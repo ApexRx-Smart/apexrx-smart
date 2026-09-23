@@ -1,1 +1,1 @@
-# ApexRx-Yan
+# apexrx-smart
