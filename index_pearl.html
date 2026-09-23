@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zoner Health — Connected Healthcare Access</title>
+  <!-- Google Fonts & Lucide Icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    :root {
+      --primary: #0284c7;
+      --primary-hover: #0369a1;
+      --primary-light: #e0f2fe;
+      --secondary: #0d9488;
+      --dark: #0f172a;
+      --slate-500: #64748b;
+      --slate-100: #f1f5f9;
+      --border: #e2e8f0;
+      --white: #ffffff;
+      --radius-lg: 16px;
+      --radius-md: 10px;
+      --shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.08);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    body {
+      background-color: #f8fafc;
+      color: var(--dark);
+      line-height: 1.6;
+    }
+
+    /* Header & Navigation */
+    header {
+      position: sticky;
+      top: 0;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      z-index: 100;
+    }
+
+    .nav-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: var(--dark);
+      font-weight: 600;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: var(--primary);
+    }
+
+    .cta-button {
+      background-color: var(--primary);
+      color: var(--white);
+      padding: 0.65rem 1.3rem;
+      border-radius: var(--radius-md);
+      text-decoration: none;
+      font-weight: 600;
+      transition: background 0.2s, transform 0.1s;
+      border: none;
+      cursor: pointer;
+    }
+
+    .cta-button:hover {
+      background-color: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+
+    /* Hero Section */
+    .hero {
+      max-width: 1200px;
+      margin: 3rem auto;
+      padding: 0 1.5rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem;
+      align-items: center;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background-color: var(--primary-light);
+      color: var(--primary);
+      padding: 0.4rem 1rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+
+    .hero-content h1 {
+      font-size: 3rem;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 1.2rem;
+      letter-spacing: -0.02em;
+    }
+
+    .hero-content p {
+      font-size: 1.15rem;
+      color: var(--slate-500);
+      margin-bottom: 2rem;
+    }
+
+    /* Search Widget */
+    .search-box {
+      background: var(--white);
+      padding: 0.5rem;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .search-input-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      flex: 1;
+    }
+
+    .search-input-group input {
+      border: none;
+      outline: none;
+      width: 100%;
+      font-size: 1rem;
+    }
+
+    /* Interactive UI Card Side */
+    .hero-visual {
+      position: relative;
+    }
+
+    .app-preview-card {
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .status-tag {
+      background: #dcfce7;
+      color: #15803d;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.2rem 0.6rem;
+      border-radius: 12px;
+    }
+
+    .med-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.8rem;
+      background-color: var(--slate-100);
+      border-radius: var(--radius-md);
+    }
+
+    .med-info {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+    }
+
+    .med-icon {
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 0.5rem;
+      border-radius: 8px;
+    }
+
+    /* Features Section */
+    .features {
+      max-width: 1200px;
+      margin: 5rem auto;
+      padding: 0 1.5rem;
+    }
+
+    .section-title {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .section-title h2 {
+      font-size: 2.2rem;
+      font-weight: 800;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2rem;
+    }
+
+    .feature-card {
+      background: var(--white);
+      padding: 2rem;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      transition: transform 0.2s;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-5px);
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--primary-light);
+      color: var(--primary);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.2rem;
+    }
+
+    /* Interactive Tabs Section */
+    .tabs-section {
+      background: var(--white);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 4rem 1.5rem;
+    }
+
+    .tabs-container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .tab-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .tab-btn {
+      padding: 0.6rem 1.5rem;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .tab-btn.active {
+      background: var(--primary);
+      color: var(--white);
+      border-color: var(--primary);
+    }
+
+    .tab-content {
+      display: none;
+      background: var(--slate-100);
+      padding: 2rem;
+      border-radius: var(--radius-lg);
+      text-align: center;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+      .nav-links {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <header>
+    <div class="nav-container">
+      <a href="#" class="logo">
+        <i data-lucide="activity"></i> Zoner
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#how-it-works">How It Works</a></li>
+        <li><a href="#pharmacies">For Pharmacies</a></li>
+      </ul>
+      <a href="#" class="cta-button">Download App</a>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content">
+      <div class="hero-badge">
+        <i data-lucide="shield-check" size="16"></i> Real-time Pharmacy Stock
+      </div>
+      <h1>Find your medicine, without the runaround.</h1>
+      <p>Locate nearby pharmacy stock instantly, schedule reminders, and store your digital lab results and prescriptions in one place.</p>
+      
+      <!-- Interactive Search Widget -->
+      <div class="search-box">
+        <div class="search-input-group">
+          <i data-lucide="search" color="#64748b"></i>
+          <input type="text" id="medSearch" placeholder="Search medicine (e.g. Amoxicillin, Paracetamol)..." onkeyup="filterMeds()">
+        </div>
+        <button class="cta-button">Search</button>
+      </div>
+    </div>
+
+    <!-- Live Preview Card -->
+    <div class="hero-visual">
+      <div class="app-preview-card">
+        <div class="card-header">
+          <strong>Nearby Availability</strong>
+          <span class="status-tag">Live Updates</span>
+        </div>
+        
+        <div id="medList">
+          <div class="med-item" data-name="Amoxicillin 500mg">
+            <div class="med-info">
+              <div class="med-icon"><i data-lucide="pill"></i></div>
+              <div>
+                <strong>Amoxicillin 500mg</strong>
+                <p style="font-size: 0.8rem; color: var(--slate-500);">City Center Pharmacy • 0.8 km away</p>
+              </div>
+            </div>
+            <span style="color: #16a34a; font-weight: 700; font-size: 0.9rem;">In Stock</span>
+          </div>
+
+          <div class="med-item" data-name="Paracetamol 650mg" style="margin-top: 0.8rem;">
+            <div class="med-info">
+              <div class="med-icon"><i data-lucide="pill"></i></div>
+              <div>
+                <strong>Paracetamol 650mg</strong>
+                <p style="font-size: 0.8rem; color: var(--slate-500);">Kigali Heights Pharmacy • 1.2 km away</p>
+              </div>
+            </div>
+            <span style="color: #16a34a; font-weight: 700; font-size: 0.9rem;">In Stock</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Key Features -->
+  <section class="features" id="features">
+    <div class="section-title">
+      <h2>Everything you need to manage your health</h2>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon"><i data-lucide="map-pin"></i></div>
+        <h3>Medicine Locator</h3>
+        <p>Search availability across verified local pharmacies before leaving your house.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><i data-lucide="bell"></i></div>
+        <h3>Dose Reminders</h3>
+        <p>Set personalized schedules so you never miss a dose or critical prescription refill.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><i data-lucide="folder-heart"></i></div>
+        <h3>Health Vault</h3>
+        <p>Digitize and organize lab results, doctor's notes, and prescriptions securely.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Content Tabs -->
+  <section class="tabs-section" id="how-it-works">
+    <div class="tabs-container">
+      <div class="tab-buttons">
+        <button class="tab-btn active" onclick="switchTab(event, 'tab-patients')">For Patients</button>
+        <button class="tab-btn" onclick="switchTab(event, 'tab-pharmacies')">For Pharmacies</button>
+      </div>
+
+      <div id="tab-patients" class="tab-content active">
+        <h3>Save time and avoid wasted trips</h3>
+        <p style="margin-top:0.5rem; color: var(--slate-500);">Search for medicines, view prices, check stock statuses, and navigate directly to the store.</p>
+      </div>
+
+      <div id="tab-pharmacies" class="tab-content">
+        <h3>Digitize your store inventory</h3>
+        <p style="margin-top:0.5rem; color: var(--slate-500);">Connect directly with local customers searching for specific medications in real-time.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Script Initializations and Interactions -->
+  <script>
+    // Initialize icons
+    lucide.createIcons();
+
+    // Interactive Search Filter
+    function filterMeds() {
+      const input = document.getElementById('medSearch').value.toLowerCase();
+      const items = document.querySelectorAll('.med-item');
+
+      items.forEach(item => {
+        const name = item.getAttribute('data-name').toLowerCase();
+        if (name.includes(input)) {
+          item.style.display = 'flex';
+        } else {
+          item.style.display = 'none';
+        }
+      });
+    }
+
+    // Interactive Tab Switcher
+    function switchTab(evt, tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      
+      evt.currentTarget.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+  </script>
+</body>
+</html>
