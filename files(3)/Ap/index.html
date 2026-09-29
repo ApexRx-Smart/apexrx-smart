@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>ApexRX Smart</title>
+<meta name="description" content="Find the medicines you need in Kigali: real-time stock from pharmacies across the city.">
+<meta name="theme-color" content="#0f1a3d">
+<link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@400;500;600;700&family=Poppins:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============ HEADER (floating pill) ============ -->
+<header class="site" id="siteHeader">
+  <div class="header-pill">
+    <a class="brand" href="#top" aria-label="ApexRX_Smart, home">
+      <img class="brand-mark" src="assets/logo-mark.svg" alt="" width="40" height="38">
+      <span class="brand-name">ApexRX_Smart</span>
+    </a>
+
+    <nav class="main-nav" aria-label="Main">
+      <a href="#patients" data-i18n="nav_patients">For Patients</a>
+      <a href="#pharmacies" data-i18n="nav_pharmacies">For Pharmacies</a>
+      <a href="#suppliers" data-i18n="nav_suppliers">For Suppliers</a>
+      <a href="#how" data-i18n="nav_how">How it works</a>
+      <a href="#footer" data-i18n="nav_about">About</a>
+    </nav>
+
+    <div class="header-actions">
+      <select class="lang-select" id="langSelect" aria-label="Language">
+        <option value="en">EN</option>
+        <option value="fr">FR</option>
+        <option value="rw">RW</option>
+      </select>
+      <button class="btn-link" id="signInBtn" data-i18n="btn_signin">Sign in</button>
+      <button class="btn btn-pill" id="getStartedBtn" data-i18n="btn_start">Get started</button>
+      <button class="menu-toggle" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="mobileNav">☰</button>
+    </div>
+  </div>
+
+  <nav class="mobile-nav" id="mobileNav" aria-label="Mobile">
+    <a href="#patients" data-i18n="nav_patients">For Patients</a>
+    <a href="#pharmacies" data-i18n="nav_pharmacies">For Pharmacies</a>
+    <a href="#suppliers" data-i18n="nav_suppliers">For Suppliers</a>
+    <a href="#how" data-i18n="nav_how">How it works</a>
+    <a href="#footer" data-i18n="nav_about">About</a>
+    <div class="mobile-actions">
+      <button class="btn btn-ghost-light" id="signInBtnMobile" data-i18n="btn_signin">Sign in</button>
+      <button class="btn btn-pill" id="getStartedBtnMobile" data-i18n="btn_start">Get started</button>
+    </div>
+  </nav>
+</header>
+
+<main id="top">
+<!-- ============ HERO: animated Kigali ============ -->
+<section class="hero">
+  <div class="map-canvas" id="mapCanvas">
+    <div class="map-layer" id="mapLayer">
+      <img class="map-bg-img" src="assets/kigali-map-bg.jpg" alt="" aria-hidden="true">
+      <div class="map-overlay" aria-hidden="true"></div>
+      <canvas class="map-fx" id="mapFx" aria-hidden="true"></canvas>
+
+      <!-- Pins sit on the pharmacy icons drawn in the map (x/y in image pixels, 1672×941) -->
+      <button class="pin" data-x="1117" data-y="228"><span class="pin-card"><span class="stock in">Kacyiru Central</span><span class="med">Amlodipine 5mg</span></span></button>
+      <button class="pin low" data-x="1448" data-y="490" data-align="right"><span class="pin-card"><span class="stock low">Good Health Pharmacy</span><span class="med">Paracetamol 500mg</span></span></button>
+      <button class="pin" data-x="1082" data-y="508"><span class="pin-card"><span class="stock in">Kicukiro Family Pharmacy</span><span class="med">Vitamin D3</span></span></button>
+      <button class="pin" data-x="770"  data-y="410"><span class="pin-card"><span class="stock in">Pharmacie La Santé</span><span class="med">Amoxicillin 500mg</span></span></button>
+      <button class="pin" data-x="862"  data-y="268"><span class="pin-card"><span class="stock in">Nyarugenge Pharmacy</span><span class="med">Salbutamol Inhaler</span></span></button>
+      <button class="pin" data-x="690"  data-y="80" data-align="below"><span class="pin-card"><span class="stock in">Gasabo Health Point</span><span class="med">Ibuprofen 400mg</span></span></button>
+      <button class="pin" data-x="1322" data-y="258" data-align="right"><span class="pin-card"><span class="stock in">Airport Rd Pharmacy</span><span class="med">ORS Sachets</span></span></button>
+      <button class="pin" data-x="1210" data-y="748"><span class="pin-card"><span class="stock in">Rebero Pharmacy</span><span class="med">Cetirizine 10mg</span></span></button>
+      <button class="pin low" data-x="513" data-y="348"><span class="pin-card"><span class="stock low">Downtown Pharmacy</span><span class="med">Insulin (Rapid)</span></span></button>
+      <button class="pin" data-x="358" data-y="235" data-align="left"><span class="pin-card"><span class="stock in">Nyabugogo Pharmacy</span><span class="med">Metformin 500mg</span></span></button>
+      <button class="pin" data-x="365" data-y="700" data-align="left"><span class="pin-card"><span class="stock in">Nyamirambo Pharmacy</span><span class="med">Azithromycin 250mg</span></span></button>
+    </div>
+  </div>
+
+  <div class="hero-inner">
+    <div class="live-badge"><span class="live-dot"></span><span data-i18n="hero_live">Live stock across Kigali</span></div>
+    <h1 class="hero-title"><span id="h1Pre">Find the medicines you need in </span><span class="accent" id="h1Accent">Kigali.</span></h1>
+    <p class="lede" data-i18n="hero_lede">Real-time information from pharmacies across Kigali, helping you access the right medicines, faster and easier.</p>
+
+    <div class="search-card" id="hero-search">
+      <div class="search-row">
+        <label class="search-field" for="medSearch">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input type="text" id="medSearch" placeholder="Search for a medicine, e.g. Amoxicillin 500mg" data-i18n-placeholder="hero_search_ph" autocomplete="off">
+        </label>
+        <button class="search-btn" id="searchBtn" aria-label="Search">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <span data-i18n="hero_search_btn">Search</span>
+        </button>
+      </div>
+      <div class="try-row">
+        <span data-i18n="hero_try">Try:</span>
+        <button class="chip" data-q="Amoxicillin">Amoxicillin</button>
+        <button class="chip" data-q="Paracetamol">Paracetamol</button>
+        <button class="chip" data-q="Insulin">Insulin</button>
+      </div>
+      <div class="search-results" id="searchResults" aria-live="polite"></div>
+
+      <div class="search-divider" data-i18n="hero_or">or</div>
+
+      <button class="upload-btn" id="uploadBtn">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><circle cx="12" cy="14" r="3"/></svg>
+        <span data-i18n="hero_upload">Upload prescription</span>
+      </button>
+      <input type="file" id="fileInput" accept="image/*,.pdf" hidden>
+      <div class="upload-note" data-i18n="hero_upload_note">Take a photo or upload a prescription to find available medicines</div>
+      <div class="upload-filename" id="uploadFilename"></div>
+    </div>
+
+    <div class="pharm-pill">
+      <span data-i18n="hero_pharm_q">Own a pharmacy in Kigali?</span>
+      <a href="#pharmacies" class="pharm-pill-btn" data-i18n="hero_pharm_cta">Join ApexRX_Smart</a>
+    </div>
+  </div>
+
+  <svg class="hero-wave" viewBox="0 0 1440 120" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0,64 C240,120 480,0 720,40 C960,80 1200,110 1440,50 L1440,120 L0,120 Z" fill="#ffffff" opacity=".35"/>
+    <path d="M0,88 C300,40 560,120 820,86 C1080,52 1260,70 1440,96 L1440,120 L0,120 Z" fill="#ffffff"/>
+  </svg>
+</section>
+
+<!-- ============ STATS ============ -->
+<section class="stats">
+  <div class="wrap stats-grid">
+    <div class="stat reveal">
+      <div class="num" data-count="250" data-suffix="+">250+</div>
+      <div class="lbl" data-i18n="stat1_lbl">Pharmacies in Kigali</div>
+      <div class="sub" data-i18n="stat1_sub">and growing</div>
+    </div>
+    <div class="stat reveal">
+      <div class="num" data-count="1000" data-suffix="+">1000+</div>
+      <div class="lbl" data-i18n="stat2_lbl">Medicines tracked</div>
+      <div class="sub" data-i18n="stat2_sub">in real time</div>
+    </div>
+    <div class="stat reveal">
+      <div class="num" data-count="99.5" data-decimals="1" data-suffix="%">99.5%</div>
+      <div class="lbl" data-i18n="stat3_lbl">Availability accuracy</div>
+      <div class="sub" data-i18n="stat3_sub">Trusted data</div>
+    </div>
+    <div class="stat reveal">
+      <div class="num" data-i18n="stat4_num">3 districts</div>
+      <div class="lbl" data-i18n="stat4_lbl">Gasabo · Kicukiro · Nyarugenge</div>
+      <div class="sub" data-i18n="stat4_sub">All of Kigali connected</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ AUDIENCE ============ -->
+<section class="audience wrap" id="audience">
+  <div class="section-head reveal">
+    <div class="eyebrow" data-i18n="aud_eyebrow">— For everyone in the medicine chain</div>
+    <h2 data-i18n="aud_h2">Built for everyone in the medicine chain</h2>
+    <p data-i18n="aud_p">Whoever you are, ApexRX_Smart gives you the information you need to act with confidence.</p>
+  </div>
+  <div class="audience-grid">
+    <article class="aud-card reveal" id="patients">
+      <div class="aud-icon ic-blue">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/><circle cx="18" cy="9" r="2.2"/><path d="M15.5 20c.3-2.2 1.9-4 4.5-4"/></svg>
+      </div>
+      <h3 data-i18n="aud1_h3">For Patients</h3>
+      <p data-i18n="aud1_p">Find nearby pharmacies and avoid unnecessary trips.</p>
+      <a href="#how" class="aud-link" data-i18n="aud_learn">Learn more →</a>
+    </article>
+    <article class="aud-card reveal" id="pharmacies">
+      <div class="aud-icon ic-green">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 10l1.5-5.5A2 2 0 0 1 6.4 3h11.2a2 2 0 0 1 1.9 1.5L21 10"/><rect x="3" y="10" width="18" height="10" rx="1.5"/><path d="M9 15h6M12 12v6"/></svg>
+      </div>
+      <h3 data-i18n="aud2_h3">For Pharmacies</h3>
+      <p data-i18n="aud2_p">Manage inventory and reach more patients.</p>
+      <a href="#how" class="aud-link" data-i18n="aud_learn">Learn more →</a>
+    </article>
+    <article class="aud-card reveal" id="professionals">
+      <div class="aud-icon ic-yellow">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4.5 13.5 9 9l3.5 3.5L20 5"/><path d="M15 5h5v5"/><path d="M4 21h16"/></svg>
+      </div>
+      <h3 data-i18n="aud3_h3">For Healthcare Professionals</h3>
+      <p data-i18n="aud3_p">Check medicine availability to make informed decisions.</p>
+      <a href="#how" class="aud-link" data-i18n="aud_learn">Learn more →</a>
+    </article>
+    <article class="aud-card reveal" id="suppliers">
+      <div class="aud-icon ic-navy">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="1" y="7" width="13" height="10" rx="1.2"/><path d="M14 10h4l3.5 3.5V17h-7.5"/><circle cx="6" cy="19" r="1.8"/><circle cx="17.5" cy="19" r="1.8"/></svg>
+      </div>
+      <h3 data-i18n="aud4_h3">For Suppliers</h3>
+      <p data-i18n="aud4_p">Connect with pharmacies and respond to demand.</p>
+      <a href="#how" class="aud-link" data-i18n="aud_learn">Learn more →</a>
+    </article>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section class="how wrap" id="how">
+  <div class="section-head reveal">
+    <div class="eyebrow" data-i18n="how_eyebrow">— How it works</div>
+    <h2 data-i18n="how_h2">From search to access, in three simple steps</h2>
+    <p data-i18n="how_p">Simple and fast, wherever you are in Kigali.</p>
+  </div>
+  <ol class="how-grid">
+    <li class="how-step reveal">
+      <div class="how-num">1</div>
+      <h3 data-i18n="how1_h3">Search</h3>
+      <p data-i18n="how1_p">Look for a medicine or upload a prescription.</p>
+    </li>
+    <li class="how-step reveal">
+      <div class="how-num">2</div>
+      <h3 data-i18n="how2_h3">Check availability</h3>
+      <p data-i18n="how2_p">See real-time stock at nearby pharmacies.</p>
+    </li>
+    <li class="how-step reveal">
+      <div class="how-num">3</div>
+      <h3 data-i18n="how3_h3">Get your medicine</h3>
+      <p data-i18n="how3_p">Visit the pharmacy or request a supplier.</p>
+    </li>
+  </ol>
+</section>
+
+<!-- ============ CTA BAND ============ -->
+<section class="cta-band">
+  <div class="cta-inner reveal">
+    <h2 data-i18n="cta_h2">Healthy Communities. Brighter Tomorrow.</h2>
+    <p data-i18n="cta_p">Made for a healthier Rwanda.</p>
+    <div class="cta-actions">
+      <a href="#hero-search" class="btn btn-pill" data-i18n="cta_search">Find a medicine</a>
+      <a href="#pharmacies" class="btn btn-ghost-light" data-i18n="hero_pharm_cta">Join ApexRX_Smart</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer class="site" id="footer">
+  <div class="wrap">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a class="brand" href="#top" aria-label="ApexRX_Smart, home">
+          <img class="brand-mark" src="assets/logo-mark.svg" alt="" width="48" height="46">
+          <span class="brand-name">ApexRX_Smart</span>
+        </a>
+        <p data-i18n="footer_tag">Healthy Communities. Brighter Tomorrow. Made for a healthier Rwanda.</p>
+      </div>
+      <div class="footer-cols">
+        <div class="footer-col">
+          <h4 data-i18n="f_product">Product</h4>
+          <a href="#patients" data-i18n="nav_patients">For Patients</a>
+          <a href="#pharmacies" data-i18n="nav_pharmacies">For Pharmacies</a>
+          <a href="#suppliers" data-i18n="nav_suppliers">For Suppliers</a>
+          <a href="#how" data-i18n="nav_how">How it works</a>
+        </div>
+        <div class="footer-col">
+          <h4 data-i18n="f_company">Company</h4>
+          <a href="#" data-i18n="f_about">About</a>
+          <a href="#" data-i18n="f_careers">Careers</a>
+          <a href="#" data-i18n="f_blog">Blog</a>
+          <a href="#" data-i18n="f_contact">Contact</a>
+        </div>
+        <div class="footer-col">
+          <h4 data-i18n="f_legal">Legal</h4>
+          <a href="#" data-i18n="f_privacy">Privacy</a>
+          <a href="#" data-i18n="f_terms">Terms of Service</a>
+          <a href="#" data-i18n="f_cookies">Cookie Policy</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="partners">
+      <div class="partners-label" data-i18n="partners_label">Partnerships</div>
+      <div class="partners-logos">
+        <a class="partner-badge" href="https://aims.ac.rw/" target="_blank" rel="noopener" aria-label="AIMS Rwanda">
+          <img src="assets/partner-aims.png" alt="AIMS Rwanda, African Institute for Mathematical Sciences">
+        </a>
+        <a class="partner-badge" href="https://mastercardfdn.org/en/" target="_blank" rel="noopener" aria-label="Mastercard Foundation">
+          <img src="assets/partner-mastercard.png" alt="Mastercard Foundation">
+        </a>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span data-i18n="f_rights">© 2026 ApexRX_Smart. All rights reserved.</span>
+      <div class="social-row">
+        <a href="https://www.linkedin.com/company/136934009/" target="_blank" rel="noopener" aria-label="LinkedIn">in</a>
+        <a href="#" aria-label="X">𝕏</a>
+        <a href="#" aria-label="YouTube">▶</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<div data-toast id="toast" role="status"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
