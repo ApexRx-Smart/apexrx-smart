@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, ForeignKey, String
+from sqlalchemy import BigInteger, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
@@ -35,4 +35,12 @@ class Membership(Base):
 
     organization: Mapped["Organization"] = relationship(
     back_populates="memberships"
+)
+
+    __table_args__ = (
+    UniqueConstraint(
+        "user_id",
+        "organization_id",
+        name="uq_membership",
+    ),
 )
