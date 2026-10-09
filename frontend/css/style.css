@@ -330,7 +330,7 @@ section.how{padding-block:70px 100px;}
   padding:64px 32px; text-align:center; color:#fff;
   background:
     linear-gradient(120deg, rgba(15,26,61,.94), rgba(15,26,61,.78)),
-    url("assets/kigali-map-bg.jpg") center/cover;
+    url("../assets/images/kigali-map-bg.jpg") center/cover;
 }
 .cta-inner::before{
   content:""; position:absolute; left:0; right:0; top:0; height:5px;
