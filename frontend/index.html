@@ -83,7 +83,50 @@
     <div class="live-badge"><span class="live-dot"></span><span data-i18n="hero_live">Live stock across Kigali</span></div>
     <h1 class="hero-title"><span id="h1Pre">Find the medicines you need in </span><span class="accent" id="h1Accent">Kigali.</span></h1>
     <p class="lede" data-i18n="hero_lede">Real-time information from pharmacies across Kigali, helping you access the right medicines, faster and easier.</p>
+<form class="medicine-search" id="medicineSearchForm">
+<div class="search-card">
+  <form id="medicineSearchForm">
+    <div class="search-row">
+      <label class="search-field" for="medicineSearchInput">
+        <span aria-hidden="true">⌕</span>
+        <input
+          type="search"
+          id="medicineSearchInput"
+          data-i18n-placeholder="hero_search_ph"
+          placeholder="Search for a medicine, e.g. Amoxicillin 500mg"
+          required
+        >
+      </label>
+      <button
+        type="submit"
+        class="search-btn"
+        data-i18n="hero_search_btn"
+      >Search</button>
+    </div>
+  </form>
 
+  <div
+    class="search-results"
+    id="medicineSearchResults"
+    aria-live="polite"
+  ></div>
+
+  <p id="medicineSearchStatus" role="status" aria-live="polite"></p>
+</div>
+  
+  <input
+    type="search"
+    id="medicineSearchInput"
+    data-i18n-placeholder="hero_search_ph"
+    placeholder="Search for a medicine, e.g. Amoxicillin 500mg"
+    aria-label="Search for a medicine"
+    required
+  >
+  <button type="submit" class="btn btn-pill" data-i18n="hero_search_btn">Search</button>
+</form>
+
+<div id="medicineSearchStatus" role="status" aria-live="polite"></div>
+<div id="medicineSearchResults" aria-live="polite"></div>
     <div class="pharm-pill">
       <span data-i18n="hero_pharm_q">Own a pharmacy in Kigali?</span>
       <a href="pharmacies.html" class="pharm-pill-btn" data-i18n="hero_pharm_cta">Join ApexRX_Smart</a>
