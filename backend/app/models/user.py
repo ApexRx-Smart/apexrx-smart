@@ -1,6 +1,7 @@
+
 from sqlalchemy import BigInteger, String
-# from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.models.base import Base
 
 
@@ -29,6 +30,11 @@ class User(Base):
         nullable=True,
     )
 
+    password_hash: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
     memberships: Mapped[list["Membership"]] = relationship(
-    back_populates="user"
-)
+        back_populates="user"
+    )
