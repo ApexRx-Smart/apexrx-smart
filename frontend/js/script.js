@@ -391,4 +391,105 @@
   langSelect.value = STRINGS[saved] ? saved : 'en';
   langSelect.addEventListener('change', function(){ applyLang(langSelect.value); });
   applyLang(langSelect.value);
+  
+  /* ================= MEDICINE SEARCH ================= */
+  var searchForm = document.getElementById('medicineSearchForm');
+  var searchInput = document.getElementById('medicineSearchInput');
+  var searchResults = document.getElementById('medicineSearchResults');
+  var searchStatus = document.getElementById('medicineSearchStatus');
+
+  if (searchForm && searchInput && searchResults && searchStatus) {
+    searchForm.addEventListener('submit', async function (event) {
+      event.preventDefault();
+
+      var query = searchInput.value.trim().toLowerCase();
+      if (!query) return;
+
+      searchStatus.textContent = 'Searching...';
+      searchResults.classList.add('open');
+      searchResults.replaceChildren();
+
+      try {
+        var response = await fetch(
+          'http://127.0.0.1:8000/medicines/availability'
+        );
+
+        if (!response.ok) {
+          throw new Error('API request failed: ' + response.status);
+        }
+
+        var medicines = await response.json();
+
+        var matches = medicines.filter(function (medicine) {
+          var searchableText = [
+            medicine.drug_name,
+            medicine.product_name,
+            medicine.brand,
+            medicine.strength,
+            medicine.dosage_form
+          ].filter(Boolean).join(' ').toLowerCase();
+
+          return searchableText.includes(query);
+        });
+
+        searchStatus.textContent = '';
+
+        if (matches.length === 0) {
+          var emptyMessage = document.createElement('div');
+          emptyMessage.className = 'result-empty';
+          emptyMessage.textContent = t('no_result');
+          searchResults.appendChild(emptyMessage);
+          return;
+        }
+
+        var heading = document.createElement('div');
+        heading.className = 'result-empty';
+        heading.textContent = t('t_results') + ' "' + searchInput.value.trim() + '"';
+        searchResults.appendChild(heading);
+
+        matches.forEach(function (medicine) {
+          var row = document.createElement('div');
+          row.className = 'result-row';
+
+          var details = document.createElement('div');
+
+          var name = document.createElement('div');
+          name.className = 'rname';
+          name.textContent = medicine.product_name || medicine.drug_name || 'Medicine';
+
+          var meta = document.createElement('div');
+          meta.className = 'rmeta';
+          meta.textContent =
+            (medicine.pharmacy_name || 'Pharmacy') + ' · ' +
+            (medicine.city || 'Location') + ' · Quantity: ' +
+            medicine.quantity + ' · Expires: ' +
+            medicine.expiry_date;
+
+          var stock = document.createElement('span');
+          var availability = String(medicine.availability || '').toLowerCase();
+
+          if (availability === 'out_of_stock' || Number(medicine.quantity) <= 0) {
+            stock.className = 'rstock out';
+            stock.textContent = t('stock_out');
+          } else if (availability === 'low_stock') {
+            stock.className = 'rstock low';
+            stock.textContent = t('stock_low');
+          } else {
+            stock.className = 'rstock in';
+            stock.textContent = t('stock_in');
+          }
+
+          details.appendChild(name);
+          details.appendChild(meta);
+          row.appendChild(details);
+          row.appendChild(stock);
+          searchResults.appendChild(row);
+        });
+      } catch (error) {
+        console.error('Medicine search failed:', error);
+        searchStatus.textContent =
+          'Unable to load medicine availability. Please try again.';
+      }
+    });
+  }
 })();
