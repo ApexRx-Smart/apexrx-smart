@@ -391,7 +391,7 @@
   langSelect.value = STRINGS[saved] ? saved : 'en';
   langSelect.addEventListener('change', function(){ applyLang(langSelect.value); });
   applyLang(langSelect.value);
-  
+
   /* ================= MEDICINE SEARCH ================= */
   var searchForm = document.getElementById('medicineSearchForm');
   var searchInput = document.getElementById('medicineSearchInput');
