@@ -1,0 +1,8 @@
+# FE-03 — Netlify baseline response headers for static ApexRx pages and assets.
+# CSP is intentionally NOT enabled until external Google Maps, Google Fonts,
+# video and API dependencies have been inventoried and verified.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  X-Frame-Options: DENY

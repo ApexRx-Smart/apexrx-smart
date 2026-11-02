@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="ApexRX Smart patient journey: search, compare and explore medicine reservations in Kigali (demonstration).">
+  <meta name="theme-color" content="#101f36">
+  <title>For Patients — ApexRX Smart</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logos/logo-mark.svg">
+  <link rel="stylesheet" href="css/pharmacies.css">
+  <link rel="stylesheet" href="css/patients.css">
+</head>
+<body class="patient-page">
+  <header class="patient-header">
+    <a class="brand" href="index.html" id="brand-home"><img src="assets/logos/logo-mark.svg" alt="" width="38"><span>ApexRX<span class="green"> Smart</span><small>Smarter access. Better health.</small></span></a>
+    <a class="home-link" href="index.html" id="back-home" data-t="back">← Back to website</a>
+    <label class="language-control"><span class="sr-only" data-t="language">Language</span><select id="patient-language" aria-label="Language"><option value="en">English</option><option value="fr">Français</option><option value="rw">Kinyarwanda</option></select></label>
+    <span class="demo" data-t="demo_badge">Interactive demo</span>
+  </header>
+  <div class="patient-scene" aria-hidden="true"></div><div class="scroll-progress" aria-hidden="true"></div>
+  <main id="patient-onboarding" class="onboarding">
+    <aside class="story patient-story">
+      <span class="eyebrow" data-t="story_eyebrow">FOR PATIENTS · KIGALI</span>
+      <h1 data-t-html="story_title">Your health.<br>More options.<br><em>Less searching.</em></h1>
+      <p data-t="story_body">Find a medicine, compare sample pharmacy listings and see how pickup could work with ApexRX Smart.</p>
+      <div class="story-photo"><img src="assets/images/audience-patients.png" alt="Patient using a phone near a pharmacy"><div data-t-html="story_photo">A better path.<br><strong>Closer to care.</strong></div></div>
+      <div class="story-foot"><span class="dot"></span><span data-t="story_foot">A patient-first experience built for Kigali</span></div>
+    </aside>
+    <section class="workspace patient-workspace" aria-labelledby="step-title">
+      <ol class="steps patient-steps" aria-label="Patient journey progress">
+        <li data-t="step_account">Account</li><li data-t="step_verify">Verify</li><li data-t="step_search">Search</li><li data-t="step_compare">Compare</li><li data-t="step_reserve">Reserve</li>
+      </ol>
+      <div class="form-area">
+        <p id="step-caption" class="eyebrow"></p><h2 id="step-title" tabindex="-1"></h2><p id="step-description" class="muted"></p>
+        <form id="patient-account" class="step-form">
+          <div class="fields"><label><span data-t="full_name">Full name</span><input name="name" type="text" autocomplete="name" maxlength="100" placeholder="e.g. Alex M." data-t-placeholder="name_placeholder" required></label>
+          <label><span data-t="email">Email address</span><input name="email" type="email" autocomplete="email" maxlength="150" placeholder="patient@example.com" required></label></div>
+          <div class="fields"><label><span data-t="password">Password</span><input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" placeholder="At least 8 characters" data-t-placeholder="password_placeholder" required></label>
+          <label><span data-t="confirm_password">Confirm password</span><input name="confirm" type="password" autocomplete="new-password" minlength="8" maxlength="128" placeholder="Repeat your password" data-t-placeholder="confirm_placeholder" required></label></div>
+          <p class="note" data-t="account_note">Demo only: use fictional details and a test password. Nothing is sent or stored as an account.</p>
+          <button class="primary" type="submit"><span data-t="create_demo">Create demo account</span> →</button>
+          <button type="button" class="text-button" id="patient-preview" data-t="preview">Just exploring? Preview the patient space ↗</button>
+        </form>
+        <form id="patient-verify" class="step-form" hidden>
+          <div class="mail-icon" aria-hidden="true">✉</div>
+          <p><span data-t="email_entered">Email entered:</span> <strong id="patient-email-display"></strong></p>
+          <label><span data-t="verification_label">6-digit verification code</span><span class="otp-control"><input name="code" class="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" aria-label="6-digit verification code" required><span class="otp-digits" aria-hidden="true"><span>–</span><span>–</span><span>–</span><span>–</span><span>–</span><span>–</span></span></span></label>
+          <p class="note"><span data-t="otp_note">No email is sent. For this demonstration, enter</span> <strong>472916</strong>.</p>
+          <div class="actions"><button type="button" class="secondary" data-back="0" data-t="back_btn">← Back</button><button class="primary" type="submit"><span data-t="verify_continue">Verify and continue</span> →</button></div>
+        </form>
+        <form id="patient-search" class="step-form" hidden>
+          <label><span data-t="medicine_label">Which medicine are you looking for?</span><input id="patient-medicine" name="medicine" type="search" list="patient-medicine-options" autocomplete="off" placeholder="e.g. Paracetamol 500mg" data-t-placeholder="medicine_placeholder" required minlength="2" maxlength="100"></label>
+          <datalist id="patient-medicine-options"></datalist>
+          <div class="fields"><label><span data-t="district_label">Preferred area</span><select name="district" id="patient-district"><option value="all" data-t="district_all">All Kigali</option><option value="Gasabo">Gasabo</option><option value="Kicukiro">Kicukiro</option><option value="Nyarugenge">Nyarugenge</option></select></label>
+            <label><span data-t="sort_label">Compare by</span><select name="sort" id="patient-sort"><option value="price" data-t="sort_price">Lowest example price</option><option value="distance" data-t="sort_distance">Approximate proximity</option><option value="stock" data-t="sort_stock">Largest sample stock</option></select></label></div>
+          <div class="patient-hint"><span aria-hidden="true">⌕</span><div><strong data-t="search_hint_title">See what the patient could compare</strong><p data-t="search_hint_body">Demo results use fictional pharmacy entries, indicative prices and approximate Kigali locations.</p></div></div>
+          <p id="search-error" role="alert" class="patient-error" aria-live="polite"></p>
+          <div class="actions"><button type="button" class="secondary" data-back="1" data-t="back_btn">← Back</button><button class="primary" type="submit"><span data-t="search_action">Find pharmacies</span> →</button></div>
+        </form>
+        <section id="patient-compare" class="step-form" hidden aria-label="Pharmacy comparison">
+          <div class="compare-heading"><p id="result-count" aria-live="polite"></p><button type="button" class="text-button" id="patient-edit-search" data-t="edit_search">← Edit search</button></div>
+          <div class="patient-legend" data-t="comparison_note">All pharmacies and prices shown are simulated. No real-time inventory is provided.</div>
+          <div id="patient-results" class="patient-results" aria-live="polite"></div>
+          <div class="actions"><button type="button" class="secondary" data-back="2" data-t="back_btn">← Back</button></div>
+        </section>
+        <form id="patient-reserve" class="step-form" hidden>
+          <div id="patient-selection-summary" class="selection-summary"></div>
+          <div class="fields"><label><span data-t="pickup_day">Preferred pickup date</span><input name="date" type="date" id="patient-pickup-date" required></label>
+            <label><span data-t="pickup_period">Preferred pickup period</span><select name="period"><option value="morning" data-t="morning">Morning (09:00–12:00)</option><option value="afternoon" data-t="afternoon">Afternoon (12:00–16:00)</option><option value="evening" data-t="evening">Evening (16:00–19:00)</option></select></label></div>
+          <label class="patient-check"><input type="checkbox" id="patient-confirm-demo" required><span data-t="reserve_agree">I understand this is a demonstration: no medicine will be held and I must contact a real pharmacy before travelling.</span></label>
+          <p class="note" data-t="reserve_note">No reservation, payment, SMS or notification is sent. Pickup hours are illustrative only.</p>
+          <div class="actions"><button type="button" class="secondary" data-back="3" data-t="back_btn">← Back</button><button class="primary" type="submit"><span data-t="reserve_action">Simulate reservation</span> →</button></div>
+        </form>
+        <p id="patient-form-error" role="alert" aria-live="assertive"></p>
+      </div>
+      <div class="workspace-foot"><span data-t="workspace_foot">Care that starts with clearer information.</span><span>APEXRX SMART</span></div>
+    </section>
+  </main>
+  <main id="patient-dashboard" class="dashboard" hidden>
+    <nav class="sidebar" aria-label="Patient workspace"><span class="eyebrow" data-t="dashboard_nav">YOUR PATIENT SPACE</span>
+      <button type="button" data-patient-view="home" class="selected" data-t="nav_overview">⌂  Overview</button>
+      <button type="button" data-patient-view="reservation" data-t="nav_reservation">◎  My reservation</button>
+      <button type="button" data-patient-view="profile" data-t="nav_profile">◉  My profile</button>
+      <div class="premium patient-premium"><span data-t="sidebar_pretitle">A BETTER ROUTE TO CARE</span><h3 data-t-html="sidebar_title">Explore options.<br>Save a journey.</h3><p data-t="sidebar_text">Compare sample pharmacy options and plan a visit.</p><button id="patient-new-search-side" type="button" data-t="new_search">Search another medicine →</button></div>
+      <button type="button" id="patient-restart" data-t="restart">← Restart demo</button>
+    </nav>
+    <section class="dashboard-body">
+      <div class="dash-top"><div><span class="eyebrow" data-t="dash_eyebrow">YOUR CARE JOURNEY</span><p id="patient-today"></p></div><span class="avatar" aria-hidden="true">RX</span></div>
+      <div class="welcome patient-welcome"><div><span class="eyebrow" data-t="welcome_eyebrow">YOUR OPTIONS, IN ONE PLACE</span><h1><span data-t="welcome">Welcome,</span> <span id="patient-name">Guest</span>.</h1><p data-t="welcome_description">See a sample of what a simpler medicine search could look like.</p><button class="primary" type="button" id="patient-new-search"><span data-t="new_search">Search another medicine</span> →</button></div><img src="assets/images/audience-patients.png" alt="Patient using ApexRX Smart"></div>
+      <div class="overview-cards patient-cards"><div><span>⌕</span><strong id="patient-medicine-count">—</strong><small data-t="card_medicine">Medicine researched</small></div><div><span>◎</span><strong id="patient-pharmacy-count">—</strong><small data-t="card_pharmacy">Pharmacy selected</small></div><div><span>✓</span><strong id="patient-reservation-state">—</strong><small data-t="card_booking">Demonstration only</small></div></div>
+      <section class="data-panel"><div class="panel-heading"><div><span class="eyebrow" data-t="panel_eyebrow">YOUR DEMO ACTIVITY</span><h2 id="patient-panel-title" tabindex="-1"></h2></div><span class="demo" data-t="sample_badge">Sample data</span></div><div id="patient-panel-content"></div></section>
+      <p class="note" data-t="dashboard_note">This is a local preview. No patient account, inventory check, reservation or pharmacy contact is created.</p>
+    </section>
+  </main>
+  <div id="patient-notice" role="status" aria-live="polite"></div>
+  <script src="js/patients-demo-data.js"></script>
+  <script src="js/patients-i18n.js"></script>
+  <script src="js/patients.js"></script>
+</body>
+</html>

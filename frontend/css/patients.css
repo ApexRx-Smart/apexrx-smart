@@ -1,0 +1,91 @@
+/* Patient journey extends the pharmacy workflow visual system without modifying it. */
+[hidden]{display:none!important}
+.patient-page{min-height:100vh;background:#e9f2ef;color:#102c36}
+.patient-page button:focus-visible,.patient-page a:focus-visible,.patient-page input:focus-visible,.patient-page select:focus-visible{outline:3px solid #17896a;outline-offset:3px}
+.patient-header{position:relative;z-index:5}
+.patient-scene{position:fixed;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(115deg,#0e2b34dc 0%,#144343a1 53%,#0b2932c5 100%),url('../assets/images/kigali-map-bg.jpg') center / cover no-repeat}
+.patient-scene:after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 72% 24%,#5dd5ab39,transparent 55%)}
+.patient-page .onboarding{max-width:1600px;grid-template-columns:minmax(320px,.84fr) minmax(0,1.3fr);gap:32px;align-items:stretch;padding:38px 4%}
+.patient-page .story{background:linear-gradient(157deg,#0d2a38de,#09392fe5 90%);backdrop-filter:blur(13px);border:1px solid #ffffff24}
+.patient-page .story h1{font-size:clamp(37px,3.9vw,64px)}
+.patient-page .story h1 em{color:#90e5c2;font-style:normal;font-weight:700}
+.patient-page .story-photo{max-width:490px;margin-top:36px;position:relative}
+.patient-page .story-photo img{width:100%;display:block;max-height:305px;object-fit:cover}
+.patient-page .story-photo div{max-width:75%}
+.patient-page .story-foot{margin-top:26px}
+.patient-page .workspace{min-height:690px;box-shadow:0 25px 65px #0d273c36}
+.patient-page .steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));padding:0 0 26px;margin-bottom:28px;gap:6px}
+.patient-page .steps li{min-width:0;font-size:11px}
+.patient-page .steps li::before{flex-shrink:0}
+.patient-page .form-area{max-width:680px}
+.patient-page .form-area>h2{font-size:clamp(27px,3vw,37px)}
+.patient-page .fields{margin-top:10px}
+.patient-page input:not([type="checkbox"]):not([type="radio"]),.patient-page select{min-width:0}
+.patient-page .step-form>label{display:block;margin:17px 0}
+.patient-page .actions{gap:10px}
+.patient-page .primary,.patient-page .secondary{min-height:45px}
+.patient-page .note{line-height:1.7}
+.patient-hint{margin:24px 0 22px;padding:17px 19px;background:#e9f7f0;border:1px solid #c9e9d8;border-radius:16px;display:flex;align-items:start;gap:15px}
+.patient-hint>span{font-size:29px;color:#078863;line-height:1}
+.patient-hint p{font-size:12px;color:#537269;margin:4px 0 0;line-height:1.7}
+.patient-hint strong{font-size:13px}
+.patient-error,#patient-form-error{color:#aa3030;font-size:12px;min-height:19px;margin:10px 0 0;font-weight:600}
+.patient-page .otp-control{max-width:580px}
+.patient-page .mail-icon{margin-bottom:14px}
+.compare-heading{display:flex;justify-content:space-between;align-items:center;gap:15px;margin:2px 0 10px}
+.compare-heading p{font-weight:700;font-size:14px;margin:0}
+.compare-heading .text-button{flex-shrink:0}
+.patient-legend{padding:10px 14px;border-left:3px solid #e9b55b;background:#fff8e9;font-size:11px;line-height:1.6;border-radius:0 9px 9px 0;color:#715629;margin-bottom:17px}
+.patient-results{display:grid;gap:11px;max-height:440px;overflow:auto;padding:3px 4px 10px 0;scrollbar-color:#a4c8ba transparent}
+.patient-result{border:1px solid #dbe8e1;background:#fff;border-radius:16px;padding:15px 17px;box-shadow:0 5px 18px #0c423608;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start}
+.patient-result:hover{border-color:#a8d7c1;background:#fbfefb}
+.patient-result h3{font-size:15px;letter-spacing:-.02em;margin:0 0 4px;line-height:1.3;color:#18384a}
+.patient-result .tag{background:#dff5e9;color:#147653;font-size:10px;display:inline-flex;padding:2px 8px;border-radius:20px;font-weight:700;margin-bottom:8px}
+.patient-result .sub{font-size:11px;color:#64757b;margin:0 0 10px}
+.patient-result .sample{font-size:10px;line-height:1.6;color:#7c7771;margin:0}
+.patient-result-price{text-align:right;white-space:nowrap}
+.patient-result-price strong{font-size:23px;color:#006f50;letter-spacing:-.04em;display:block;line-height:1.2}
+.patient-result-price small{font-size:10px;color:#697879}
+.patient-result .result-actions{grid-column:1/-1;display:flex;justify-content:space-between;gap:10px;align-items:center;border-top:1px solid #edf0ed;padding-top:11px}
+.patient-result .result-actions button{background:#007e5b;border:0;color:white;padding:10px 18px;border-radius:22px;font-size:11px;font-weight:700;cursor:pointer}
+.patient-result .result-actions button:hover{background:#006147}
+.patient-result .result-actions span{font-size:11px;color:#556972}
+.patient-result.empty{grid-template-columns:1fr;padding:28px 22px;text-align:center}
+.patient-page #patient-compare .actions{margin-top:16px}
+.selection-summary{border:1px solid #d4e7db;background:linear-gradient(140deg,#edfaf4,#fff);padding:17px 20px;border-radius:16px;margin:17px 0 18px}
+.selection-summary>span{font-size:10px;color:#087e5d;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.selection-summary h3{font-size:18px;margin:6px 0 4px}
+.selection-summary p{margin:4px 0;font-size:12px;color:#546876}
+.selection-summary strong{color:#007e5b}
+.patient-check{display:flex!important;gap:12px;align-items:flex-start;font-size:12px;line-height:1.7;padding:14px;background:#f1f6f5;border-radius:11px}
+.patient-check input{width:19px;height:19px;flex:none;margin-top:2px;accent-color:#008f64}
+.patient-page .patient-premium{display:block}
+.patient-page .patient-welcome{background:#e4f5ed}
+.patient-page .patient-welcome img{object-fit:cover}
+.patient-page .patient-cards strong{font-size:15px;line-height:1.3}
+.patient-page .patient-cards small{font-size:11px}
+.patient-page #patient-panel-content{margin-top:15px}
+.patient-reservation{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.patient-reservation .detail{background:#f5faf7;border:1px solid #e5eee9;border-radius:12px;padding:14px}
+.patient-reservation .detail dt{font-size:11px;color:#667a79;margin-bottom:4px}
+.patient-reservation .detail dd{font-size:14px;color:#142e38;font-weight:700;margin:0;overflow-wrap:anywhere}
+.patient-reservation .detail.wide{grid-column:1/-1}
+.patient-panel-actions{display:flex;flex-wrap:wrap;gap:11px;margin-top:17px}
+.patient-panel-actions button,.patient-panel-actions a{border:1px solid #b6d6c9;border-radius:24px;background:#f9fdfa;padding:9px 16px;color:#067353;text-decoration:none;font-size:11px;font-weight:700}
+.patient-panel-actions button:hover,.patient-panel-actions a:hover{background:#e5f5ed}
+.patient-empty{background:#f1f8f5;border-radius:15px;padding:26px;border:1px dashed #9fcfba}
+.patient-empty strong{font-size:17px}
+.patient-empty p{font-size:12px;color:#627570}
+#patient-notice{position:fixed;bottom:25px;left:50%;transform:translate(-50%,12px);z-index:100;pointer-events:none;opacity:0;background:#133d34;color:#fff;border-radius:30px;padding:12px 20px;font-size:12px;max-width:calc(100vw - 30px);text-align:center;transition:opacity .2s,transform .2s;box-shadow:0 12px 25px #0003}
+#patient-notice.visible{opacity:1;transform:translate(-50%,0)}
+.patient-page .dashboard{min-height:calc(100vh - 79px)}
+@media(max-width:1000px){.patient-page .onboarding{grid-template-columns:1fr;gap:15px;padding:19px}.patient-page .story{min-height:0;padding:32px 5%}.patient-page .story-photo{display:none}.patient-page .workspace{min-height:0}.patient-page .patient-premium{display:none}}
+@media(max-width:720px){.patient-page .patient-header{padding:14px 16px;gap:9px}.patient-page .onboarding{padding:12px}.patient-page .story{padding:26px 21px}.patient-page .story h1{font-size:35px}.patient-page .workspace{padding:23px 17px}.patient-page .steps{gap:3px}.patient-page .steps li{font-size:9px;overflow-wrap:anywhere}.patient-result{grid-template-columns:1fr auto;padding:13px}.patient-result h3{font-size:13px}.patient-result-price strong{font-size:19px}.compare-heading{align-items:start;flex-direction:column}.patient-reservation{grid-template-columns:1fr}.patient-reservation .detail.wide{grid-column:auto}.patient-page .sidebar{gap:4px}.patient-page .sidebar>button{white-space:normal;min-width:0}.patient-page .dashboard-body{padding:18px 15px}.patient-page .welcome img{display:none}}
+@media(prefers-reduced-motion:reduce){.patient-page *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+/* Explicit theme tokens make this page robust when the shared font import is unavailable. */
+:root{--navy:#101f36;--green:#008f64;--mint:#dff5e9;--muted:#677483;--border:#dce5e6}
+.patient-page .primary{background:#008f64;color:#fff;border:0;border-radius:10px}
+.patient-page .primary:hover{background:#00734f}
+.patient-page .secondary{background:#eaf0ee;color:#163442}
+.patient-page .text-button{color:#006b4f}
+@media(max-width:720px){.patient-page .story h1 br{display:block}.patient-page .story h1{font-size:clamp(29px,7.9vw,36px);line-height:1.13}}

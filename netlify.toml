@@ -1,0 +1,3 @@
+# FE-03: the static site is published from frontend/ (no build required).
+[build]
+  publish = "frontend"
