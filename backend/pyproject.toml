@@ -1,0 +1,9 @@
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+# Historical migration kept byte-for-byte as originally generated.
+extend-exclude = ["alembic/versions/5c11125c47b6_baseline_existing_schema.py"]
+
+[tool.ruff.lint]
+select = ["F", "E9", "B", "I"]
+ignore = ["B008"]
