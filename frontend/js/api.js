@@ -15,7 +15,8 @@
 
   var DEFAULT_BASE = 'http://127.0.0.1:8000';
   var SESSION_KEY = 'apexrx_session';
-  var TIMEOUT_MS = 15000;
+  // Generous: a free Render instance takes ~50 s to wake from sleep.
+  var TIMEOUT_MS = 70000;
 
   function resolveBase() {
     var meta = document.querySelector('meta[name="apexrx-api-base"]');

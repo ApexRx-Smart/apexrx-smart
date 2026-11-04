@@ -1,0 +1,20 @@
+# Netlify deploys the static frontend in frontend/.
+# Set APEXRX_API_BASE (the Render backend URL) under
+# Site configuration > Environment variables before the first deploy.
+
+[build]
+  command = "sh frontend/scripts/write-config.sh"
+  publish = "frontend"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Always fetch the latest config and scripts after a deploy.
+[[headers]]
+  for = "/js/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

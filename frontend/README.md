@@ -15,7 +15,17 @@ A static site (HTML, CSS and vanilla JavaScript, no build step) that talks to th
    VS Code Live Server works too. `.vscode/settings.json` sets it to port 5501.
 3. Open http://127.0.0.1:5501/index.html.
 
-To point the site at another API server, add `<meta name="apexrx-api-base" content="https://api.example.com">` to the pages, or set `window.APEXRX_API_BASE` before `js/api.js` loads. Add the site's origin to the backend's `CORS_ORIGINS`.
+The API address comes from `js/config.js`. It is empty in the repository, so local development uses `http://127.0.0.1:8000`.
+
+## Deploy on Netlify
+
+`netlify.toml` at the repository root has the settings. There is no build: the deploy step only writes `js/config.js`.
+
+1. In Netlify, choose **Add new site → Import an existing project** and pick this repository and the `main` branch. Leave the build settings at their defaults, because `netlify.toml` provides them.
+2. Under **Site configuration → Environment variables**, set `APEXRX_API_BASE` to the backend URL, for example `https://apexrx-api.onrender.com`. If it is missing or not an `https` URL, the deploy fails on purpose.
+3. Deploy. Then, in the Render backend's environment, set `CORS_ORIGINS` to the Netlify site URL, for example `https://apexrx-smart.netlify.app`, and redeploy the backend.
+
+A free Render instance sleeps when idle and takes about 50 seconds to wake. The first request after a quiet period is slow; the client waits up to 70 seconds.
 
 ## How the pages use the API
 
