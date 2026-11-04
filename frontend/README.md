@@ -27,8 +27,12 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 | Homepage **Sign in** / **Get started** | Open `pharmacies.html` |
 | Pharmacies step 1, Account | `POST /auth/register`, then `POST /auth/login`. If the email already has an account, the same form signs in. |
 | Pharmacies step 3, Profile | `POST /organizations` (type `pharmacy`), `POST /organizations/{id}/locations`, `POST /organizations/{id}/documents` for each selected file. Coming back to this step updates the same records with `PATCH`. |
-| Workspace name and profile | `GET /auth/me`, `GET /organizations/{id}`, `GET /organizations/{id}/locations` |
-| Workspace supplier search | `GET /supplier-offers`: approved pharmacies only, with exact supplier stock. **Open chat** opens the supplier's WhatsApp, or calls their phone. |
+| Workspace name, avatar and profile | `GET /auth/me`, `GET /organizations/{id}`, `GET /organizations/{id}/locations` |
+| Workspace profile: documents | `GET /organizations/{id}/documents`: each document's review status |
+| Overview card count, **Overview** and **Supplier chat** lists | `GET /purchase-orders?organization_id=`: one row per supplier you have ordered from, with the latest order's number, status, total and item count. Typing filters by supplier name, then adds matching supplier stock. |
+| **Find a source** and supplier search | `GET /supplier-offers`: approved pharmacies only, with exact supplier stock. A medicine name is required. |
+| **Open chat** on any supplier row | Opens the supplier's WhatsApp with a prefilled message, or calls their phone |
+| "Sample data" badge and workspace note | Switch to "Live data" and a live note when signed in |
 | Page refresh | Resumes the signed-in session from `sessionStorage` |
 | **Restart demo** | Signs out |
 
@@ -41,4 +45,6 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 - **License number:** there is no column for it. It is shown on the workspace profile for this session only. The uploaded license documents are what ApexRX reviews.
 - **Account holder's name:** the account form has no name field, so registration uses the part of the email before `@`. It can be changed later with `PATCH /auth/me`.
 - **Supplier chat:** messages in the sample chat dialog stay in the browser. Live suppliers are contacted on WhatsApp or by phone, as the roles document describes.
-- **Homepage map pins and headline numbers:** illustrative content, unchanged.
+- **Homepage map pins and headline numbers:** illustrative content, unchanged. No public endpoint lists every pharmacy or returns platform totals.
+- **Supplier search by supplier name:** `/supplier-offers` searches by medicine. Supplier names are matched only among suppliers you have already ordered from.
+- **Inventory, purchase order screens and admin review:** `js/api.js` has the calls, but these pages have no screens for them yet.

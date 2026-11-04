@@ -28,6 +28,7 @@ const STATUS_NOTES = {
   rejected: 'Your registration was not approved. Update your details and documents, then contact ApexRX to resubmit.',
   suspended: 'Your pharmacy is suspended. Contact ApexRX for help.'
 };
+const NO_CONTACTS = 'No supplier conversations yet. Search for a medicine to find a supplier and contact them.';
 const SEARCH_HINT = 'Search for a medicine to see supplier stock, prices and contacts.';
 const LIVE_PANEL_NOTE = 'Supplier stock and prices are live. Conversations happen on WhatsApp or by phone; subscriptions are not live yet.';
 
@@ -82,7 +83,10 @@ function profileFromLive() {
     address: l.address || '—',
     latitude: l.latitude != null ? String(l.latitude) : '—',
     longitude: l.longitude != null ? String(l.longitude) : '—',
-    status: o.status
+    status: o.status,
+    documents: (live.documents || []).length
+      ? live.documents.map(d => `${DOCUMENT_LABELS[d.document_type] || d.document_type}: ${d.verification_status}`).join(' · ')
+      : 'None uploaded'
   };
 }
 
@@ -96,10 +100,37 @@ async function loadLive() {
   live.organization = await API.organizations.get(membership.organization_id);
   const locations = await API.organizations.locations(membership.organization_id);
   live.location = (locations || []).find(l => l.is_active) || (locations || [])[0] || null;
+  await refreshWorkspaceData();
   return live;
 }
 
-function resetLive() { live = null; accountEmail = ''; profile = { ...SAMPLE_PROFILE }; }
+const DOCUMENT_LABELS = { business_license: 'Business license', pharmacy_license: 'Pharmacy license', owner_id: 'Owner ID' };
+
+// Documents and supplier contacts change while the user works, so they are
+// reloaded each time the workspace opens. A failed request keeps the last values.
+async function refreshWorkspaceData() {
+  if (!live || !live.organization) return;
+  const orgId = live.organization.organization_id;
+  const [documents, orders] = await Promise.allSettled([
+    API.organizations.documents(orgId),
+    API.purchaseOrders.list({ organization_id: orgId, limit: 100 })
+  ]);
+  if (documents.status === 'fulfilled') live.documents = documents.value;
+  if (orders.status === 'fulfilled') live.contacts = supplierContacts(orders.value.items);
+}
+
+// One entry per supplier the pharmacy has ordered from, newest order first.
+function supplierContacts(orders) {
+  const bySupplier = new Map();
+  (orders || []).forEach(o => {
+    const entry = bySupplier.get(o.supplier.organization_id);
+    if (entry) { entry.orderCount += 1; return; }
+    bySupplier.set(o.supplier.organization_id, { supplier: o.supplier, latest: o, orderCount: 1 });
+  });
+  return [...bySupplier.values()];
+}
+
+function resetLive() { live = null; accountEmail = ''; profile = { ...SAMPLE_PROFILE }; currentView = 'home'; }
 
 /* -------------------------------------------------------- step 0: account */
 $('#account').addEventListener('submit', e => {
@@ -178,7 +209,7 @@ async function saveProfile(values) {
     live.location = live.location
       ? await API.organizations.updateLocation(orgId, live.location.location_id, location)
       : await API.organizations.createLocation(orgId, location);
-    await uploadSelectedDocuments(orgId);
+    if (await uploadSelectedDocuments(orgId)) live.documents = await API.organizations.documents(orgId);
   }
 }
 
@@ -224,16 +255,31 @@ function fillProfileForm() {
 document.querySelectorAll('[name=method]').forEach(r => r.addEventListener('change', () => $('#payment-method').textContent = r.value));
 
 /* -------------------------------------------------------------- dashboard */
+// Show live text in a static element, remembering its sample text so the
+// "Just exploring?" preview can restore it.
+function setLiveText(el, liveText) {
+  if (!el) return;
+  if (el.dataset.sample === undefined) el.dataset.sample = el.textContent;
+  el.textContent = liveText == null ? el.dataset.sample : liveText;
+}
+
+function paintWorkspace() {
+  const isLive = !!(live && live.organization);
+  const count = isLive ? (live.contacts || []).length : 0;
+  const card = $('.overview-cards [data-view=chat]');
+  setLiveText(card && card.querySelector('strong'), isLive ? `${count} supplier conversation${count === 1 ? '' : 's'}` : null);
+  setLiveText(card && card.querySelector('small'), isLive ? 'Review your supplier orders and contacts →' : null);
+  setLiveText($('.panel-heading .demo'), isLive ? 'Live data' : null);
+  setLiveText($('.dash-top .avatar'), isLive ? initials(live.organization.name) : null);
+  setLiveText($('.dashboard-body > .note'), isLive ? LIVE_PANEL_NOTE : null);
+}
+
 function openDashboard() {
   if (live && live.organization) profile = { ...profile, ...profileFromLive() };
   $('#onboarding').hidden = true; $('#dashboard').hidden = false;
   $('#pharmacy-name').textContent = profile.name;
   $('#today').textContent = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const panelNote = $('.data-panel > .note');
-  if (panelNote) {
-    panelNote.dataset.sample = panelNote.dataset.sample || panelNote.textContent;
-    panelNote.textContent = live && live.organization ? LIVE_PANEL_NOTE : panelNote.dataset.sample;
-  }
+  paintWorkspace();
   view('home');
   window.scrollTo(0, 0);
 }
@@ -302,18 +348,58 @@ function contactSupplier(offer) {
   }
 }
 
+const ORDER_STATUS_LABELS = { draft: 'Draft', submitted: 'Awaiting supplier', countered: 'Counteroffer received', accepted: 'Accepted', rejected: 'Rejected', processing: 'Processing', dispatched: 'Dispatched', delivered: 'Delivered', cancelled: 'Cancelled' };
+
+function whatsappLink(phone, text) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  return digits ? `https://wa.me/${digits}?text=${encodeURIComponent(text)}` : null;
+}
+
+function contactRow(contact) {
+  const { supplier, latest, orderCount } = contact;
+  const total = latest.confirmed_total != null ? latest.confirmed_total : latest.requested_total;
+  const parts = [
+    `Order #${latest.purchase_order_id}`,
+    ORDER_STATUS_LABELS[latest.status] || latest.status,
+    formatPrice(total, latest.currency),
+    `${latest.item_count} item${latest.item_count === 1 ? '' : 's'}`
+  ];
+  if (orderCount > 1) parts.push(`${orderCount} orders`);
+  const message = `Hello ${supplier.name}, ${profile.name} here (via ApexRX Smart) about purchase order #${latest.purchase_order_id}.`;
+  const wa = whatsappLink(supplier.whatsapp_phone, message);
+  const onClick = wa ? () => window.open(wa, '_blank', 'noopener')
+    : supplier.phone ? () => { location.href = `tel:${supplier.phone.replace(/[^\d+]/g, '')}`; } : null;
+  return supplierRow(supplier.name, parts.join(' · '), 'Open chat ↗', onClick, `Contact ${supplier.name} about order ${latest.purchase_order_id}`);
+}
+
 let supplierRequest = null, supplierTimer = null;
+// Live workspace list:
+//  - Overview / Supplier chat: suppliers you have ordered from (GET /purchase-orders),
+//    filtered by name as you type, followed by supplier stock matching the search.
+//  - Find a source: supplier stock matching the search (GET /supplier-offers).
 async function renderLiveSuppliers() {
   const container = $('#suppliers');
   const orgId = live.organization.organization_id;
-  if (live.organization.status !== 'approved') {
-    container.textContent = STATUS_NOTES[live.organization.status] || STATUS_NOTES.pending;
+  const q = $('#supplier-search').value.trim();
+  if (supplierRequest) { supplierRequest.abort(); supplierRequest = null; }
+
+  const showContacts = currentView !== 'source';
+  const contacts = showContacts
+    ? (live.contacts || []).filter(c => !q || c.supplier.name.toLowerCase().includes(q.toLowerCase()))
+    : [];
+  container.replaceChildren(...contacts.map(contactRow));
+
+  const approved = live.organization.status === 'approved';
+  // Supplier search is for approved pharmacies and searches by medicine name.
+  if (q.length < 2 || !approved) {
+    if (!container.children.length) {
+      if (!approved) container.textContent = STATUS_NOTES[live.organization.status] || STATUS_NOTES.pending;
+      else if (showContacts && !q) container.textContent = NO_CONTACTS;
+      else container.textContent = q ? 'No suppliers match your search.' : SEARCH_HINT;
+    }
     return;
   }
-  if (supplierRequest) supplierRequest.abort();
-  const q = $('#supplier-search').value.trim();
-  // The API searches by medicine, so wait for a search term.
-  if (q.length < 2) { supplierRequest = null; container.textContent = SEARCH_HINT; return; }
+
   const controller = new AbortController(); supplierRequest = controller;
   const params = { pharmacy_organization_id: orgId, q, sort: 'price', limit: 25 };
   if (live.location && live.location.latitude != null) { params.lat = live.location.latitude; params.lng = live.location.longitude; }
@@ -321,7 +407,6 @@ async function renderLiveSuppliers() {
   try {
     const page = await API.supplierOffers.search(params, { signal: controller.signal });
     if (supplierRequest !== controller) return;
-    container.replaceChildren();
     page.items.forEach(o => {
       const parts = [productLabel(o), formatPrice(o.unit_price, o.currency), `${o.quantity.toLocaleString('en-GB')} in stock`, o.city || o.location_name];
       if (o.distance_km != null) parts.push(`${o.distance_km.toFixed(1)} km`);
@@ -331,7 +416,8 @@ async function renderLiveSuppliers() {
     if (!container.children.length) container.textContent = 'No suppliers match your search.';
   } catch (err) {
     if (controller.signal.aborted) return;
-    container.textContent = errorText(err);
+    if (!container.children.length) container.textContent = errorText(err);
+    else notice(errorText(err));
   } finally {
     if (supplierRequest === controller) { supplierRequest = null; container.removeAttribute('aria-busy'); }
   }
@@ -359,12 +445,18 @@ function renderProfile() {
   $('#profile-summary').append(note);
 }
 
+let currentView = 'home';
 function view(name) {
+  currentView = name;
   document.querySelectorAll('.sidebar [data-view]').forEach(b => b.classList.toggle('selected', b.dataset.view === name));
   $('#panel-title').textContent = ({ home: 'Recent supplier conversations', source: 'Find a medicine source', chat: 'Your supplier conversations', profile: 'Your pharmacy details' })[name];
   $('#suppliers').hidden = name === 'profile'; $('#search-label').hidden = name === 'profile'; $('#profile-summary').hidden = name !== 'profile';
   if (name === 'profile') renderProfile();
-  else { $('#supplier-search').value = ''; renderSuppliers(); }
+  else {
+    $('#supplier-search').value = '';
+    if (live && live.organization) $('#suppliers').replaceChildren(); // never show the previous view's rows
+    renderSuppliers();
+  }
   if (name !== 'home') { $('#panel-title').focus(); $('#panel-title').scrollIntoView({ block: 'center' }); }
 }
 document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => view(b.dataset.view)));

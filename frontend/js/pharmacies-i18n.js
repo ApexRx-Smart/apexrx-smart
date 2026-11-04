@@ -207,6 +207,22 @@ const workflowTranslations = {
   "fr": "Aucun fournisseur ne correspond à votre recherche.",
   "rw": "Nta mutanga imiti uhuye n’ibyo washakishije."
  },
+ "Live data": {
+  "fr": "Données en direct",
+  "rw": "Amakuru y’ako kanya"
+ },
+ "Review your supplier orders and contacts →": {
+  "fr": "Voir vos commandes et contacts fournisseurs →",
+  "rw": "Reba ibyo watumije n’abatanga imiti →"
+ },
+ "No supplier conversations yet. Search for a medicine to find a supplier and contact them.": {
+  "fr": "Aucune discussion fournisseur pour l’instant. Recherchez un médicament pour trouver un fournisseur et le contacter.",
+  "rw": "Nta biganiro n’abatanga imiti biraba. Shakisha umuti ubone uwutanga umuvugishe."
+ },
+ "Documents": {
+  "fr": "Documents",
+  "rw": "Inyandiko"
+ },
  "Search for a medicine to see supplier stock, prices and contacts.": {
   "fr": "Recherchez un médicament pour voir les stocks, prix et contacts des fournisseurs.",
   "rw": "Shakisha umuti urebe ububiko, ibiciro na nimero z’abatanga imiti."
@@ -547,6 +563,7 @@ function workflowTranslate(source){
  const text=source.trim();
  if(workflowLang==='en')return source;
  let translated=workflowTranslations[text]?.[workflowLang];
+ if(!translated && /^\d+ supplier conversations?$/.test(text)){const n=text.split(' ')[0];translated=workflowLang==='fr'?`${n} discussion${n==='1'?'':'s'} fournisseur${n==='1'?'':'s'}`:`Ibiganiro ${n} n’abatanga imiti`;}
  if(!translated && /^STEP 0\d \/ 05$/.test(text)) translated=text.replace('STEP',workflowLang==='fr'?'ÉTAPE':'INTAMBWE');
  if(!translated && text.endsWith(' · Sample supplier')) translated=text.replace('Sample supplier',workflowLang==='fr'?'Fournisseur fictif':'Utanga imiti w’igerageza');
  if(!translated && text.startsWith('Open demo chat with ')) translated=text.replace('Open demo chat with ',workflowLang==='fr'?'Ouvrir la discussion de démonstration avec ':'Fungura ikiganiro cy’igerageza na ');
