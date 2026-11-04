@@ -3,9 +3,8 @@
  * One small, dependency-free wrapper around the FastAPI backend (see the
  * backend README "API Overview" and http://127.0.0.1:8000/docs).
  *
- * Base URL: set window.APEXRX_API_BASE before this script loads, or add
- * <meta name="apexrx-api-base" content="https://api.example.com"> to the page.
- * It defaults to the local development server.
+ * Base URL: js/config.js sets window.APEX_CONFIG.API_BASE_URL and must load
+ * before this script. Without it, the local development server is used.
  *
  * The access token is kept in sessionStorage, so it is cleared when the tab
  * closes. It is never written to localStorage.
@@ -13,7 +12,8 @@
 (function (global) {
   'use strict';
 
-  var DEFAULT_BASE = 'http://127.0.0.1:8000';
+  var DEFAULT_BASE =
+    window.APEX_CONFIG?.API_BASE_URL || 'http://127.0.0.1:8000';
   var SESSION_KEY = 'apexrx_session';
   var TIMEOUT_MS = 15000;
 

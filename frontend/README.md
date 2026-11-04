@@ -15,7 +15,7 @@ A static site (HTML, CSS and vanilla JavaScript, no build step) that talks to th
    VS Code Live Server works too. `.vscode/settings.json` sets it to port 5501.
 3. Open http://127.0.0.1:5501/index.html.
 
-To point the site at another API server, add `<meta name="apexrx-api-base" content="https://api.example.com">` to the pages, or set `window.APEXRX_API_BASE` before `js/api.js` loads. Add the site's origin to the backend's `CORS_ORIGINS`.
+The backend address is set in `js/config.js` (`window.APEX_CONFIG.API_BASE_URL`), which every page loads before `js/api.js`. It points at the hosted Render backend. To use a local backend, change it to `http://127.0.0.1:8000` and don't commit that change. Whichever backend you use must list the site's address in `CORS_ORIGINS`.
 
 ## How the pages use the API
 
