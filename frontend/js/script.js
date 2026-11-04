@@ -44,7 +44,8 @@
       stock_in:'In stock', stock_low:'Low stock', stock_out:'Out of stock',
       no_result:'No matching medicine found nearby. Try a different name.',
       t_signin:'Sign in is coming soon.', t_start:'Thanks for your interest. Onboarding opens soon.',
-      t_results:'Results for'
+      t_results:'Results for',
+      t_updated:'Updated', t_searching:'Searching...', t_search_error:'Unable to load medicine availability. Please try again.'
     },
     fr: {
       stats_eyebrow:'ApexRX en chiffres', stats_title:'Une ville. Mieux connectée.',
@@ -87,7 +88,8 @@
       stock_in:'En stock', stock_low:'Stock faible', stock_out:'Rupture',
       no_result:'Aucun médicament correspondant à proximité. Essayez un autre nom.',
       t_signin:'La connexion arrive bientôt.', t_start:'Merci de votre intérêt. L’inscription ouvre bientôt.',
-      t_results:'Résultats pour'
+      t_results:'Résultats pour',
+      t_updated:'Mis à jour', t_searching:'Recherche...', t_search_error:'Impossible de charger la disponibilité. Veuillez réessayer.'
     },
     /* Kinyarwanda: à faire relire par un locuteur natif avant la mise en ligne */
     rw: {
@@ -131,7 +133,8 @@
       stock_in:'Irahari', stock_low:'Hasigaye bike', stock_out:'Yashize',
       no_result:'Nta muti uhuye n’ibyo washakaga hafi aha. Gerageza irindi zina.',
       t_signin:'Kwinjira biraza vuba.', t_start:'Murakoze. Kwiyandikisha biraza vuba.',
-      t_results:'Ibisubizo bya'
+      t_results:'Ibisubizo bya',
+      t_updated:'Byavuguruwe', t_searching:'Turashakisha...', t_search_error:'Ntibishobotse kubona amakuru y’imiti. Ongera ugerageze.'
     }
   };
   var lang = 'en';
@@ -155,11 +158,14 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function(){ toastEl.classList.remove('show'); }, 2600);
   }
+  // Sign in and Get started both open the pharmacy/supplier account flow.
+  // Entering an existing account's email and password there signs you in.
+  function openAccountFlow(hash){ location.href = 'pharmacies.html?lang=' + encodeURIComponent(lang) + hash; }
   ['signInBtn','signInBtnMobile'].forEach(function(id){
-    document.getElementById(id).addEventListener('click', function(){ toast(t('t_signin')); });
+    document.getElementById(id).addEventListener('click', function(){ openAccountFlow('#signin'); });
   });
   ['getStartedBtn','getStartedBtnMobile'].forEach(function(id){
-    document.getElementById(id).addEventListener('click', function(){ toast(t('t_start')); });
+    document.getElementById(id).addEventListener('click', function(){ openAccountFlow(''); });
   });
 
   /* ================= STAT COUNTERS ================= */
@@ -392,104 +398,97 @@
   langSelect.addEventListener('change', function(){ applyLang(langSelect.value); });
   applyLang(langSelect.value);
 
-  /* ================= MEDICINE SEARCH ================= */
+  /* ================= MEDICINE SEARCH =================
+     Public patient search: GET /search/pharmacies?q=...
+     Patients see availability status, price, location and freshness only,
+     never exact stock quantities. */
   var searchForm = document.getElementById('medicineSearchForm');
   var searchInput = document.getElementById('medicineSearchInput');
   var searchResults = document.getElementById('medicineSearchResults');
   var searchStatus = document.getElementById('medicineSearchStatus');
+  var STOCK_CLASS = { in_stock: ['in', 'stock_in'], low_stock: ['low', 'stock_low'], unavailable: ['out', 'stock_out'] };
+  var LOCALES = { en: 'en-GB', fr: 'fr-FR', rw: 'rw-RW' };
+  var activeSearch = null;
 
-  if (searchForm && searchInput && searchResults && searchStatus) {
-    searchForm.addEventListener('submit', async function (event) {
+  function formatPrice(amount, currency){
+    var n = Number(amount);
+    if(!isFinite(n)) return '';
+    try{
+      return new Intl.NumberFormat(LOCALES[lang] || 'en-GB', {style:'currency', currency:currency || 'RWF', maximumFractionDigits:2}).format(n);
+    }catch(e){ return (currency || '') + ' ' + n.toLocaleString(); }
+  }
+  function formatAge(iso){
+    var then = new Date(iso).getTime();
+    if(!isFinite(then)) return '';
+    var mins = Math.max(0, Math.round((Date.now() - then) / 60000));
+    try{
+      var rtf = new Intl.RelativeTimeFormat(LOCALES[lang] || 'en-GB', {numeric:'auto'});
+      if(mins < 60) return rtf.format(-mins, 'minute');
+      if(mins < 1440) return rtf.format(-Math.round(mins / 60), 'hour');
+      return rtf.format(-Math.round(mins / 1440), 'day');
+    }catch(e){ return new Date(iso).toLocaleDateString(); }
+  }
+  function textRow(className, text){
+    var el = document.createElement('div'); el.className = className; el.textContent = text; return el;
+  }
+  function medicineLabel(m){
+    return [m.product_name || m.drug_name, m.strength, m.dosage_form]
+      .filter(function(part, i, all){ return part && (i === 0 || String(all[0]).toLowerCase().indexOf(String(part).toLowerCase()) === -1); })
+      .join(' · ') || 'Medicine';
+  }
+
+  if (searchForm && searchInput && searchResults && searchStatus && window.ApexAPI) {
+    searchForm.addEventListener('submit', function (event) {
       event.preventDefault();
+      var query = searchInput.value.trim();
+      if (query.length < 2) { searchInput.focus(); return; }
 
-      var query = searchInput.value.trim().toLowerCase();
-      if (!query) return;
+      if (activeSearch) activeSearch.abort();
+      var controller = typeof AbortController === 'function' ? new AbortController() : null;
+      activeSearch = controller;
 
-      searchStatus.textContent = 'Searching...';
+      searchStatus.textContent = t('t_searching');
       searchResults.classList.add('open');
       searchResults.replaceChildren();
 
-      try {
-        var response = await fetch(
-          'http://127.0.0.1:8000/medicines/availability'
-        );
+      ApexAPI.search.pharmacies({ q: query, sort: 'freshness', limit: 20 }, { signal: controller ? controller.signal : undefined })
+        .then(function (page) {
+          if (activeSearch !== controller) return;
+          searchStatus.textContent = '';
+          var matches = (page && page.items) || [];
 
-        if (!response.ok) {
-          throw new Error('API request failed: ' + response.status);
-        }
-
-        var medicines = await response.json();
-
-        var matches = medicines.filter(function (medicine) {
-          var searchableText = [
-            medicine.drug_name,
-            medicine.product_name,
-            medicine.brand,
-            medicine.strength,
-            medicine.dosage_form
-          ].filter(Boolean).join(' ').toLowerCase();
-
-          return searchableText.includes(query);
-        });
-
-        searchStatus.textContent = '';
-
-        if (matches.length === 0) {
-          var emptyMessage = document.createElement('div');
-          emptyMessage.className = 'result-empty';
-          emptyMessage.textContent = t('no_result');
-          searchResults.appendChild(emptyMessage);
-          return;
-        }
-
-        var heading = document.createElement('div');
-        heading.className = 'result-empty';
-        heading.textContent = t('t_results') + ' "' + searchInput.value.trim() + '"';
-        searchResults.appendChild(heading);
-
-        matches.forEach(function (medicine) {
-          var row = document.createElement('div');
-          row.className = 'result-row';
-
-          var details = document.createElement('div');
-
-          var name = document.createElement('div');
-          name.className = 'rname';
-          name.textContent = medicine.product_name || medicine.drug_name || 'Medicine';
-
-          var meta = document.createElement('div');
-          meta.className = 'rmeta';
-          meta.textContent =
-            (medicine.pharmacy_name || 'Pharmacy') + ' · ' +
-            (medicine.city || 'Location') + ' · Quantity: ' +
-            medicine.quantity + ' · Expires: ' +
-            medicine.expiry_date;
-
-          var stock = document.createElement('span');
-          var availability = String(medicine.availability || '').toLowerCase();
-
-          if (availability === 'out_of_stock' || Number(medicine.quantity) <= 0) {
-            stock.className = 'rstock out';
-            stock.textContent = t('stock_out');
-          } else if (availability === 'low_stock') {
-            stock.className = 'rstock low';
-            stock.textContent = t('stock_low');
-          } else {
-            stock.className = 'rstock in';
-            stock.textContent = t('stock_in');
+          if (matches.length === 0) {
+            searchResults.appendChild(textRow('result-empty', t('no_result')));
+            return;
           }
+          searchResults.appendChild(textRow('result-empty', t('t_results') + ' "' + query + '"'));
 
-          details.appendChild(name);
-          details.appendChild(meta);
-          row.appendChild(details);
-          row.appendChild(stock);
-          searchResults.appendChild(row);
+          matches.forEach(function (m) {
+            var row = document.createElement('div');
+            row.className = 'result-row';
+            var details = document.createElement('div');
+            var place = m.location_name && m.location_name !== m.pharmacy_name
+              ? m.pharmacy_name + ' (' + m.location_name + ')' : m.pharmacy_name;
+            var meta = [place, m.address, formatPrice(m.unit_price, m.currency), t('t_updated') + ' ' + formatAge(m.last_updated)]
+              .filter(Boolean).join(' · ');
+            details.appendChild(textRow('rname', medicineLabel(m)));
+            details.appendChild(textRow('rmeta', meta));
+
+            var status = STOCK_CLASS[m.availability_status] || STOCK_CLASS.in_stock;
+            var stock = document.createElement('span');
+            stock.className = 'rstock ' + status[0];
+            stock.textContent = t(status[1]);
+
+            row.appendChild(details);
+            row.appendChild(stock);
+            searchResults.appendChild(row);
+          });
+        })
+        .catch(function (error) {
+          if (controller && controller.signal.aborted && activeSearch !== controller) return;
+          console.error('Medicine search failed:', error);
+          searchStatus.textContent = (error && error.status === 0) ? error.message : t('t_search_error');
         });
-      } catch (error) {
-        console.error('Medicine search failed:', error);
-        searchStatus.textContent =
-          'Unable to load medicine availability. Please try again.';
-      }
     });
   }
 })();

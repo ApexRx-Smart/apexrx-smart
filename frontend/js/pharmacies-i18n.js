@@ -83,13 +83,13 @@ const workflowTranslations = {
   "fr": "Confirmer le mot de passe",
   "rw": "Subiramo ijambobanga"
  },
- "Demo only: use sample details and a test password. No account is created and nothing is sent to a server.": {
-  "fr": "Démo : utilisez des données fictives et un mot de passe de test. Aucun compte n’est créé et rien n’est envoyé au serveur.",
-  "rw": "Igerageza gusa: koresha amakuru n’ijambobanga by’igerageza. Nta konti ikorwa kandi nta makuru yoherezwa kuri seriveri."
+ "Your account is created on ApexRX Smart. Already registered? Enter your email and password to sign in.": {
+  "fr": "Votre compte est créé sur ApexRX Smart. Déjà inscrit ? Saisissez votre e-mail et votre mot de passe pour vous connecter.",
+  "rw": "Konti yawe ikorerwa kuri ApexRX Smart. Usanzwe ufite konti? Andika imeli n’ijambobanga byawe winjire."
  },
- "Create demo account": {
-  "fr": "Créer un compte de démonstration",
-  "rw": "Kora konti y’igerageza"
+ "Create account": {
+  "fr": "Créer un compte",
+  "rw": "Kora konti"
  },
  "Just exploring? Preview the workspace ↗": {
   "fr": "Envie de découvrir ? Voir le tableau de bord ↗",
@@ -175,9 +175,69 @@ const workflowTranslations = {
   "fr": "Pièce d’identité du propriétaire",
   "rw": "Indangamuntu ya nyiri farumasi"
  },
- "Use sample files only. Documents remain on your device and are not uploaded.": {
-  "fr": "Utilisez des fichiers fictifs. Les documents restent sur votre appareil et ne sont pas envoyés.",
-  "rw": "Koresha inyandiko z’igerageza gusa. Ziguma ku gikoresho cyawe kandi ntizoherezwa."
+ "Documents are uploaded securely to ApexRX for verification (PDF, PNG or JPG, up to 10 MB each).": {
+  "fr": "Les documents sont envoyés de façon sécurisée à ApexRX pour vérification (PDF, PNG ou JPG, 10 Mo max. chacun).",
+  "rw": "Inyandiko zoherezwa kuri ApexRX mu buryo bwizewe kugira ngo zisuzumwe (PDF, PNG cyangwa JPG, buri imwe itarenze MB 10)."
+ },
+ "Status": {
+  "fr": "Statut",
+  "rw": "Imiterere"
+ },
+ "Your pharmacy is awaiting verification by ApexRX. Supplier search opens once it is approved.": {
+  "fr": "Votre pharmacie est en attente de vérification par ApexRX. La recherche de fournisseurs s’ouvre après validation.",
+  "rw": "Farumasi yawe itegereje kwemezwa na ApexRX. Gushaka abatanga imiti bizafunguka imaze kwemezwa."
+ },
+ "Your pharmacy is verified. Listed medicines are visible to patients on ApexRX.": {
+  "fr": "Votre pharmacie est vérifiée. Les médicaments publiés sont visibles par les patients sur ApexRX.",
+  "rw": "Farumasi yawe yaremejwe. Imiti washyizeho igaragara ku barwayi kuri ApexRX."
+ },
+ "Your registration was not approved. Update your details and documents, then contact ApexRX to resubmit.": {
+  "fr": "Votre inscription n’a pas été validée. Mettez à jour vos informations et documents, puis contactez ApexRX pour la soumettre à nouveau.",
+  "rw": "Kwiyandikisha kwawe ntikwemejwe. Vugurura amakuru n’inyandiko byawe, hanyuma uvugishe ApexRX wongere usabe."
+ },
+ "Your pharmacy is suspended. Contact ApexRX for help.": {
+  "fr": "Votre pharmacie est suspendue. Contactez ApexRX pour obtenir de l’aide.",
+  "rw": "Farumasi yawe yahagaritswe by’agateganyo. Vugisha ApexRX ugufashe."
+ },
+ "Supplier stock and prices are live. Conversations happen on WhatsApp or by phone; subscriptions are not live yet.": {
+  "fr": "Les stocks et prix des fournisseurs sont en direct. Les échanges se font sur WhatsApp ou par téléphone ; les abonnements ne sont pas encore actifs.",
+  "rw": "Ububiko n’ibiciro by’abatanga imiti ni iby’ako kanya. Ibiganiro bikorerwa kuri WhatsApp cyangwa kuri telefoni; ifatabuguzi ntiriratangira."
+ },
+ "No suppliers match your search.": {
+  "fr": "Aucun fournisseur ne correspond à votre recherche.",
+  "rw": "Nta mutanga imiti uhuye n’ibyo washakishije."
+ },
+ "Live data": {
+  "fr": "Données en direct",
+  "rw": "Amakuru y’ako kanya"
+ },
+ "Review your supplier orders and contacts →": {
+  "fr": "Voir vos commandes et contacts fournisseurs →",
+  "rw": "Reba ibyo watumije n’abatanga imiti →"
+ },
+ "No supplier conversations yet. Search for a medicine to find a supplier and contact them.": {
+  "fr": "Aucune discussion fournisseur pour l’instant. Recherchez un médicament pour trouver un fournisseur et le contacter.",
+  "rw": "Nta biganiro n’abatanga imiti biraba. Shakisha umuti ubone uwutanga umuvugishe."
+ },
+ "Documents": {
+  "fr": "Documents",
+  "rw": "Inyandiko"
+ },
+ "Search for a medicine to see supplier stock, prices and contacts.": {
+  "fr": "Recherchez un médicament pour voir les stocks, prix et contacts des fournisseurs.",
+  "rw": "Shakisha umuti urebe ububiko, ibiciro na nimero z’abatanga imiti."
+ },
+ "Welcome back. You are signed in.": {
+  "fr": "Bon retour. Vous êtes connecté.",
+  "rw": "Murakaza neza. Mwinjiye."
+ },
+ "Your session has expired. Please sign in again.": {
+  "fr": "Votre session a expiré. Veuillez vous reconnecter.",
+  "rw": "Igihe cyawe cyarangiye. Ongera winjire."
+ },
+ "An account with this email already exists. Enter its password to sign in.": {
+  "fr": "Un compte existe déjà avec cet e-mail. Saisissez son mot de passe pour vous connecter.",
+  "rw": "Hari konti isanzwe ikoresha iyi imeli. Andika ijambobanga ryayo winjire."
  },
  "← Back": {
   "fr": "← Retour",
@@ -503,6 +563,7 @@ function workflowTranslate(source){
  const text=source.trim();
  if(workflowLang==='en')return source;
  let translated=workflowTranslations[text]?.[workflowLang];
+ if(!translated && /^\d+ supplier conversations?$/.test(text)){const n=text.split(' ')[0];translated=workflowLang==='fr'?`${n} discussion${n==='1'?'':'s'} fournisseur${n==='1'?'':'s'}`:`Ibiganiro ${n} n’abatanga imiti`;}
  if(!translated && /^STEP 0\d \/ 05$/.test(text)) translated=text.replace('STEP',workflowLang==='fr'?'ÉTAPE':'INTAMBWE');
  if(!translated && text.endsWith(' · Sample supplier')) translated=text.replace('Sample supplier',workflowLang==='fr'?'Fournisseur fictif':'Utanga imiti w’igerageza');
  if(!translated && text.startsWith('Open demo chat with ')) translated=text.replace('Open demo chat with ',workflowLang==='fr'?'Ouvrir la discussion de démonstration avec ':'Fungura ikiganiro cy’igerageza na ');
