@@ -1,36 +1,65 @@
+import logging
 
-from datetime import date
-
-from fastapi import FastAPI, HTTPException
-from sqlalchemy import select, text
-from sqlalchemy.exc import SQLAlchemyError
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.database import SessionLocal, engine
-from app.models import Batch, Drug, Location, Product, Stock
-from app.api.auth import router as auth_router
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.api import admin, auth, catalogue, inventory, orders, organizations, search
+from app.core.config import settings
+from app.core.database import engine
+from app.core.errors import AppError, register_error_handlers
+
+logging.basicConfig(level=logging.INFO)
+
+API_DESCRIPTION = """
+ApexRx connects patients with pharmacies that report a medicine as available,
+and pharmacies with suppliers that stock it.
+
+* **Patients** search without an account (`/search`).
+* **Pharmacies and suppliers** register an organization, upload verification
+  documents, add staff, record stock and prices, and exchange purchase orders.
+* **ApexRx admins** verify organizations and maintain the shared catalogue.
+
+Authenticate with `POST /auth/login` and send `Authorization: Bearer <token>`.
+"""
 
 app = FastAPI(
     title="ApexRx API",
-    description="Backend API for medicine availability and pharmacy inventory.",
-    version="0.1.0",
+    description=API_DESCRIPTION,
+    version="0.2.0",
+    openapi_tags=[
+        {"name": "Health"},
+        {"name": "Authentication", "description": "Accounts and sessions"},
+        {"name": "Search", "description": "Public patient search (no account)"},
+        {"name": "Catalogue", "description": "Shared medicine catalogue"},
+        {"name": "Organizations", "description": "Registration, members, locations, documents"},
+        {"name": "Inventory", "description": "Stock and offers per location"},
+        {"name": "Supplier discovery", "description": "Pharmacies search supplier stock"},
+        {"name": "Purchase orders", "description": "Pharmacy to supplier ordering"},
+        {"name": "Admin", "description": "Platform administration"},
+    ],
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://127.0.0.1:5501",
-        "http://localhost:5501",
-    ],
+    allow_origins=settings.cors_origins,
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
-app.include_router(
-    auth_router,
-    prefix="/auth",
-    tags=["Authentication"],
-)
+register_error_handlers(app)
+
+app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+app.include_router(search.router, prefix="/search", tags=["Search"])
+app.include_router(catalogue.router, prefix="/catalogue", tags=["Catalogue"])
+app.include_router(organizations.router, prefix="/organizations", tags=["Organizations"])
+app.include_router(inventory.router, prefix="/organizations", tags=["Inventory"])
+app.include_router(search.supplier_router, prefix="/supplier-offers", tags=["Supplier discovery"])
+app.include_router(orders.router, prefix="/purchase-orders", tags=["Purchase orders"])
+app.include_router(admin.router, prefix="/admin", tags=["Admin"])
+app.include_router(search.legacy_router, tags=["Search"])
 
 
 @app.get("/health", tags=["Health"])
@@ -38,57 +67,6 @@ def health_check():
     try:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
-
-        return {
-            "status": "healthy",
-            "database": "connected",
-        }
-
     except SQLAlchemyError:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "status": "unhealthy",
-                "database": "unavailable",
-            },
-        )
-
-
-@app.get("/medicines/availability", tags=["Medicines"])
-def get_medicine_availability():
-    statement = (
-        select(
-            Drug.name.label("drug_name"),
-            Product.product_name,
-            Product.brand,
-            Product.strength,
-            Product.dosage_form,
-            Location.name.label("pharmacy_name"),
-            Location.city,
-            Stock.quantity,
-            Stock.availability,
-            Batch.batch_number,
-            Batch.expiry_date,
-        )
-        .select_from(Stock)
-        .join(Location, Stock.location_id == Location.location_id)
-        .join(Batch, Stock.batch_id == Batch.batch_id)
-        .join(Product, Batch.product_id == Product.product_id)
-        .join(Drug, Product.drug_id == Drug.drug_id)
-        .where(
-            Stock.quantity > 0,
-            Batch.expiry_date >= date.today(),
-        )
-        .order_by(Drug.name, Location.name)
-    )
-
-    try:
-        with SessionLocal() as db:
-            results = db.execute(statement).mappings().all()
-            return [dict(row) for row in results]
-
-    except SQLAlchemyError:
-        raise HTTPException(
-            status_code=503,
-            detail="Unable to retrieve medicine availability.",
-        )
+        raise AppError("Database unavailable.", status_code=503) from None
+    return {"status": "healthy", "database": "connected"}

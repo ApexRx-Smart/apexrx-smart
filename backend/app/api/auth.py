@@ -1,107 +1,107 @@
+from fastapi import APIRouter, status
+from sqlalchemy import func, select
 
-from collections.abc import Generator
-
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-
-from app.core.database import SessionLocal
-from app.core.security import (
-    create_access_token,
-    hash_password,
-    verify_password,
-)
-from app.models.user import User
+from app.api.deps import CurrentUser, DbSession
+from app.core.errors import AppError, Conflict, Unauthorized
+from app.core.security import create_access_token, hash_password, verify_password
+from app.models import Membership, Organization, User
 from app.schemas.auth import (
+    ChangePasswordRequest,
     LoginRequest,
+    MembershipSummary,
+    MeResponse,
     RegisterRequest,
     TokenResponse,
+    UpdateMeRequest,
     UserResponse,
 )
-
+from app.schemas.common import Message
 
 router = APIRouter()
 
 
-def get_db() -> Generator[Session, None, None]:
-    with SessionLocal() as db:
-        yield db
+def normalize_email(email: str) -> str:
+    return str(email).strip().lower()
 
 
-@router.post(
-    "/register",
-    response_model=UserResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-def register(
-    payload: RegisterRequest,
-    db: Session = Depends(get_db),
-):
-    normalized_email = str(payload.email).strip().lower()
+def find_user_by_email(db, email: str) -> User | None:
+    return db.scalar(select(User).where(func.lower(func.btrim(User.email)) == normalize_email(email)))
 
-    existing_user = db.scalar(
-        select(User).where(User.email == normalized_email)
-    )
 
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="An account with this email already exists.",
-        )
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def register(payload: RegisterRequest, db: DbSession):
+    """Create a personal user account. Patients do not need an account; this is
+    for pharmacy/supplier staff, who then create or join an organization."""
+    email = normalize_email(payload.email)
+    if find_user_by_email(db, email):
+        raise Conflict("An account with this email already exists.")
 
     user = User(
-        name=payload.name.strip(),
-        email=normalized_email,
+        name=payload.name,
+        email=email,
         phone=payload.phone,
         password_hash=hash_password(payload.password),
     )
-
     db.add(user)
-
-    try:
-        db.commit()
-        db.refresh(user)
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="An account with this email already exists.",
-        )
-
+    db.commit()
     return user
 
 
-@router.post(
-    "/login",
-    response_model=TokenResponse,
-)
-def login(
-    payload: LoginRequest,
-    db: Session = Depends(get_db),
-):
-    normalized_email = str(payload.email).strip().lower()
+@router.post("/login", response_model=TokenResponse)
+def login(payload: LoginRequest, db: DbSession):
+    user = find_user_by_email(db, payload.email)
+    password_ok = verify_password(payload.password, user.password_hash if user else None)
+    if user is None or not password_ok or not user.is_active:
+        raise Unauthorized("Invalid email or password.")
 
-    user = db.scalar(
-        select(User).where(User.email == normalized_email)
+    token, expires_in = create_access_token(subject=str(user.user_id))
+    return TokenResponse(access_token=token, expires_in=expires_in)
+
+
+def _me(db, user: User) -> MeResponse:
+    rows = db.execute(
+        select(Membership, Organization)
+        .join(Organization, Organization.organization_id == Membership.organization_id)
+        .where(Membership.user_id == user.user_id, Membership.is_active.is_(True))
+        .order_by(Organization.name)
+    ).all()
+    return MeResponse(
+        **UserResponse.model_validate(user).model_dump(),
+        memberships=[
+            MembershipSummary(
+                membership_id=m.membership_id,
+                organization_id=o.organization_id,
+                organization_name=o.name,
+                organization_type=o.type,
+                organization_status=o.status,
+                role=m.role,
+            )
+            for m, o in rows
+        ],
     )
 
-    if (
-        user is None
-        or user.password_hash is None
-        or not verify_password(
-            payload.password,
-            user.password_hash,
-        )
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
 
-    access_token = create_access_token(
-        subject=str(user.user_id)
-    )
+@router.get("/me", response_model=MeResponse)
+def get_me(user: CurrentUser, db: DbSession):
+    """The current user and the organizations they belong to (with role)."""
+    return _me(db, user)
 
-    return TokenResponse(access_token=access_token)
+
+@router.patch("/me", response_model=MeResponse)
+def update_me(payload: UpdateMeRequest, user: CurrentUser, db: DbSession):
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        if field == "name" and value is None:
+            continue
+        setattr(user, field, value)
+    db.commit()
+    return _me(db, user)
+
+
+@router.post("/me/password", response_model=Message)
+def change_password(payload: ChangePasswordRequest, user: CurrentUser, db: DbSession):
+    if not verify_password(payload.current_password, user.password_hash):
+        # 400, not 401: the session is valid, only the confirmation failed.
+        raise AppError("Current password is incorrect.")
+    user.password_hash = hash_password(payload.new_password)
+    db.commit()
+    return Message(detail="Password updated.")
