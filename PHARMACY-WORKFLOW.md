@@ -4,9 +4,18 @@ Open frontend/index.html, then choose “For Pharmacies”. You can also open fr
 
 Demo journey: sample email + matching passwords (8 characters minimum) → code 472916 → pharmacy profile → simulated 5,000 RWF monthly plan → dashboard. “Preview the workspace” skips onboarding. The workspace includes supplier search, local demo conversations and a profile summary.
 
-This is a front-end prototype. No account is created, verification email sent, document uploaded, payment taken, supplier contacted or map listing published. Passwords are cleared after the first step; no workflow data is written to browser storage. Refreshing the page resets the demo. Uploaded sample files remain local. The map is illustrative; coordinates can be entered manually. Premium is a feature preview.
+The workflow is connected to the backend API (see [frontend/README.md](frontend/README.md) for the endpoint of each step):
 
-Before production: connect backend authentication and email verification, secure document storage and license review, a geocoded map, payment-provider integration with server verification, and live suppliers/chat. Confirm subscription terms and prices. The workflow supports English, French and Kinyarwanda. It inherits apexrx_lang from the home page; language query parameters also preserve the choice when local storage is unavailable. A selector changes the workflow language without losing form progress. Browser-native file picker and validation wording follow the browser language.
+- **Account:** creates a real account, or signs in if the email is already registered.
+- **Profile:** creates the pharmacy organization and its location, and uploads the verification documents for ApexRX to review.
+- **Workspace:** shows the live profile and document review status, suppliers from the pharmacy's purchase orders, and supplier stock search. Search works only once ApexRX has approved the pharmacy.
+- **Supplier contact:** **Open chat** opens the supplier's WhatsApp or phone.
+
+The access token is kept in `sessionStorage`, so a refresh resumes the session and closing the tab signs out. Passwords are never stored in the browser. **Restart demo** signs out. "Preview the workspace" and "Just exploring?" still show sample data without an account.
+
+Still simulated: the verification code (`472916`, no email is sent), the plan and payment step (no payment is taken), and in-app chat messages, which stay in the browser. The map is illustrative; coordinates can be entered manually. Premium is a feature preview.
+
+Before production: email verification, a geocoded map, payment-provider integration with server verification, durable document storage, and screens for inventory, purchase orders and admin review. Confirm subscription terms and prices. The workflow supports English, French and Kinyarwanda. It inherits apexrx_lang from the home page; language query parameters also preserve the choice when local storage is unavailable. A selector changes the workflow language without losing form progress. Browser-native file picker and validation wording follow the browser language.
 
 Files added: pharmacies.html, pharmacies.css, pharmacies.js, pharmacies-i18n.js. The home page pharmacy links now open pharmacies.html. Existing home-page CSS, JavaScript, Kigali map and wave animations are preserved.
 

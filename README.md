@@ -2,7 +2,13 @@
 
 ApexRx-Smart is a medicine availability platform designed to help patients, healthcare professionals, pharmacies, and suppliers access information about medicine availability.
 
-The project includes a static frontend, a FastAPI backend, and a PostgreSQL database schema. The frontend currently contains a pharmacy workflow demonstration, while the backend implements the v6 data model and API for patients, pharmacies, suppliers and administrators.
+The project includes a static frontend, a FastAPI backend, and a PostgreSQL database schema. The backend implements the v6 data model and API for patients, pharmacies, suppliers and administrators. The frontend is connected to it: the homepage medicine search, pharmacy registration and sign-in, organization profile and document upload, supplier search and the pharmacy workspace all use the live API.
+
+| Part | Hosted on (test deployment) |
+|---|---|
+| Frontend | Netlify (static, publish directory `frontend/`) |
+| Backend | Render: https://apexrx-smart.onrender.com |
+| Database | Neon (PostgreSQL) |
 
 ## Project Structure
 
@@ -29,15 +35,37 @@ apexrx-smart/
 │   │   └── logos/
 │   ├── css/
 │   ├── js/
+│   │   ├── config.js        # backend address (API_BASE_URL)
+│   │   ├── api.js           # API client used by every page (window.ApexAPI)
+│   │   ├── script.js        # homepage, including medicine search
+│   │   ├── pharmacies.js    # pharmacy onboarding and workspace
+│   │   ├── pharmacies-i18n.js
+│   │   └── pharmacies-motion.js
 │   ├── index.html
-│   └── pharmacies.html
+│   ├── pharmacies.html
+│   └── README.md            # how each page and control maps to the API
+├── apexrx_customer_bases_roles_and_functions.md   # business rules for the v6 model
 ├── PHARMACY-WORKFLOW.md
 └── README.md
 ```
 
 ## Frontend
 
-The frontend is a static website and pharmacy workflow demonstration. No frontend build step is required.
+The frontend is a static website (HTML, CSS and vanilla JavaScript). No build step is required. It supports English, French and Kinyarwanda.
+
+### Backend address
+
+Every page loads `js/config.js` before `js/api.js`:
+
+```js
+window.APEX_CONFIG = {
+    API_BASE_URL: "https://apexrx-smart.onrender.com"
+};
+```
+
+`api.js` uses `window.APEX_CONFIG.API_BASE_URL`, and falls back to `http://127.0.0.1:8000` when it is not set. To work against a local backend, change the URL in `config.js` to `http://127.0.0.1:8000` and don't commit that change.
+
+Whichever backend you use must list the frontend's address in its `CORS_ORIGINS` (see [Configure](#1-configure)).
 
 ### Run locally
 
@@ -52,13 +80,18 @@ Open the following pages in your browser:
 - Home page: http://localhost:5501/
 - Pharmacy workflow: http://localhost:5501/pharmacies.html
 
-Stop the server with `Ctrl+C`.
+Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
 
-### Static hosting
+### What is connected to the API
 
-For static hosting, set the published directory to `frontend/`. No build step is required.
+[frontend/README.md](frontend/README.md) maps every page and control to its endpoint. In short:
 
-If the entire repository is served instead, open `/frontend/`.
+- **Homepage search** calls `GET /search/pharmacies`. It shows availability, price, location and how fresh the data is, never exact quantities.
+- **Pharmacy registration** (`pharmacies.html`) creates the account (`POST /auth/register`), signs in, creates the pharmacy organization and its location, and uploads the verification documents. An existing email signs in instead.
+- **The pharmacy workspace** shows the signed-in pharmacy's profile and document review status. It lists suppliers from the pharmacy's purchase orders and searches supplier stock with `GET /supplier-offers`, which works only for approved pharmacies. **Open chat** opens the supplier's WhatsApp or phone.
+- **Just exploring?** still opens the workspace with sample data and no account.
+
+Still simulated in the browser, because the v6 data model has no support for them: the email verification code (`472916`), the plan and payment step, and in-app supplier chat. Inventory, purchase order and admin screens don't exist yet, but `js/api.js` already has the calls for them.
 
 ### Verify frontend changes
 
@@ -66,17 +99,14 @@ After making changes, check the following:
 
 1. Open the home page and verify the Kigali map, logos, audience images, and animations.
 2. Select English, French, and Kinyarwanda and verify that the language selection is applied.
-3. Open the pharmacy workflow and follow the demonstration signup process using a sample email, matching test passwords, and the demonstration verification code `472916`.
-4. Continue through the profile and simulated payment steps, then check supplier search and demonstration chat.
-5. Check narrow and wide layouts, navigation, return navigation, and social links.
+3. Search for a medicine on the home page and check that results come back from the backend. An empty database returns no results: see [Test data](#test-data).
+4. Open the pharmacy workflow and register with a new email and matching passwords (8 characters minimum). Enter the demonstration code `472916`, fill in the profile and upload the documents, then continue through the simulated payment step.
+5. In the workspace, check the profile and document statuses. Sign in as an **approved** pharmacy to try supplier search.
+6. Check narrow and wide layouts, navigation, return navigation, and social links.
 
-### Frontend demonstration limitations
+External Google Fonts and the YouTube background need network access and are subject to browser and provider restrictions.
 
-The pharmacy workflow is a frontend demonstration. Account creation, document uploads, payments, and supplier messaging should not be assumed to perform real transactions unless their backend integrations have been implemented.
-
-External Google Fonts and the existing YouTube background require network access and remain subject to browser and provider restrictions.
-
-See [PHARMACY-WORKFLOW.md](PHARMACY-WORKFLOW.md) for additional workflow details and demonstration limitations.
+See [PHARMACY-WORKFLOW.md](PHARMACY-WORKFLOW.md) for more details about the workflow.
 
 ## Backend
 
@@ -161,7 +191,7 @@ uvicorn app.main:app --reload --port 8000
 The tests are integration tests against a real PostgreSQL database, because the schema's triggers are part of the behaviour. Point `TEST_DATABASE_URL` at a **disposable** database whose name ends in `_test`. The suite drops and rebuilds its schema.
 
 ```bash
-export TEST_DATABASE_URL=postgresql+psycopg://USER:PASSWORD@localhost:5432/apexrx_test
+export TEST_DATABASE_URL=postgresql+psycopg://USER:PASSWORD@localhost:5432/apexrx_v6_test
 python -m pytest
 ruff check app tests alembic
 ```
@@ -183,7 +213,7 @@ Authenticated endpoints need `Authorization: Bearer <token>`. List endpoints ret
 | Supplier discovery | `GET /supplier-offers?pharmacy_organization_id=&q=&lat=&lng=&min_quantity=&sort=price\|distance\|quantity\|freshness` |
 | Purchase orders | `POST/GET /purchase-orders`, `GET/PATCH/DELETE /purchase-orders/{id}`, items `POST/PATCH/DELETE .../items[/{item_id}]`, `POST .../reprice`, transitions `POST .../submit\|accept\|counter\|reject\|accept-counter\|start-processing\|dispatch\|mark-delivered\|cancel` |
 | Admin | `GET /admin/organizations`, `GET /admin/organizations/{id}`, `POST .../review`, `GET /admin/documents`, `GET .../download`, `POST .../review`, `GET/PATCH /admin/users`, `GET /admin/insights/searches` |
-| Legacy (deprecated) | `GET /medicines/availability`: kept for the current homepage search, without quantities |
+| Legacy (deprecated) | `GET /medicines/availability`: no longer used by the frontend. Kept for older clients, without quantities |
 
 Each purchase order includes `allowed_actions`, the actions the current user may take next, so the UI can show only the valid buttons.
 
@@ -212,12 +242,64 @@ Every authenticated request sets the database transaction actor (`set_config('ap
 
 Run the frontend and backend in separate terminals during local development. CORS allows `http://127.0.0.1:5501` and `http://localhost:5501` by default; change it with `CORS_ORIGINS`.
 
-The current homepage search still calls the deprecated `GET /medicines/availability`. New frontend work should use `GET /search/pharmacies` and the other endpoints above. See `/docs` for the full request and response schemas.
+All frontend requests go through `frontend/js/api.js` (`window.ApexAPI`):
+
+- It reads the backend address from `js/config.js`.
+- It turns error responses into `ApiError` objects that carry a readable message.
+- It keeps the access token in `sessionStorage`, so the token is cleared when the tab closes.
+- Requests time out after 15 seconds.
+
+See `/docs` on the backend for the full request and response schemas.
+
+## Deployment (test environment)
+
+The test deployment uses free tiers only.
+
+### Database: Neon
+
+1. Create a Neon project and copy its connection string. Change the scheme to `postgresql+psycopg://` and keep `?sslmode=require`.
+2. From your machine, run the migrations against it once, then create an admin:
+
+   ```bash
+   cd backend
+   DATABASE_URL="postgresql+psycopg://...neon.tech/...?sslmode=require" alembic upgrade head
+   DATABASE_URL="..." python -m app.scripts.create_admin --email you@example.com --name "Your Name"
+   ```
+
+### Backend: Render
+
+Create a web service with root directory `backend`.
+
+| Setting | Value |
+|---|---|
+| Build command | `pip install -r requirements.txt` |
+| Start command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| Environment | `DATABASE_URL` (Neon), `JWT_SECRET_KEY`, `CORS_ORIGINS` (must include the Netlify URL, for example `https://your-site.netlify.app`) |
+
+Limits of the free plan:
+
+- The service sleeps after about 15 minutes without traffic. The first request after that can take up to a minute while it wakes, so it may time out in the browser: retry it.
+- The disk is not persistent, so uploaded verification documents are lost when the service restarts or redeploys. Use object storage before relying on uploads.
+
+### Frontend: Netlify
+
+Deploy the repository with publish directory `frontend` and no build command. `frontend/js/config.js` already points to the Render backend; change it there if the backend URL changes.
+
+### Test data
+
+A new database has no medicines or pharmacies, so searches return nothing. Either:
+
+- Run `python -m app.scripts.seed_demo` against the database (fake data only), or
+- Add real data through the API: an admin creates catalogue drugs and products, then approved pharmacies record their stock and prices per branch.
+
+Patient search shows only **approved** pharmacies, **active** locations and **listed** offers. By default it returns `in_stock` and `low_stock` results.
 
 ## Development Roadmap
 
-- Integrate the new endpoints with the frontend (registration, inventory, supplier search, orders, admin review).
+- Screens for inventory (stock and prices), purchase orders and admin review. `frontend/js/api.js` already has these calls.
+- A catalogue import script for loading real medicine data.
 - Password reset and email verification.
+- Subscription plans and real payments (the plan step is simulated).
 - Object storage (S3 or similar) for verification documents in multi-server deployments.
 - PostGIS for distance search at scale (bounding-box and haversine search is used today).
 - Notifications (email/WhatsApp) for order status changes.
