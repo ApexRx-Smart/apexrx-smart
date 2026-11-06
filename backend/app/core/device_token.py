@@ -53,11 +53,19 @@ def issue(user_id: int) -> str:
 
 
 def device_id_for(token: str | None, user_id: int | None) -> str | None:
-    """The device id if ``token`` is a valid, unexpired token for ``user_id``."""
+    """The device id if ``token`` is a valid, unexpired token for ``user_id``.
+
+    Never raises on client input: any malformed token (including non-ASCII
+    characters) is simply not a valid token, so the request falls back to the
+    normal per-account limit with the same response as for any other client.
+    """
     if not token or user_id is None or len(token) > MAX_TOKEN_LENGTH or token.count(".") != 1:
         return None
     body, signature = token.split(".")
-    if not hmac.compare_digest(signature, _sign(body.encode())):
+    # Compare bytes: hmac.compare_digest raises TypeError for str arguments
+    # containing non-ASCII characters. Bytes comparison stays constant-time.
+    expected = _sign(body.encode("utf-8", "surrogatepass"))
+    if not hmac.compare_digest(signature.encode("utf-8", "surrogatepass"), expected.encode("ascii")):
         return None
     try:
         data = json.loads(_unb64(body))

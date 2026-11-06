@@ -81,23 +81,41 @@
   var DEVICE_KEY = 'apexrx_known_devices';
   var MAX_DEVICE_ENTRIES = 5;
   function deviceKeyFor(email) { return String(email || '').trim().toLowerCase(); }
+  // Only well-formed entries survive: {token: string, savedAt: finite number}.
+  // Anything else in storage (null, strings, arrays, junk) is dropped, so a
+  // corrupted value can never break sign-in.
   function readDevices() {
+    var clean = {};
     try {
       var d = JSON.parse(localStorage.getItem(DEVICE_KEY) || '{}');
-      return d && typeof d === 'object' && !Array.isArray(d) ? d : {};
-    } catch (e) { return {}; }
+      if (!d || typeof d !== 'object' || Array.isArray(d)) return clean;
+      Object.keys(d).forEach(function (k) {
+        var e = d[k];
+        if (e && typeof e === 'object' && typeof e.token === 'string' && e.token &&
+            typeof e.savedAt === 'number' && isFinite(e.savedAt)) {
+          clean[k] = { token: e.token, savedAt: e.savedAt };
+        }
+      });
+    } catch (e) { /* storage unavailable or corrupt */ }
+    return clean;
   }
   function deviceTokenFor(email) {
     var entry = readDevices()[deviceKeyFor(email)];
-    return entry && typeof entry.token === 'string' ? entry.token : null;
+    return entry ? entry.token : null;
   }
+  // Best effort: never throws, so a successful sign-in is never reported as
+  // failed because the known-browser list could not be updated.
   function saveDeviceToken(email, token) {
-    if (!token) return;
-    var devices = readDevices();
-    devices[deviceKeyFor(email)] = { token: token, savedAt: Date.now() };
-    var keys = Object.keys(devices).sort(function (a, b) { return devices[b].savedAt - devices[a].savedAt; });
-    keys.slice(MAX_DEVICE_ENTRIES).forEach(function (k) { delete devices[k]; });
-    try { localStorage.setItem(DEVICE_KEY, JSON.stringify(devices)); } catch (e) { /* ignore */ }
+    try {
+      if (typeof token !== 'string' || !token) return;
+      var devices = readDevices();
+      devices[deviceKeyFor(email)] = { token: token, savedAt: Date.now() };
+      Object.keys(devices)
+        .sort(function (a, b) { return devices[b].savedAt - devices[a].savedAt; })
+        .slice(MAX_DEVICE_ENTRIES)
+        .forEach(function (k) { delete devices[k]; });
+      localStorage.setItem(DEVICE_KEY, JSON.stringify(devices));
+    } catch (e) { /* storage unavailable: the browser is simply not remembered */ }
   }
 
   function currentToken() {
