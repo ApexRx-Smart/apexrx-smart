@@ -13,3 +13,5 @@ storage3==2.34.0
 httpx==0.28.1
 # Login rate limiting
 limits==5.8.0
+# Phone number validation/normalization (libphonenumber)
+phonenumbers==9.0.42

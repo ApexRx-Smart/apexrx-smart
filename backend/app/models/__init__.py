@@ -13,6 +13,7 @@ from app.models.orders import (
     PurchaseOrderItem,
     PurchaseOrderStatusHistory,
 )
+from app.models.verification import PhoneVerification
 from app.models.views import patient_availability, supplier_listing
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     "Membership",
     "Organization",
     "OrganizationDocument",
+    "PhoneVerification",
     "Product",
     "ProductOffer",
     "PurchaseOrder",

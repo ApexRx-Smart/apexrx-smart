@@ -4,7 +4,8 @@ patient search on the homepage, against a LOCAL backend.
 Never point this at production: it registers accounts and changes statuses.
 
 Setup (see the root README, "Admin dashboard"):
-  1. Backend on http://127.0.0.1:8000 with a disposable database, and an admin:
+  1. Backend on http://127.0.0.1:8000 with a disposable database, APP_ENV=development
+     and SMS_PROVIDER=mock (pharmacies need an SMS-verified phone), and an admin:
        APEXRX_ADMIN_PASSWORD=... python -m app.scripts.create_admin --email e2e-admin@example.com --yes
   2. Frontend served on http://127.0.0.1:5501 (python -m http.server 5501 --directory frontend)
   3. pip install playwright && playwright install chromium
@@ -16,6 +17,7 @@ points at E2E_API, so no file needs editing. Uploaded files are dummy PDFs.
 
 import json
 import os
+import random
 import sys
 import time
 import urllib.error
@@ -30,6 +32,9 @@ ADMIN_EMAIL = os.environ["E2E_ADMIN_EMAIL"]
 ADMIN_PASSWORD = os.environ["E2E_ADMIN_PASSWORD"]
 PASSWORD = "E2e-User-Pass-2026"
 RUN = uuid.uuid4().hex[:6]
+# Random Rwandan mobile numbers per run (the per-number SMS limit is hourly).
+OWNER_PHONE = f"+250788{random.randint(0, 999999):06d}"
+SELLER_PHONE = f"+250789{random.randint(0, 999999):06d}"
 PDF = b"%PDF-1.4\n% ApexRx e2e dummy document, not a real license\n%%EOF\n"
 XSS_NAME = f'<img src=x onerror="window.__xss=1"> Supplier {RUN}'
 
@@ -78,12 +83,22 @@ def account(email, name):
     return call("POST", "/auth/login", {"email": email, "password": PASSWORD})["access_token"]
 
 
+def verify_phone(token, phone):
+    """The real SMS flow with the mock provider: send, read the code, verify."""
+    call("POST", "/auth/phone/send-code", {"phone": phone}, token)
+    req = urllib.request.Request(API + "/dev/sms/latest", headers={"Authorization": f"Bearer {token}"})
+    with urllib.request.urlopen(req) as res:
+        code = json.loads(res.read())["code"]
+    call("POST", "/auth/phone/verify", {"phone": phone, "code": code}, token)
+
+
 def seed():
     admin = call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})["access_token"]
 
     owner = account(f"owner-{RUN}@example.com", "Pending Owner")
+    verify_phone(owner, OWNER_PHONE)
     pending = call("POST", "/organizations", {"name": f"Pending Pharmacy {RUN}", "type": "pharmacy",
-                                               "email": f"contact-{RUN}@example.com", "phone": "+250 788 100 200"}, owner)
+                                               "email": f"contact-{RUN}@example.com", "phone": OWNER_PHONE}, owner)
     call("POST", f"/organizations/{pending['organization_id']}/locations",
          {"name": "Remera Branch", "address": "KG 11 Ave", "city": "Kigali", "latitude": -1.95, "longitude": 30.11}, owner)
     for doc_type, fname in [("pharmacy_license", "license-dummy.pdf"), ("owner_id", "owner-id-dummy.pdf")]:
@@ -95,6 +110,7 @@ def seed():
 
     # An approved pharmacy with a listed offer, for the patient search check.
     seller = account(f"seller-{RUN}@example.com", "Seller")
+    verify_phone(seller, SELLER_PHONE)
     shop = call("POST", "/organizations", {"name": f"Search Pharmacy {RUN}", "type": "pharmacy"}, seller)
     call("POST", f"/admin/organizations/{shop['organization_id']}/review", {"decision": "approved"}, admin)
     loc = call("POST", f"/organizations/{shop['organization_id']}/locations",
@@ -180,7 +196,7 @@ def main():
         page.click(f"#org-rows tr:has-text('Pending Pharmacy {RUN}') button")
         page.wait_for_selector("#detail-view:not([hidden])")
         detail = page.inner_text("#detail-view")
-        check("detail shows contact", f"contact-{RUN}@example.com" in detail and "+250 788 100 200" in detail)
+        check("detail shows contact", f"contact-{RUN}@example.com" in detail and OWNER_PHONE in detail)
         check("detail shows location", "Remera Branch" in detail and "KG 11 Ave" in detail)
         check("detail shows members", f"owner-{RUN}@example.com" in detail)
         check("detail shows both documents", "license-dummy.pdf" in detail and "owner-id-dummy.pdf" in detail)

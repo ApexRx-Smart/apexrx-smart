@@ -1,4 +1,19 @@
 const workflowTranslations = {
+ "Mobile phone number": {"fr": "Numéro de téléphone mobile", "rw": "Nimero ya telefoni igendanwa"},
+ "Send code by SMS": {"fr": "Envoyer le code par SMS", "rw": "Ohereza kode kuri SMS"},
+ "Resend code": {"fr": "Renvoyer le code", "rw": "Ongera wohereze kode"},
+ "Verify code": {"fr": "Vérifier le code", "rw": "Emeza kode"},
+ "We send a 6-digit code by SMS to confirm your mobile number. It expires after 5 minutes.": {"fr": "Nous envoyons un code à 6 chiffres par SMS pour confirmer votre numéro mobile. Il expire après 5 minutes.", "rw": "Tukoherereza kode y’imibare 6 kuri SMS kugira ngo twemeze nimero yawe. Irangira nyuma y’iminota 5."},
+ "Verify your mobile number to take the next step.": {"fr": "Vérifiez votre numéro mobile pour passer à la suite.", "rw": "Emeza nimero yawe ya telefoni kugira ngo ukomeze."},
+ "Enter your mobile phone number.": {"fr": "Saisissez votre numéro de téléphone mobile.", "rw": "Andika nimero yawe ya telefoni igendanwa."},
+ "Enter the 6-digit code from the SMS.": {"fr": "Saisissez le code à 6 chiffres reçu par SMS.", "rw": "Andika kode y’imibare 6 wakiriye kuri SMS."},
+ "Your mobile number is verified.": {"fr": "Votre numéro mobile est vérifié.", "rw": "Nimero yawe ya telefoni yemejwe."},
+ "SMS verification is not available right now. Please try again later or contact ApexRX.": {"fr": "La vérification par SMS n’est pas disponible pour le moment. Réessayez plus tard ou contactez ApexRX.", "rw": "Kwemeza ukoresheje SMS ntibiboneka ubu. Ongera ugerageze nyuma cyangwa uvugane na ApexRX."},
+ "This code has expired. Request a new code.": {"fr": "Ce code a expiré. Demandez un nouveau code.", "rw": "Iyi kode yarangiye. Saba indi kode."},
+ "There is no active code for this number. Request a new code.": {"fr": "Aucun code actif pour ce numéro. Demandez un nouveau code.", "rw": "Nta kode ikora y’iyi nimero. Saba indi kode."},
+ "Too many incorrect attempts. Request a new code.": {"fr": "Trop de tentatives incorrectes. Demandez un nouveau code.", "rw": "Wagerageje inshuro nyinshi bitari byo. Saba indi kode."},
+ "We could not send the SMS. Check the number and try again in a moment.": {"fr": "Nous n’avons pas pu envoyer le SMS. Vérifiez le numéro et réessayez dans un instant.", "rw": "Ntitwashoboye kohereza SMS. Reba nimero wongere ugerageze mu kanya."},
+ "Verify your mobile number by SMS before registering a pharmacy.": {"fr": "Vérifiez votre numéro mobile par SMS avant d’enregistrer une pharmacie.", "rw": "Emeza nimero yawe ukoresheje SMS mbere yo kwandikisha farumasi."},
  "For Pharmacies — ApexRX Smart": {
   "fr": "Pour les pharmacies — ApexRX Smart",
   "rw": "Kuri farumasi — ApexRX Smart"
@@ -95,25 +110,9 @@ const workflowTranslations = {
   "fr": "Envie de découvrir ? Voir le tableau de bord ↗",
   "rw": "Urashaka kureba gusa? Reba ahakorerwa ↗"
  },
- "Email entered:": {
-  "fr": "E-mail renseigné :",
-  "rw": "Imeli watanze:"
- },
  "6-digit verification code": {
   "fr": "Code de vérification à 6 chiffres",
   "rw": "Kode y’imibare 6 yo kwemeza"
- },
- "No email is sent in this demo. Enter": {
-  "fr": "Aucun e-mail n’est envoyé dans cette démo. Saisissez",
-  "rw": "Nta imeli yoherezwa muri iri gerageza. Andika"
- },
- "to continue.": {
-  "fr": "pour continuer.",
-  "rw": "kugira ngo ukomeze."
- },
- "Verify demo code": {
-  "fr": "Vérifier le code de démonstration",
-  "rw": "Emeza kode y’igerageza"
  },
  "← Change email": {
   "fr": "← Modifier l’e-mail",
@@ -443,10 +442,6 @@ const workflowTranslations = {
   "fr": "Les mots de passe ne correspondent pas.",
   "rw": "Amagambobanga ntabwo ahuye."
  },
- "Enter the demo verification code: 472916.": {
-  "fr": "Saisissez le code de démonstration : 472916.",
-  "rw": "Andika kode y’igerageza: 472916."
- },
  "Please enter a pharmacy name.": {
   "fr": "Veuillez saisir le nom de la pharmacie.",
   "rw": "Andika izina rya farumasi."
@@ -564,6 +559,10 @@ function workflowTranslate(source){
  if(workflowLang==='en')return source;
  let translated=workflowTranslations[text]?.[workflowLang];
  if(!translated && /^\d+ supplier conversations?$/.test(text)){const n=text.split(' ')[0];translated=workflowLang==='fr'?`${n} discussion${n==='1'?'':'s'} fournisseur${n==='1'?'':'s'}`:`Ibiganiro ${n} n’abatanga imiti`;}
+ if(!translated && /^Resend code in \d+s$/.test(text)){const n=text.match(/\d+/)[0];translated=workflowLang==='fr'?`Renvoyer le code dans ${n} s`:`Ongera wohereze kode mu masegonda ${n}`;}
+ if(!translated && /^Code sent to \S+\. It expires in \d+ minutes\.$/.test(text)){const m=text.match(/^Code sent to (\S+)\. It expires in (\d+) minutes\.$/);translated=workflowLang==='fr'?`Code envoyé au ${m[1]}. Il expire dans ${m[2]} minutes.`:`Kode yoherejwe kuri ${m[1]}. Irangira mu minota ${m[2]}.`;}
+ if(!translated && /^Incorrect code\. \d+ attempts? left\.$/.test(text)){const n=text.match(/\d+/)[0];translated=workflowLang==='fr'?`Code incorrect. ${n} tentative${n==='1'?'':'s'} restante${n==='1'?'':'s'}.`:`Kode si yo. Usigaje amahirwe ${n}.`;}
+ if(!translated && /^Please wait \d+ seconds before requesting another code\.$/.test(text)){const n=text.match(/\d+/)[0];translated=workflowLang==='fr'?`Patientez ${n} secondes avant de demander un autre code.`:`Tegereza amasegonda ${n} mbere yo gusaba indi kode.`;}
  if(!translated && /^STEP 0\d \/ 05$/.test(text)) translated=text.replace('STEP',workflowLang==='fr'?'ÉTAPE':'INTAMBWE');
  if(!translated && text.endsWith(' · Sample supplier')) translated=text.replace('Sample supplier',workflowLang==='fr'?'Fournisseur fictif':'Utanga imiti w’igerageza');
  if(!translated && text.startsWith('Open demo chat with ')) translated=text.replace('Open demo chat with ',workflowLang==='fr'?'Ouvrir la discussion de démonstration avec ':'Fungura ikiganiro cy’igerageza na ');
