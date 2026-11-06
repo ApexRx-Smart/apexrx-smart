@@ -198,13 +198,24 @@ function useVerifiedPhone(number) {
 
 // After sign-in: verify the phone unless the backend says it is not needed.
 async function continueToPhoneVerification() {
-  try { phoneState.status = await API.auth.phone.status(); } catch (err) {
+  let status = null;
+  try {
+    const result = await API.auth.phone.status();
+    // Only a well-formed answer counts; anything else is "unknown".
+    if (result && typeof result.required === 'boolean' && typeof result.verified === 'boolean') status = result;
+  } catch (err) {
     if (err.status === 401) throw err;
-    phoneState.status = null; // unknown: show the step; the backend still enforces it
+    // 404 (older backend during a deploy), network error, timeout: unknown.
   }
-  const status = phoneState.status;
-  if (status && status.verified) { useVerifiedPhone(status.verified_phone); step(2); return; }
-  if (status && !status.required) { step(2); return; }
+  phoneState.status = status;
+  if (!status) {
+    // Unknown is NOT verified: the backend still refuses an unverified
+    // pharmacy when verification is required (403), and the profile step
+    // then brings the user back here. When it is not required, they continue.
+    step(2); return;
+  }
+  if (status.verified) { useVerifiedPhone(status.verified_phone); step(2); return; }
+  if (!status.required) { step(2); return; }
   step(1);
   if (status && !status.sms_available) {
     formError('SMS verification is not available right now. Please try again later or contact ApexRX.');
@@ -340,6 +351,10 @@ $('#profile').addEventListener('submit', e => {
     if (live) {
       try { await saveProfile(values); } catch (err) {
         if (err.status === 401) { resetLive(); step(0); formError('Your session has expired. Please sign in again.'); return; }
+        if (err.status === 403 && !live.organization && !(phoneState.status && phoneState.status.verified)) {
+          // The backend requires a verified phone first: go to that step.
+          step(1); formError(errorText(err)); return;
+        }
         formError(errorText(err)); return;
       }
     }
