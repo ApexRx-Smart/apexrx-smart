@@ -1,9 +1,9 @@
 """Organization registration and setup: profile, members, locations, documents."""
 
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import APIRouter, File, Form, Response, UploadFile, status
-from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 
 from app.api.auth import find_user_by_email
@@ -361,14 +361,27 @@ def upload_document(
     return document
 
 
-def document_file_response(document: OrganizationDocument) -> FileResponse:
-    path = storage.resolve(document.storage_key)
-    if not path.is_file():
-        raise NotFound("The document file is missing from storage.")
-    return FileResponse(path, media_type=document.mime_type, filename=document.file_name)
+DOCUMENT_RESPONSES = {200: {"description": "The file", "content": {"application/octet-stream": {}}}}
 
 
-@router.get("/{organization_id}/documents/{document_id}/download", response_class=FileResponse)
+def document_file_response(document: OrganizationDocument) -> Response:
+    """Stream a stored document through the API. Callers must have authorized
+    the request first; no storage URL is ever handed to the client."""
+    content = storage.read_document(document.storage_key)
+    ascii_name = document.file_name.encode("ascii", "ignore").decode().replace('"', "") or "document"
+    disposition = f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(document.file_name)}"
+    return Response(
+        content=content,
+        media_type=document.mime_type,
+        headers={
+            "Content-Disposition": disposition,
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/{organization_id}/documents/{document_id}/download", responses=DOCUMENT_RESPONSES)
 def download_document(organization_id: int, document_id: int, user: CurrentUser, db: DbSession):
     get_org_access(db, user, organization_id, allow_admin_read=True)
     return document_file_response(_get_document(db, organization_id, document_id))

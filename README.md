@@ -35,12 +35,16 @@ apexrx-smart/
 │   │   └── logos/
 │   ├── css/
 │   ├── js/
+│   │   ├── admin.js         # admin dashboard
 │   │   ├── config.js        # backend address (API_BASE_URL)
 │   │   ├── api.js           # API client used by every page (window.ApexAPI)
 │   │   ├── script.js        # homepage, including medicine search
 │   │   ├── pharmacies.js    # pharmacy onboarding and workspace
 │   │   ├── pharmacies-i18n.js
 │   │   └── pharmacies-motion.js
+│   ├── tests/
+│   │   └── e2e_admin.py     # Playwright check of the admin dashboard (local only)
+│   ├── admin.html           # admin dashboard (ApexRX staff)
 │   ├── index.html
 │   ├── pharmacies.html
 │   └── README.md            # how each page and control maps to the API
@@ -79,6 +83,7 @@ Open the following pages in your browser:
 
 - Home page: http://localhost:5501/
 - Pharmacy workflow: http://localhost:5501/pharmacies.html
+- Admin dashboard: http://localhost:5501/admin.html
 
 Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
 
@@ -91,7 +96,9 @@ Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
 - **The pharmacy workspace** shows the signed-in pharmacy's profile and document review status. It lists suppliers from the pharmacy's purchase orders and searches supplier stock with `GET /supplier-offers`, which works only for approved pharmacies. **Open chat** opens the supplier's WhatsApp or phone.
 - **Just exploring?** still opens the workspace with sample data and no account.
 
-Still simulated in the browser, because the v6 data model has no support for them: the email verification code (`472916`), the plan and payment step, and in-app supplier chat. Inventory, purchase order and admin screens don't exist yet, but `js/api.js` already has the calls for them.
+- **The admin dashboard** (`admin.html`) lets ApexRX staff review registrations. See [Admin dashboard](#admin-dashboard).
+
+Still simulated in the browser, because the v6 data model has no support for them: the email verification code (`472916`), the plan and payment step, and in-app supplier chat. Inventory and purchase order screens don't exist yet, but `js/api.js` already has the calls for them.
 
 ### Verify frontend changes
 
@@ -135,11 +142,15 @@ cp .env.example .env    # then edit DATABASE_URL and JWT_SECRET_KEY
 | `JWT_SECRET_KEY` | yes | At least 16 characters, random |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | no | Default 30 |
 | `CORS_ORIGINS` | no | Comma-separated. Default: `http://127.0.0.1:5501,http://localhost:5501` |
-| `UPLOAD_DIR` | no | Where verification documents are stored. Default `backend/uploads/` |
+| `SUPABASE_URL` | production | Supabase project URL, e.g. `https://<project-ref>.supabase.co`. With the key, document files go to Supabase Storage |
+| `SUPABASE_SECRET_KEY` | production | Supabase **secret** key (`sb_secret_...`, or the legacy `service_role` key). Backend only: never put it in the frontend |
+| `SUPABASE_BUCKET_NAME` | no | Default `organization-documents`. The bucket must be **private** |
+| `DOCUMENT_STORAGE` | no | `auto` (default: Supabase when the two variables above are set, otherwise local disk), `supabase` or `local` |
+| `UPLOAD_DIR` | no | Local document storage only (development). Default `backend/uploads/` |
 | `MAX_UPLOAD_SIZE_BYTES` | no | Default 10 MB |
 | `DEFAULT_CURRENCY` | no | Default `RWF` |
 
-**Security:** never commit `.env`, database credentials or JWT secrets.
+**Security:** never commit `.env`, database credentials, JWT secrets or the Supabase secret key.
 
 ### 2. Install
 
@@ -169,6 +180,8 @@ python -m app.scripts.create_admin --email you@example.com --name "Your Name"
 python -m app.scripts.seed_demo     # local development only
 ```
 
+`create_admin` writes to the database in `DATABASE_URL` (environment first, otherwise `backend/.env`). It prints the target host and database and asks you to type `yes` (`--yes` skips the prompt). If the email already has an account, the account is promoted to platform admin and reactivated, with its password unchanged. Otherwise a new account is created and the password is prompted for, hidden (or read from `APEXRX_ADMIN_PASSWORD`).
+
 `seed_demo` creates an approved pharmacy with two Kigali branches, an approved supplier, five catalogue products, and stock and prices. Its accounts all use the password `demo-password`:
 
 | Email | Role |
@@ -195,6 +208,42 @@ export TEST_DATABASE_URL=postgresql+psycopg://USER:PASSWORD@localhost:5432/apexr
 python -m pytest
 ruff check app tests alembic
 ```
+
+The document tests use an in-memory fake of the Supabase Storage client, and the suite forces `DOCUMENT_STORAGE=local`, so tests never touch a real bucket. `tests/test_supabase_live.py` is an optional round trip against the real bucket (a dummy PDF under a random `test-.../` prefix, deleted afterwards). It runs only with `SUPABASE_LIVE_TESTS=1` and the `SUPABASE_*` variables set.
+
+## Document storage
+
+Verification documents are files in a **private Supabase Storage bucket**. Their metadata (type, file name, size, review status and the object key in `organization_document.storage_key`) stays in PostgreSQL on Neon.
+
+- **Object keys** are generated by the backend: `org-<organization_id>/<32 random hex characters>.<pdf|png|jpg>`. The uploaded file name is stored only as metadata, so it cannot cause path traversal or overwrite another file. Uploads never overwrite (`upsert=false`).
+- **Validation** happens before anything is stored. Only PDF, PNG and JPEG are accepted (415 otherwise), and the content must match the declared type. Empty files are refused (400), as are files over `MAX_UPLOAD_SIZE_BYTES` (413).
+- **Downloads** are streamed through the API after the caller is checked:
+  - `GET /admin/documents/{id}/download` needs a platform admin.
+  - `GET /organizations/{id}/documents/{doc}/download` needs a member of that organization.
+  - Anyone else gets 404, 403 or 401.
+  - No Supabase URL, signed or public, is ever sent to the browser, and the secret key never leaves the backend.
+- **Failures:** if Supabase is unreachable, uploads and downloads return 503 "Document storage is temporarily unavailable". No metadata row is written for a failed upload. A record whose file is not in the bucket returns 404 "missing from storage", and the record itself is kept.
+- **Check the configuration** with `python -m app.scripts.check_storage`. It confirms the bucket is private and round-trips a dummy file. It prints no secrets.
+- **Files from the old local storage** keep the same key format. `python -m app.scripts.migrate_documents_to_supabase` lists the files it would copy (a dry run). Add `--apply` to upload them under the same keys. No database change is needed.
+
+## Admin dashboard
+
+`frontend/admin.html` is for ApexRX staff. It is not linked from the public pages and is marked `noindex`. It uses only the existing endpoints:
+
+- **Sign in:** with the normal ApexRX login. Accounts that aren't platform admins are refused, and their token is cleared. The token is kept in `sessionStorage`, like the rest of the site. An expired or invalid token returns you to the sign-in screen. **Sign out** clears it.
+- **Overview:**
+  - Seven counts: total, pharmacies, suppliers, pending, approved, rejected and suspended.
+  - They come from the `total` of `GET /admin/organizations` with each filter, so no summary endpoint is needed.
+  - Clicking a count filters the list by it.
+- **Organizations:** a table of name, type, registration date, status and contact details. It has type and status filters, a name or email search, and pagination.
+- **Organization detail:**
+  - **Information:** profile, contacts, review history, locations, members and verification documents.
+  - **Documents:** download any document, then approve it or reject it with a reason.
+  - **Organization:** approve, reject with notes, or suspend with notes. Only the actions the backend allows from the current status are shown. **Approve** stays disabled while any document is pending.
+
+Every rule is enforced by the backend (`require_platform_admin` on every `/admin` route, `ORG_TRANSITIONS`, the pending-documents check). The page's buttons are only for usability. All values from the API are inserted as text, never as HTML.
+
+To check the dashboard end to end against a **local** backend and a disposable database, see `frontend/tests/e2e_admin.py`.
 
 ## API Overview
 
@@ -274,12 +323,17 @@ Create a web service with root directory `backend`.
 |---|---|
 | Build command | `pip install -r requirements.txt` |
 | Start command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
-| Environment | `DATABASE_URL` (Neon), `JWT_SECRET_KEY`, `CORS_ORIGINS` (must include the Netlify URL, for example `https://your-site.netlify.app`) |
+| Environment | `DATABASE_URL` (Neon), `JWT_SECRET_KEY`, `CORS_ORIGINS` (must include the Netlify URL, for example `https://your-site.netlify.app`), `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_BUCKET_NAME=organization-documents` |
 
 Limits of the free plan:
 
 - The service sleeps after about 15 minutes without traffic. The first request after that can take up to a minute while it wakes, so it may time out in the browser: retry it.
-- The disk is not persistent, so uploaded verification documents are lost when the service restarts or redeploys. Use object storage before relying on uploads.
+- The disk is not persistent. That is why verification documents are stored in Supabase Storage. Without the `SUPABASE_*` variables, the backend falls back to local disk, and uploads are lost on the next restart. The first document upload or download logs which storage is in use (`Document storage: Supabase bucket ...`), and `python -m app.scripts.check_storage` checks it directly.
+
+### Documents: Supabase Storage
+
+1. In the Supabase dashboard, open **Storage** and create the bucket `organization-documents`. Leave **Public bucket off**. No storage policies are needed, because only the backend accesses the bucket, using the secret key.
+2. Copy the **Project URL** and a **secret key** from **Project Settings → API Keys**, and set them on Render as `SUPABASE_URL` and `SUPABASE_SECRET_KEY`. Never put them in the frontend or in the repository.
 
 ### Frontend: Netlify
 
@@ -296,10 +350,9 @@ Patient search shows only **approved** pharmacies, **active** locations and **li
 
 ## Development Roadmap
 
-- Screens for inventory (stock and prices), purchase orders and admin review. `frontend/js/api.js` already has these calls.
+- Screens for inventory (stock and prices) and purchase orders. `frontend/js/api.js` already has these calls.
 - A catalogue import script for loading real medicine data.
 - Password reset and email verification.
 - Subscription plans and real payments (the plan step is simulated).
-- Object storage (S3 or similar) for verification documents in multi-server deployments.
 - PostGIS for distance search at scale (bounding-box and haversine search is used today).
 - Notifications (email/WhatsApp) for order status changes.
