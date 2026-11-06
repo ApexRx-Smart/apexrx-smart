@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Admin — ApexRX Smart</title>
+  <link rel="icon" href="assets/logos/logo-mark.svg">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="index.html"><img src="assets/logos/logo-mark.svg" alt="" width="34"><span>ApexRX<span class="green"> Smart</span><small>Administration</small></span></a>
+    <div class="who" id="who" hidden><span id="who-email"></span><button type="button" class="secondary small" id="sign-out">Sign out</button></div>
+  </header>
+
+  <!-- Sign in -->
+  <main id="login-view" class="login" hidden>
+    <form id="login-form" class="card login-card" novalidate>
+      <span class="eyebrow">APEXRX STAFF ONLY</span>
+      <h1>Admin sign in</h1>
+      <p class="muted">Use your ApexRX platform administrator account.</p>
+      <label>Email address<input name="email" type="email" autocomplete="username" required></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <p id="login-error" class="error" role="alert"></p>
+      <button class="primary" id="login-button">Sign in</button>
+    </form>
+  </main>
+
+  <!-- Dashboard -->
+  <main id="dashboard-view" class="dashboard" hidden>
+    <section aria-labelledby="overview-title">
+      <div class="section-head"><h1 id="overview-title">Organizations</h1><button type="button" class="secondary small" id="refresh">Refresh</button></div>
+      <div class="stats" id="stats">
+        <button type="button" class="stat" data-filter-type="" data-filter-status=""><strong data-count="total">–</strong><span>Total registered</span></button>
+        <button type="button" class="stat" data-filter-type="pharmacy" data-filter-status=""><strong data-count="pharmacy">–</strong><span>Pharmacies</span></button>
+        <button type="button" class="stat" data-filter-type="supplier" data-filter-status=""><strong data-count="supplier">–</strong><span>Suppliers</span></button>
+        <button type="button" class="stat pending" data-filter-type="" data-filter-status="pending"><strong data-count="pending">–</strong><span>Pending</span></button>
+        <button type="button" class="stat approved" data-filter-type="" data-filter-status="approved"><strong data-count="approved">–</strong><span>Approved</span></button>
+        <button type="button" class="stat rejected" data-filter-type="" data-filter-status="rejected"><strong data-count="rejected">–</strong><span>Rejected</span></button>
+        <button type="button" class="stat suspended" data-filter-type="" data-filter-status="suspended"><strong data-count="suspended">–</strong><span>Suspended</span></button>
+      </div>
+    </section>
+
+    <section id="list-view" class="card" aria-label="Organization list">
+      <form id="filters" class="filters">
+        <label>Type<select name="type"><option value="">All types</option><option value="pharmacy">Pharmacy</option><option value="supplier">Supplier</option></select></label>
+        <label>Status<select name="status"><option value="">All statuses</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label>
+        <label class="grow">Search<input name="q" type="search" maxlength="100" placeholder="Name or email"></label>
+        <button class="primary small">Apply</button>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Type</th><th>Registered</th><th>Status</th><th>Contact</th><th><span class="sr-only">Actions</span></th></tr></thead>
+          <tbody id="org-rows"></tbody>
+        </table>
+      </div>
+      <p id="list-message" class="muted" role="status"></p>
+      <div class="pager"><button type="button" class="secondary small" id="prev">← Previous</button><span id="page-info" class="muted"></span><button type="button" class="secondary small" id="next">Next →</button></div>
+    </section>
+
+    <section id="detail-view" class="card" hidden aria-labelledby="detail-name">
+      <button type="button" class="text-button" id="back">← Back to organizations</button>
+      <div class="detail-head">
+        <div><span class="eyebrow" id="detail-type"></span><h2 id="detail-name" tabindex="-1"></h2></div>
+        <span class="badge" id="detail-status"></span>
+      </div>
+      <p id="detail-message" class="notice" role="status" hidden></p>
+
+      <div class="grid">
+        <div>
+          <h3>Registration</h3>
+          <dl id="detail-info" class="facts"></dl>
+        </div>
+        <div>
+          <h3>Review</h3>
+          <div id="review-box">
+            <p id="review-hint" class="muted"></p>
+            <label>Review notes <small class="muted">(required to reject or suspend)</small><textarea id="review-notes" rows="3" maxlength="2000"></textarea></label>
+            <div class="actions">
+              <button type="button" class="primary" data-decision="approved">Approve</button>
+              <button type="button" class="danger" data-decision="rejected">Reject</button>
+              <button type="button" class="warning" data-decision="suspended">Suspend</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <h3>Verification documents</h3>
+      <div id="documents"></div>
+
+      <h3>Locations</h3>
+      <div id="locations"></div>
+
+      <h3>Members</h3>
+      <div id="members"></div>
+    </section>
+  </main>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

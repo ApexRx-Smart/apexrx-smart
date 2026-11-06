@@ -19,7 +19,7 @@ The backend address is set in `js/config.js` (`window.APEX_CONFIG.API_BASE_URL`)
 
 ## How the pages use the API
 
-All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend endpoint, including inventory, purchase orders and admin, which have no screens yet. It turns error responses into `ApiError` objects with a readable `message`. It keeps the access token in `sessionStorage`, so the token is cleared when the tab closes.
+All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend endpoint, including inventory and purchase orders, which have no screens yet. It turns error responses into `ApiError` objects with a readable `message`. It keeps the access token in `sessionStorage`, so the token is cleared when the tab closes.
 
 | Page / control | Endpoint |
 |---|---|
@@ -38,6 +38,19 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 
 **Just exploring?** still opens the workspace with sample data and no account.
 
+### Admin dashboard (`admin.html`)
+
+| Control | Endpoint |
+|---|---|
+| Sign in | `POST /auth/login`, then `GET /auth/me`. Refused unless `is_platform_admin` |
+| Overview counts | `GET /admin/organizations?limit=1` with each `type` / `status` filter, using its `total` |
+| Organization table, filters, search, pages | `GET /admin/organizations?type=&status=&q=&limit=&offset=` |
+| **Open** | `GET /admin/organizations/{id}`: profile, locations, members and documents |
+| **Approve** / **Reject** / **Suspend** | `POST /admin/organizations/{id}/review` (notes required to reject or suspend) |
+| Document **Download** | `GET /admin/documents/{id}/download`: streamed by the backend from the private bucket |
+| **Approve document** / **Reject document** | `POST /admin/documents/{id}/review` (a reason is required to reject) |
+| **Sign out**, expired token | Clears the session and shows the sign-in screen |
+
 ## Not connected yet (no backend support in the v6 data model)
 
 - **Email verification (step 2):** the demo code `472916` is still checked in the browser.
@@ -47,4 +60,4 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 - **Supplier chat:** messages in the sample chat dialog stay in the browser. Live suppliers are contacted on WhatsApp or by phone, as the roles document describes.
 - **Homepage map pins and headline numbers:** illustrative content, unchanged. No public endpoint lists every pharmacy or returns platform totals.
 - **Supplier search by supplier name:** `/supplier-offers` searches by medicine. Supplier names are matched only among suppliers you have already ordered from.
-- **Inventory, purchase order screens and admin review:** `js/api.js` has the calls, but these pages have no screens for them yet.
+- **Inventory and purchase order screens:** `js/api.js` has the calls, but there are no screens for them yet.

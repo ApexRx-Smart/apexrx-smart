@@ -4,13 +4,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Query
-from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, select
 
 from app.api.auth import normalize_email
 from app.api.catalogue import contains
 from app.api.deps import AdminUser, DbSession, Pagination
-from app.api.organizations import document_file_response, list_member_responses
+from app.api.organizations import DOCUMENT_RESPONSES, document_file_response, list_member_responses
 from app.core.errors import AppError, Conflict, NotFound
 from app.models import Location, Organization, OrganizationDocument, SearchEvent, User
 from app.models.enums import DocumentStatus, OrganizationStatus, OrganizationType
@@ -179,7 +178,7 @@ def _get_document(db, document_id: int) -> OrganizationDocument:
     return document
 
 
-@router.get("/documents/{document_id}/download", response_class=FileResponse)
+@router.get("/documents/{document_id}/download", responses=DOCUMENT_RESPONSES)
 def download_document(document_id: int, _: AdminUser, db: DbSession):
     return document_file_response(_get_document(db, document_id))
 

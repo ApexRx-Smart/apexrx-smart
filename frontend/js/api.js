@@ -152,6 +152,10 @@
       .then(function (res) {
         if (res.ok) return res.blob();
         return res.json().catch(function () { return null; }).then(function (data) {
+          if (res.status === 401) {
+            clearSession();
+            emit('apexrx:signed-out');
+          }
           throw new ApiError(res.status, messageFrom(res.status, data), data);
         });
       }, function (err) { throw new ApiError(0, messageFrom(0, null), { cause: String(err) }); });

@@ -8,3 +8,6 @@ pwdlib[argon2]==0.2.1
 PyJWT==2.10.1
 email-validator==2.2.0
 python-multipart==0.0.20
+# Supabase Storage (official client) for verification documents
+storage3==2.34.0
+httpx==0.28.1

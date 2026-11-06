@@ -2,7 +2,14 @@
 
     python -m app.scripts.create_admin --email admin@apexrx.rw --name "ApexRx Admin"
 
-The password is prompted for (or read from APEXRX_ADMIN_PASSWORD).
+The target database is DATABASE_URL from the environment, otherwise from
+backend/.env. The script shows which host and database it will write to and
+asks for confirmation (skip with --yes).
+
+* If the email already has an account, it is promoted to platform admin and
+  reactivated. Its password is not changed.
+* Otherwise a new account is created. The password is prompted for, hidden
+  (or read from APEXRX_ADMIN_PASSWORD).
 """
 
 import argparse
@@ -11,7 +18,9 @@ import os
 import sys
 
 from sqlalchemy import func, select
+from sqlalchemy.engine import make_url
 
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.models import User
@@ -21,8 +30,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--email", required=True)
     parser.add_argument("--name", default="ApexRx Admin")
+    parser.add_argument("--yes", action="store_true", help="Do not ask for confirmation")
     args = parser.parse_args()
     email = args.email.strip().lower()
+
+    url = make_url(settings.database_url)
+    target = f"{url.host or 'localhost'}/{url.database}"  # never print the password
+    print(f"Target database: {target}")
+    if not args.yes and input(f"Make {email} a platform admin on {target}? Type 'yes' to continue: ") != "yes":
+        print("Cancelled. Nothing was changed.")
+        return 1
 
     with SessionLocal() as db:
         user = db.scalar(select(User).where(func.lower(func.btrim(User.email)) == email))

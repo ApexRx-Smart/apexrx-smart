@@ -25,10 +25,15 @@ if not (make_url(_test_url).database or "").endswith("_test"):
 os.environ["DATABASE_URL"] = _test_url
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-that-is-long-enough")
 os.environ["UPLOAD_DIR"] = tempfile.mkdtemp(prefix="apexrx-uploads-")
+# Never touch a real Supabase bucket by accident: tests use the local backend or
+# the in-memory fake (see fake_bucket). tests/test_supabase_live.py builds its
+# own client and only runs when SUPABASE_LIVE_TESTS=1.
+os.environ["DOCUMENT_STORAGE"] = "local"
 
 from alembic.config import Config  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import text  # noqa: E402
+from storage3.exceptions import StorageApiError  # noqa: E402
 
 from alembic import command  # noqa: E402
 from app.core.database import engine  # noqa: E402
@@ -62,3 +67,56 @@ def _clean():
 def client():
     with TestClient(app) as c:
         yield c
+
+
+class FakeBucketFiles:
+    """Mimics storage3's ``from_(bucket)`` file API, in memory."""
+
+    def __init__(self, store: "FakeSupabase"):
+        self.store = store
+
+    def _check(self):
+        if self.store.fail:
+            raise StorageApiError("Service unavailable", "InternalError", 503)
+
+    def upload(self, path, file, file_options=None):
+        self._check()
+        if path in self.store.objects:
+            raise StorageApiError("The resource already exists", "Duplicate", 409)
+        self.store.objects[path] = (bytes(file), dict(file_options or {}))
+        return {"path": path}
+
+    def download(self, path, options=None, query_params=None):
+        self._check()
+        if path not in self.store.objects:
+            raise StorageApiError("Object not found", "not_found", 404)
+        return self.store.objects[path][0]
+
+    def remove(self, paths):
+        self._check()
+        for path in paths:
+            self.store.objects.pop(path, None)
+        return []
+
+
+class FakeSupabase:
+    def __init__(self):
+        self.objects: dict[str, tuple[bytes, dict]] = {}
+        self.buckets: list[str] = []
+        self.fail = False
+
+    def from_(self, bucket):
+        self.buckets.append(bucket)
+        return FakeBucketFiles(self)
+
+
+@pytest.fixture
+def fake_bucket():
+    """Route document storage through the real SupabaseBackend, backed by an
+    in-memory fake of the storage3 client."""
+    from app.services import storage
+
+    fake = FakeSupabase()
+    storage.set_backend(storage.SupabaseBackend(fake, "organization-documents"))
+    yield fake
+    storage.set_backend(None)
