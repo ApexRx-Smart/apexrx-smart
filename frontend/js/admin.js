@@ -280,6 +280,11 @@
       ['Last reviewed', org.reviewed_at ? date(org.reviewed_at, true) : 'Not reviewed yet'],
       ['Review notes', org.review_notes || '—']
     ];
+    // Licence details given at registration, once the API returns them.
+    var licences = org.type === 'pharmacy'
+      ? [['NPC number', org.npc_number], ['Pharmacy license', org.license_number]]
+      : [['TIN', org.tin], ['Rwanda FDA licence', org.fda_license_number], ['FDA licence expiry', org.fda_license_expiry]];
+    licences.forEach(function (l) { if (l[1]) facts.splice(4, 0, l); });
     var dl = $('#detail-info');
     dl.replaceChildren();
     facts.forEach(function (f) { dl.appendChild(el('dt', { text: f[0] })); dl.appendChild(el('dd', { text: f[1] })); });
@@ -423,6 +428,49 @@
   }
 
   /* ---------------------------------------------------------------- start */
+  /* Medicines: the catalogue pharmacies and suppliers pick from. Only admins add to it. */
+  function loadMedicines() {
+    var q = $('#meds-q').value.trim();
+    return API.catalogue.products(Object.assign({ limit: 100 }, q ? { q: q } : {})).then(function (page) {
+      var rows = $('#meds-rows');
+      rows.replaceChildren();
+      page.items.forEach(function (p) {
+        var tr = el('tr');
+        [p.product_name, p.strength, p.dosage_form, p.pack_size, p.manufacturer].forEach(function (v) { tr.appendChild(el('td', { text: v || '—' })); });
+        rows.appendChild(tr);
+      });
+      $('#meds-message').textContent = page.items.length ? '' : 'No medicine found.';
+    }).catch(function (err) { if (err.status !== 401) toast(errorText(err)); });
+  }
+  $('#meds-toggle').addEventListener('click', function () {
+    var box = $('#meds-view'), open = box.hidden;
+    box.hidden = !open;
+    $('#list-view').hidden = open;
+    $('#detail-view').hidden = true;
+    this.textContent = open ? 'Organizations' : 'Medicines';
+    if (open) loadMedicines();
+  });
+  $('#meds-search').addEventListener('submit', function (e) { e.preventDefault(); loadMedicines(); });
+  $('#meds-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var form = e.currentTarget, f = form.elements, button = form.querySelector('button');
+    var value = function (n) { return f[n].value.trim() || null; };
+    var name = value('drug'), product = value('product');
+    if (!name || !product) { $('#meds-error').textContent = 'Enter the generic name and the product name.'; return; }
+    $('#meds-error').textContent = '';
+    button.disabled = true;
+    API.catalogue.drugs({ q: name, limit: 100 }).then(function (r) {
+      var known = r.items.filter(function (d) { return d.name.toLowerCase() === name.toLowerCase(); })[0];
+      return known || API.catalogue.createDrug({ name: name, therapeutic_class: value('cls') });
+    }).then(function (drug) {
+      return API.catalogue.createProduct({ drug_id: drug.drug_id, product_name: product, brand: value('brand'), strength: value('strength'), dosage_form: value('form'), pack_size: value('pack'), manufacturer: value('maker') });
+    }).then(function () {
+      form.reset(); toast('Medicine added.'); return loadMedicines();
+    }).catch(function (err) {
+      if (err.status !== 401) $('#meds-error').textContent = errorText(err);
+    }).then(function () { button.disabled = false; });
+  });
+
   if (API.session.isSignedIn()) {
     enter().catch(function (err) {
       API.session.clear();

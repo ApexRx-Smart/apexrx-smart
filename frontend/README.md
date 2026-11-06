@@ -19,25 +19,24 @@ The backend address is set in `js/config.js` (`window.APEX_CONFIG.API_BASE_URL`)
 
 ## How the pages use the API
 
-All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend endpoint, including inventory and purchase orders, which have no screens yet. It turns error responses into `ApiError` objects with a readable `message`. It keeps the access token in `sessionStorage`, so the token is cleared when the tab closes.
+All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend endpoint. It turns error responses into `ApiError` objects with a readable `message`. It keeps the access token in `sessionStorage`, so the token is cleared when the tab closes.
 
 | Page / control | Endpoint |
 |---|---|
 | Homepage medicine search | `GET /search/pharmacies?q=`: availability status, price, location and freshness. Never exact quantities. |
-| Homepage **Sign in** / **Get started** | Open `pharmacies.html` |
-| Pharmacies step 1, Account | `POST /auth/register`, then `POST /auth/login`. If the email already has an account, the same form signs in. |
-| Pharmacies step 2, Verify | `GET /auth/phone/status`, then `POST /auth/phone/send-code` and `POST /auth/phone/verify`. The step is skipped when the number is already verified or the backend doesn't require it. **Resend code** counts down `resend_after` |
-| Pharmacies step 3, Profile | `POST /organizations` (type `pharmacy`). The phone field is filled with the verified number, read-only, and the backend enforces it, `POST /organizations/{id}/locations`, `POST /organizations/{id}/documents` for each selected file. Coming back to this step updates the same records with `PATCH`. |
-| Workspace name, avatar and profile | `GET /auth/me`, `GET /organizations/{id}`, `GET /organizations/{id}/locations` |
-| Workspace profile: documents | `GET /organizations/{id}/documents`: each document's review status |
-| Overview card count, **Overview** and **Supplier chat** lists | `GET /purchase-orders?organization_id=`: one row per supplier you have ordered from, with the latest order's number, status, total and item count. Typing filters by supplier name, then adds matching supplier stock. |
-| **Find a source** and supplier search | `GET /supplier-offers`: approved pharmacies only, with exact supplier stock. A medicine name is required. |
-| **Open chat** on any supplier row | Opens the supplier's WhatsApp with a prefilled message, or calls their phone |
-| "Sample data" badge and workspace note | Switch to "Live data" and a live note when signed in |
+| Homepage **Sign in** / **Get started** | Open `pharmacies.html`. Supplier links open `suppliers.html`. |
+| Registration step 1, Account | `POST /auth/register`, then `POST /auth/login`. If the email already has an account, the same form signs in. |
+| Registration step 2, Verify | `GET /auth/phone/status`, then `POST /auth/phone/send-code` and `POST /auth/phone/verify`. The step is skipped when the number is already verified or the backend doesn't require it. **Resend code** counts down `resend_after` |
+| Registration step 3, Profile | `POST /organizations`, `POST /organizations/{id}/locations`, and `POST /organizations/{id}/documents` for each selected file. The phone field is filled with the verified number, read-only, and the backend enforces it. Coming back to this step updates the same records with `PATCH`. |
+| Dashboard name and profile | `GET /auth/me`, `GET /organizations/{id}`, `GET /organizations/{id}/locations`, `GET /organizations/{id}/documents` |
+| Dashboard stock or catalogue | `GET /catalogue/products`, `GET /catalogue/drugs`, and the inventory calls in `js/api.js` for stock quantities, supplier offers and stock confirmation |
+| Dashboard orders | `GET /purchase-orders?organization_id=`, then the create, reprice and status calls in `js/api.js` |
+| **Compare prices** (pharmacy) | `GET /supplier-offers`: approved pharmacies only, with exact supplier stock. A medicine name is required. |
+| **Open chat** on a supplier row | Opens the supplier's WhatsApp with a prefilled message, or calls their phone |
+| Branches or depots, and team | `POST /organizations/{id}/locations` and the member calls in `js/api.js` |
 | Page refresh | Resumes the signed-in session from `sessionStorage` |
-| **Restart demo** | Signs out |
 
-**Just exploring?** still opens the workspace with sample data and no account.
+**Just exploring?** opens the dashboard with sample data and no account.
 
 ### Admin dashboard (`admin.html`)
 
@@ -50,14 +49,34 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 | **Approve** / **Reject** / **Suspend** | `POST /admin/organizations/{id}/review` (notes required to reject or suspend) |
 | Document **Download** | `GET /admin/documents/{id}/download`: streamed by the backend from the private bucket |
 | **Approve document** / **Reject document** | `POST /admin/documents/{id}/review` (a reason is required to reject) |
+| **Medicines** | `GET /catalogue/products`, then `POST /catalogue/drugs` if the generic name is new and `POST /catalogue/products`. Pharmacies and suppliers can only stock medicines listed here. |
 | **Sign out**, expired token | Clears the session and shows the sign-in screen |
 
 ## Not connected yet (no backend support in the v6 data model)
 
 - **Plan and payment (step 4):** still simulated. There is no subscription data.
-- **License number:** there is no column for it. It is shown on the workspace profile for this session only. The uploaded license documents are what ApexRX reviews.
 - **Account holder's name:** the account form has no name field, so registration uses the part of the email before `@`. It can be changed later with `PATCH /auth/me`.
-- **Supplier chat:** messages in the sample chat dialog stay in the browser. Live suppliers are contacted on WhatsApp or by phone, as the roles document describes.
+- **Chat:** messages in the sample chat stay in the browser. Live suppliers are contacted on WhatsApp or by phone, as the roles document describes.
+- **Patient orders (pharmacy dashboard):** sample data in preview only. Signed-in users see a "coming soon" panel.
 - **Homepage map pins and headline numbers:** illustrative content, unchanged. No public endpoint lists every pharmacy or returns platform totals.
 - **Supplier search by supplier name:** `/supplier-offers` searches by medicine. Supplier names are matched only among suppliers you have already ordered from.
-- **Inventory and purchase order screens:** `js/api.js` has the calls, but there are no screens for them yet.
+
+## Dashboards and registration
+
+- `pharmacies.html` and `suppliers.html` share `js/onboarding.js`: account, SMS verification, profile, plan. The `data-role` attribute on `<body>` picks the role.
+- `pharmacy-dashboard.html` and `supplier-dashboard.html` share `js/dashboard.js`. Each role has its own overview. Add `?preview=1` to open a dashboard with sample data and no account.
+- `js/dashboard-forecast.js` draws the forecasting screen. It shows example data only, and says so on the page. A real forecast needs order history from the API.
+
+### Waiting on the API
+
+These screens already call the API below. Until it exists, the quantity is saved without the batch, and the user is told so.
+
+| Route or field | Purpose |
+|---|---|
+| `PUT /organizations/{id}/locations/{loc}/stock/{product}/batches` with `{batch_number, expiry_date, quantity}` | Add a batch, or replace the batch with this number |
+| `PATCH .../batches/{batch_id}` with `{quantity?, expiry_date?}` | Change a batch |
+| `DELETE .../batches/{batch_id}` | Remove a batch |
+| Inventory items: `batches: [{batch_id, batch_number, expiry_date, quantity, is_expired}]` and `expired_quantity` | Fill the stock table. Each batch route returns the updated item. |
+| Organizations: `npc_number`, `license_number`, `tin`, `fda_license_number`, `fda_license_expiry` | Sent at registration and shown to admins. The current API ignores them. |
+
+Expired batches must not count in `patient_availability`, `supplier_listing` or `availability_status`.

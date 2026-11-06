@@ -117,3 +117,6 @@ h3 { font-size: 15px; margin: 24px 0 10px; }
   .facts dd { margin-bottom: 8px; }
 }
 @media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+
+.pw-wrap{position:relative;display:block}.pw-wrap input{padding-right:46px!important}.pw-eye{position:absolute;right:5px;bottom:5px;display:grid;place-items:center;width:34px;height:34px;padding:0;border:0;border-radius:8px;background:none;color:inherit;opacity:.7}.pw-eye:hover{opacity:1}
+#meds-form{flex-wrap:wrap}

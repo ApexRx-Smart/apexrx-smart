@@ -390,6 +390,7 @@
     labelPins();
     try{ localStorage.setItem('apexrx_lang', lang); }catch(e){}
     document.querySelectorAll('a[href^="pharmacies.html"]').forEach(function(a){ a.href = 'pharmacies.html?lang=' + lang; });
+    document.querySelectorAll('a[href^="suppliers.html"]').forEach(function(a){ a.href = 'suppliers.html?lang=' + lang; });
   }
   var langSelect = document.getElementById('langSelect');
   var saved = 'en';

@@ -68,7 +68,7 @@ def main():
         page.fill("#account [name=password]", PASSWORD)
         page.fill("#account [name=confirm]", PASSWORD)
         page.click("#account button.primary")
-        page.wait_for_selector("#verify:not([hidden])")
+        page.wait_for_selector("#verify")
         check("new account lands on the phone verification step",
               "mobile number" in page.text_content("#step-description"))
 
@@ -118,7 +118,7 @@ def main():
         requests.clear()
         page.fill("#verify [name=code]", new_code)
         page.dblclick("#verify-code")
-        page.wait_for_selector("#profile:not([hidden])")
+        page.wait_for_selector("#profile")
         verify_calls = [u for u in requests if u.endswith("/auth/phone/verify")]
         check(f"double click sends one verification request ({len(verify_calls)})", len(verify_calls) == 1)
         phone_field = page.locator("#profile [name=phone]")
@@ -127,10 +127,14 @@ def main():
 
         # 7. Profile -> plan; the backend stored the verified number.
         page.fill("#profile [name=name]", f"OTP Pharmacy {RUN}")
-        page.fill("#profile [name=license]", "PH-OTP")
-        page.fill("#profile [name=address]", "KG 1 Ave, Kigali")
+        page.fill("#profile [name=npc]", "NPC/RWA/2026/00123")
+        page.fill("#profile [name=lic]", "PH-OTP")
+        page.select_option("[data-a=dist]", index=1)
+        page.select_option("[data-a=sect]", index=1)
+        page.select_option("[data-a=cell]", index=1)
+        page.select_option("[data-a=vill]", index=1)
         page.click("#profile button.primary")
-        page.wait_for_selector("#payment:not([hidden])")
+        page.wait_for_selector("#payment")
         org_phone = page.evaluate("""async (api) => {
           const s = JSON.parse(sessionStorage.getItem('apexrx_session'));
           const me = await (await fetch(api + '/organizations', { headers: { Authorization: 'Bearer ' + s.token } })).json();
@@ -138,20 +142,21 @@ def main():
         }""", API)
         check(f"pharmacy registered with the verified phone ({org_phone})", org_phone == E164)
 
-        # 8. Refresh keeps the session; restart signs out.
-        page.reload()
-        page.wait_for_selector("#dashboard:not([hidden])")
-        check("still signed in after refresh", page.is_visible("#dashboard"))
-        page.click("#restart")
-        page.wait_for_selector("#account:not([hidden])")
-        check("restart demo signs out", page.evaluate("sessionStorage.getItem('apexrx_session')") is None)
+        # 8. Refresh keeps the session and opens the workspace; signing out ends it.
+        page.goto(SITE + "/pharmacies.html")
+        page.wait_for_url("**/pharmacy-dashboard.html*")
+        page.wait_for_selector(".ov-top")
+        check("still signed in after refresh", page.is_visible("#title"))
+        page.click("#out")
+        page.wait_for_selector("#account")
+        check("sign out ends the session", page.evaluate("sessionStorage.getItem('apexrx_session')") is None)
 
         # 9. Signing in again skips the step (already verified).
+        page.goto(SITE + "/pharmacies.html#signin")
         page.fill("#account [name=email]", EMAIL)
         page.fill("#account [name=password]", PASSWORD)
-        page.fill("#account [name=confirm]", PASSWORD)
         page.click("#account button.primary")
-        page.wait_for_selector("#dashboard:not([hidden])")
+        page.wait_for_url("**/pharmacy-dashboard.html*")
         check("existing pharmacy goes straight to the workspace", True)
 
         # 10. Error states with the backend's answers simulated in the browser.
@@ -162,7 +167,7 @@ def main():
         for sel, val in (("email", email2), ("password", PASSWORD), ("confirm", PASSWORD)):
             page2.fill(f"#account [name={sel}]", val)
         page2.click("#account button.primary")
-        page2.wait_for_selector("#verify:not([hidden])")
+        page2.wait_for_selector("#verify")
         page2.route("**/auth/phone/send-code", lambda r: r.fulfill(
             status=502, content_type="application/json",
             body=json.dumps({"detail": "We could not send the SMS. Check the number and try again in a moment."})))
@@ -180,7 +185,7 @@ def main():
         check("SMS not configured is shown", True)
 
         # 11. French translation of the step.
-        page2.select_option("#workflow-language", "fr")
+        page2.select_option("#lang", "fr")
         page2.wait_for_function("document.querySelector('#send-code').textContent.includes('SMS')")
         check(f"French label ({page2.text_content('#send-code')!r})", page2.text_content("#send-code") == "Envoyer le code par SMS")
 

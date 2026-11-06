@@ -30,7 +30,7 @@
   <!-- Dashboard -->
   <main id="dashboard-view" class="dashboard" hidden>
     <section aria-labelledby="overview-title">
-      <div class="section-head"><h1 id="overview-title">Organizations</h1><button type="button" class="secondary small" id="refresh">Refresh</button></div>
+      <div class="section-head"><h1 id="overview-title">Organizations</h1><button type="button" class="secondary small" id="refresh">Refresh</button><button type="button" class="secondary small" id="meds-toggle">Medicines</button></div>
       <div class="stats" id="stats">
         <button type="button" class="stat" data-filter-type="" data-filter-status=""><strong data-count="total">–</strong><span>Total registered</span></button>
         <button type="button" class="stat" data-filter-type="pharmacy" data-filter-status=""><strong data-count="pharmacy">–</strong><span>Pharmacies</span></button>
@@ -57,6 +57,27 @@
       </div>
       <p id="list-message" class="muted" role="status"></p>
       <div class="pager"><button type="button" class="secondary small" id="prev">← Previous</button><span id="page-info" class="muted"></span><button type="button" class="secondary small" id="next">Next →</button></div>
+    </section>
+
+    <section id="meds-view" class="card" hidden aria-labelledby="meds-title">
+      <h2 id="meds-title">Medicine catalogue</h2>
+      <p class="muted">Pharmacies and suppliers can only stock medicines listed here.</p>
+      <form id="meds-search" class="filters"><label class="grow">Search<input id="meds-q" type="search" maxlength="100" placeholder="Medicine name"></label><button class="primary small">Search</button></form>
+      <div class="table-wrap"><table><thead><tr><th>Product</th><th>Strength</th><th>Form</th><th>Pack size</th><th>Manufacturer</th></tr></thead><tbody id="meds-rows"></tbody></table></div>
+      <p id="meds-message" class="muted" role="status"></p>
+      <h3>Add a medicine</h3>
+      <form id="meds-form" class="filters" novalidate>
+        <label>Generic name<input name="drug" maxlength="255" required></label>
+        <label>Therapeutic class<input name="cls" maxlength="255"></label>
+        <label class="grow">Product name<input name="product" maxlength="255" required></label>
+        <label>Brand<input name="brand" maxlength="255"></label>
+        <label>Manufacturer<input name="maker" maxlength="255"></label>
+        <label>Strength<input name="strength" maxlength="100"></label>
+        <label>Form<input name="form" maxlength="100"></label>
+        <label>Pack size<input name="pack" maxlength="100" placeholder="B/30 Tablets"></label>
+        <button class="primary small">Add</button>
+      </form>
+      <p id="meds-error" class="error" role="alert"></p>
     </section>
 
     <section id="detail-view" class="card" hidden aria-labelledby="detail-name">
@@ -101,5 +122,6 @@
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
   <script src="js/admin.js"></script>
+  <script src="js/password-toggle.js"></script>
 </body>
 </html>
