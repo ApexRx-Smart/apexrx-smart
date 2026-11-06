@@ -8,6 +8,11 @@
  *
  * The access token is kept in sessionStorage, so it is cleared when the tab
  * closes. It is never written to localStorage.
+ *
+ * "Known browser" device tokens (one per account, from successful sign-ins)
+ * are kept in localStorage and sent with later sign-ins for that account, so
+ * someone else's wrong passwords cannot lock the owner out on this browser.
+ * They are not credentials: the password is always required.
  */
 (function (global) {
   'use strict';
@@ -71,6 +76,30 @@
     try { sessionStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
   }
   var memorySession = null;
+
+  /* ------------------------------------------------- known-browser tokens */
+  var DEVICE_KEY = 'apexrx_known_devices';
+  var MAX_DEVICE_ENTRIES = 5;
+  function deviceKeyFor(email) { return String(email || '').trim().toLowerCase(); }
+  function readDevices() {
+    try {
+      var d = JSON.parse(localStorage.getItem(DEVICE_KEY) || '{}');
+      return d && typeof d === 'object' && !Array.isArray(d) ? d : {};
+    } catch (e) { return {}; }
+  }
+  function deviceTokenFor(email) {
+    var entry = readDevices()[deviceKeyFor(email)];
+    return entry && typeof entry.token === 'string' ? entry.token : null;
+  }
+  function saveDeviceToken(email, token) {
+    if (!token) return;
+    var devices = readDevices();
+    devices[deviceKeyFor(email)] = { token: token, savedAt: Date.now() };
+    var keys = Object.keys(devices).sort(function (a, b) { return devices[b].savedAt - devices[a].savedAt; });
+    keys.slice(MAX_DEVICE_ENTRIES).forEach(function (k) { delete devices[k]; });
+    try { localStorage.setItem(DEVICE_KEY, JSON.stringify(devices)); } catch (e) { /* ignore */ }
+  }
+
   function currentToken() {
     var s = readSession() || (memorySession && memorySession.expiresAt > Date.now() ? memorySession : null);
     return s ? s.token : null;
@@ -194,8 +223,15 @@
     auth: {
       register: function (data) { return post('/auth/register', data, { auth: false }); },
       login: function (email, password) {
-        return post('/auth/login', { email: email, password: password }, { auth: false })
-          .then(function (t) { saveSession(t.access_token, t.expires_in); return t; });
+        var body = { email: email, password: password };
+        var known = deviceTokenFor(email);
+        if (known) body.device_token = known;
+        return post('/auth/login', body, { auth: false })
+          .then(function (t) {
+            saveSession(t.access_token, t.expires_in);
+            saveDeviceToken(email, t.device_token);
+            return t;
+          });
       },
       logout: function () { clearSession(); emit('apexrx:signed-out'); },
       me: function () { return get('/auth/me'); },

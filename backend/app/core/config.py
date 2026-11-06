@@ -59,11 +59,15 @@ class Settings(BaseSettings):
     login_max_failures_per_account: int = Field(default=5, ge=1)
     login_max_failures_per_ip: int = Field(default=20, ge=1)
     login_failure_window_seconds: int = Field(default=900, ge=1)
+    # Lifetime of the "known browser" tokens that keep the owner able to sign
+    # in while their account is locked by someone else's wrong passwords.
+    device_token_max_age_days: int = Field(default=90, ge=1)
     rate_limit_storage_uri: str = "memory://"
-    # Header holding the real client IP, set by a trusted proxy that overwrites
-    # it (on Render: True-Client-IP, set by Cloudflare). Never X-Forwarded-For,
-    # which clients can forge. Unset: the TCP peer address is used, and per-IP
-    # limiting is skipped when that peer is a private proxy address.
+    # Header holding the real client IP. Only set it to a header that the proxy
+    # in front of the app is VERIFIED to overwrite on every request (see
+    # tools/render-ip-check); otherwise clients can choose their own rate-limit
+    # key. Never X-Forwarded-For. Unset (the safe default): the TCP peer is
+    # used, and per-IP limiting is skipped when that peer is a private proxy.
     trusted_client_ip_header: str | None = None
 
     # Default currency for offers and purchase orders (ISO 4217).

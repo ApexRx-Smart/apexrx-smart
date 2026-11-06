@@ -145,7 +145,8 @@ cp .env.example .env    # then edit DATABASE_URL and JWT_SECRET_KEY
 | `SUPABASE_URL` | production | Supabase project URL, e.g. `https://<project-ref>.supabase.co`. With the key, document files go to Supabase Storage |
 | `SUPABASE_SECRET_KEY` | production | Supabase **secret** key (`sb_secret_...`, or the legacy `service_role` key). Backend only: never put it in the frontend |
 | `SUPABASE_BUCKET_NAME` | no | Default `organization-documents`. The bucket must be **private** |
-| `TRUSTED_CLIENT_IP_HEADER` | Render: yes | Header holding the real client IP, set and overwritten by the proxy. On Render: `True-Client-IP`. `X-Forwarded-For` is refused (clients can forge it). See [Login rate limiting](#login-rate-limiting) |
+| `TRUSTED_CLIENT_IP_HEADER` | no (leave unset) | Header holding the real client IP. **Set it only after `tools/render-ip-check` shows that the proxy overwrites it.** Otherwise clients choose their own value. `X-Forwarded-For` is refused. See [Login rate limiting](#login-rate-limiting) |
+| `DEVICE_TOKEN_MAX_AGE_DAYS` | no | Default 90. Lifetime of the "known browser" tokens |
 | `LOGIN_MAX_FAILURES_PER_ACCOUNT` / `LOGIN_MAX_FAILURES_PER_IP` / `LOGIN_FAILURE_WINDOW_SECONDS` | no | Defaults 5 / 20 / 900 (15 minutes) |
 | `RATE_LIMIT_STORAGE_URI` | no | Default `memory://` (per process). Use e.g. `redis://host:6379` with several instances |
 | `DOCUMENT_STORAGE` | no | `auto` (default: Supabase when the two variables above are set, otherwise local disk), `supabase` or `local` |
@@ -227,21 +228,27 @@ The document tests use an in-memory fake of the Supabase Storage client, and the
 
 ## Login rate limiting
 
-Failed sign-ins (`POST /auth/login`) are limited with the [`limits`](https://pypi.org/project/limits/) library, using a moving window:
+Failed sign-ins (`POST /auth/login`) are limited with the [`limits`](https://pypi.org/project/limits/) library, using a moving window. The limits are checked **before** the password is verified. A blocked attempt gets **429** with `Retry-After` and "Too many failed sign-in attempts. Please wait about N minutes and try again". The right password is refused too.
 
-- **Per account:** 5 failures per 15 minutes.
-  - It is keyed on a hash of the normalized email, whether or not the account exists, so the response never reveals which emails are registered.
-  - A successful sign-in clears it.
-- **Per client IP:** 20 failures per 15 minutes.
-  - A successful sign-in does not clear it, so one valid account cannot reset an attacker's budget.
-- **When a limit is hit:** both limits are checked before the password is verified. A blocked attempt gets **429** with `Retry-After` and the message "Too many failed sign-in attempts. Please wait about N minutes and try again". The right password is refused too until the window passes.
-- **How users recover:** wait the stated time (the window moves, so old failures expire). Restarting the backend also clears the in-memory counters.
-- **Client IP:**
-  - It is taken from `TRUSTED_CLIENT_IP_HEADER` when set. On Render that is `True-Client-IP`, set by Cloudflare.
-  - `X-Forwarded-For` is never trusted: Render appends to it without clearing it, so clients can forge its first entry.
-  - Without the header, the TCP peer is used. On Render the peer is a private proxy address (`10.x`), so the **per-IP limit is skipped** instead of becoming one bucket shared by every user, which would let one attacker lock everyone out. The per-account limit still applies, and a warning is logged at startup on Render.
-- **Storage:** counters live in process memory (`RATE_LIMIT_STORAGE_URI=memory://`). That is right for the single Render instance. With several instances, use a shared store such as Redis, or each instance keeps its own counters.
-- **Known trade-off:** anyone can lock a specific account for 15 minutes by failing 5 times. The window expires on its own.
+| Limit | Default | Counted for | Cleared by |
+|---|---|---|---|
+| Per account | 5 failures / 15 min | Browsers that haven't signed in to this account before. Keyed on a hash of the normalized email, **whether or not the account exists**, so no account is revealed | A successful sign-in from such a browser |
+| Per known browser | 5 failures / 15 min | A browser that sends a valid device token for this account | A successful sign-in from that browser |
+| Per client IP | 20 failures / 15 min | Only when the client IP is trustworthy (see below) | Expiry only |
+
+**Known browsers (protection against lockout):**
+- Every successful sign-in returns a signed `device_token`. It is tied to that user ID, expires after 90 days, and its signing key is derived from `JWT_SECRET_KEY`.
+- `js/api.js` keeps it in `localStorage` for that email and sends it with the next sign-in.
+- Someone who knows a user's email can still lock the account for **new** browsers with 5 wrong passwords. The owner's usual browser keeps working, because its attempts are counted separately.
+- A device token is not a credential: the password is always required, and a token for one account is ignored for any other.
+- Signing in from a new browser while an attack is under way still has to wait for the window to pass.
+
+**Client IP:**
+- `X-Forwarded-For` is never trusted: Render appends to it without clearing it.
+- Leave `TRUSTED_CLIENT_IP_HEADER` **unset** unless `tools/render-ip-check` shows that a header (for example `CF-Connecting-IP` or `True-Client-IP`) always carries your real IP and can't be forged. Cloudflare's documentation says `True-Client-IP` is added only when it's enabled, and can otherwise be spoofed.
+- Without the header, the TCP peer is used. On Render that's a private proxy address, so the per-IP limit is **skipped** rather than becoming one bucket shared by every user. The per-account and per-browser limits still apply, and a warning is logged at startup.
+
+**Storage:** counters live in process memory (`RATE_LIMIT_STORAGE_URI=memory://`). That fits the single Render instance, and the counters reset on restart or deploy. With several instances, use a shared store such as Redis.
 
 ## Document storage
 
@@ -355,7 +362,7 @@ Create a web service with root directory `backend`.
 |---|---|
 | Build command | `pip install -r requirements.txt` |
 | Start command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
-| Environment | `DATABASE_URL` (Neon), `JWT_SECRET_KEY` (**at least 32 random characters**, or the service will not start), `CORS_ORIGINS` (must include the Netlify URL, for example `https://your-site.netlify.app`), `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_BUCKET_NAME=organization-documents`, `TRUSTED_CLIENT_IP_HEADER=True-Client-IP` |
+| Environment | `DATABASE_URL` (Neon), `JWT_SECRET_KEY` (**at least 32 random characters**, or the service will not start), `CORS_ORIGINS` (must include the Netlify URL, for example `https://your-site.netlify.app`), `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_BUCKET_NAME=organization-documents`. Leave `TRUSTED_CLIENT_IP_HEADER` unset unless `tools/render-ip-check` has verified a header |
 
 Limits of the free plan:
 
