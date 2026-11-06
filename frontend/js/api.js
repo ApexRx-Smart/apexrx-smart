@@ -8,6 +8,11 @@
  *
  * The access token is kept in sessionStorage, so it is cleared when the tab
  * closes. It is never written to localStorage.
+ *
+ * "Known browser" device tokens (one per account, from successful sign-ins)
+ * are kept in localStorage and sent with later sign-ins for that account, so
+ * someone else's wrong passwords cannot lock the owner out on this browser.
+ * They are not credentials: the password is always required.
  */
 (function (global) {
   'use strict';
@@ -71,6 +76,48 @@
     try { sessionStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
   }
   var memorySession = null;
+
+  /* ------------------------------------------------- known-browser tokens */
+  var DEVICE_KEY = 'apexrx_known_devices';
+  var MAX_DEVICE_ENTRIES = 5;
+  function deviceKeyFor(email) { return String(email || '').trim().toLowerCase(); }
+  // Only well-formed entries survive: {token: string, savedAt: finite number}.
+  // Anything else in storage (null, strings, arrays, junk) is dropped, so a
+  // corrupted value can never break sign-in.
+  function readDevices() {
+    var clean = {};
+    try {
+      var d = JSON.parse(localStorage.getItem(DEVICE_KEY) || '{}');
+      if (!d || typeof d !== 'object' || Array.isArray(d)) return clean;
+      Object.keys(d).forEach(function (k) {
+        var e = d[k];
+        if (e && typeof e === 'object' && typeof e.token === 'string' && e.token &&
+            typeof e.savedAt === 'number' && isFinite(e.savedAt)) {
+          clean[k] = { token: e.token, savedAt: e.savedAt };
+        }
+      });
+    } catch (e) { /* storage unavailable or corrupt */ }
+    return clean;
+  }
+  function deviceTokenFor(email) {
+    var entry = readDevices()[deviceKeyFor(email)];
+    return entry ? entry.token : null;
+  }
+  // Best effort: never throws, so a successful sign-in is never reported as
+  // failed because the known-browser list could not be updated.
+  function saveDeviceToken(email, token) {
+    try {
+      if (typeof token !== 'string' || !token) return;
+      var devices = readDevices();
+      devices[deviceKeyFor(email)] = { token: token, savedAt: Date.now() };
+      Object.keys(devices)
+        .sort(function (a, b) { return devices[b].savedAt - devices[a].savedAt; })
+        .slice(MAX_DEVICE_ENTRIES)
+        .forEach(function (k) { delete devices[k]; });
+      localStorage.setItem(DEVICE_KEY, JSON.stringify(devices));
+    } catch (e) { /* storage unavailable: the browser is simply not remembered */ }
+  }
+
   function currentToken() {
     var s = readSession() || (memorySession && memorySession.expiresAt > Date.now() ? memorySession : null);
     return s ? s.token : null;
@@ -194,8 +241,15 @@
     auth: {
       register: function (data) { return post('/auth/register', data, { auth: false }); },
       login: function (email, password) {
-        return post('/auth/login', { email: email, password: password }, { auth: false })
-          .then(function (t) { saveSession(t.access_token, t.expires_in); return t; });
+        var body = { email: email, password: password };
+        var known = deviceTokenFor(email);
+        if (known) body.device_token = known;
+        return post('/auth/login', body, { auth: false })
+          .then(function (t) {
+            saveSession(t.access_token, t.expires_in);
+            saveDeviceToken(email, t.device_token);
+            return t;
+          });
       },
       logout: function () { clearSession(); emit('apexrx:signed-out'); },
       me: function () { return get('/auth/me'); },

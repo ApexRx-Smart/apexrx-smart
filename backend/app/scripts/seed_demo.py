@@ -4,9 +4,16 @@
 
 Creates (if missing) an admin, an approved pharmacy with two Kigali branches,
 an approved supplier with a warehouse, a small catalogue, stock and offers.
-All demo accounts use the password ``demo-password``. Never run in production.
+All demo accounts use the public password ``demo-password``, including a
+PLATFORM ADMIN, so this must never run against production.
+
+Safety: by default it only runs against a local (loopback) database whose name
+does not look like production (see app/scripts/safety.py). Any other target is
+refused unless --allow-remote-database is given AND the host is retyped. The
+check happens before anything is written.
 """
 
+import argparse
 import sys
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -25,6 +32,7 @@ from app.models import (
     Stock,
     User,
 )
+from app.scripts import safety
 
 PASSWORD = "demo-password"
 
@@ -89,7 +97,35 @@ def _stock(db, loc: Location, product: Product, quantity: int, price: str) -> No
     db.add(ProductOffer(location_id=loc.location_id, product_id=product.product_id, unit_price=Decimal(price), currency="RWF"))
 
 
-def main() -> int:
+def main(argv: list[str] | None = None, input_fn=input) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument(
+        "--allow-remote-database",
+        action="store_true",
+        help="Allow a non-local or production-like database (you must also retype its host)",
+    )
+    args = parser.parse_args(argv)
+
+    target = safety.current_target()
+    print(f"Target database: {target.label}")
+    if not target.is_safe_local:
+        for reason in target.reasons():
+            print(f"Refusing by default: {reason}.")
+        if not args.allow_remote_database:
+            print("Nothing was written. seed_demo creates a platform admin with a public password;")
+            print("run it only against a local database (or pass --allow-remote-database deliberately).")
+            return 1
+        print("WARNING: this creates admin@apexrx.example.com, a PLATFORM ADMIN with the public password")
+        print(f"'{PASSWORD}', on {target.label}.")
+        if not safety.confirm_host(target, input_fn):
+            print("Host did not match. Cancelled; nothing was written.")
+            return 1
+
+    _seed()
+    return 0
+
+
+def _seed() -> None:
     with SessionLocal() as db:
         admin = _user(db, "admin@apexrx.example.com", "ApexRx Admin", admin=True)
         pharmacist = _user(db, "pharmacist@apexrx.example.com", "Demo Pharmacist")
@@ -148,7 +184,6 @@ def main() -> int:
     print("  admin@apexrx.example.com       platform admin")
     print("  pharmacist@apexrx.example.com  owner of Kigali Central Pharmacy")
     print("  supplier@apexrx.example.com    owner of Rwanda Medical Supplies")
-    return 0
 
 
 if __name__ == "__main__":

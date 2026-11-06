@@ -1,8 +1,12 @@
-from fastapi import APIRouter, status
+import math
+
+from fastapi import APIRouter, Request, status
 from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession
-from app.core.errors import AppError, Conflict, Unauthorized
+from app.core import device_token
+from app.core.errors import AppError, Conflict, TooManyRequests, Unauthorized
+from app.core.rate_limit import account_subject, client_ip, device_subject, login_limiter
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models import Membership, Organization, User
 from app.schemas.auth import (
@@ -47,15 +51,47 @@ def register(payload: RegisterRequest, db: DbSession):
     return user
 
 
-@router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: DbSession):
-    user = find_user_by_email(db, payload.email)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    responses={429: {"description": "Too many failed sign-in attempts; see Retry-After"}},
+)
+def login(payload: LoginRequest, request: Request, db: DbSession):
+    """Failed attempts are limited (see app/core/rate_limit.py):
+
+    * from browsers the account does not recognise: per account (5 per 15 min),
+      identical whether or not the email has an account;
+    * from a browser holding a valid device token for this account: per
+      device, so someone else's failures cannot lock the owner out there;
+    * per client IP, when the IP can be trusted.
+
+    The limits are checked before the password is verified.
+    """
+    email = normalize_email(payload.email)
+    ip = client_ip(request)
+    user = find_user_by_email(db, email)
+    device_id = device_token.device_id_for(payload.device_token, user.user_id if user else None)
+    subject = device_subject(device_id) if device_id else account_subject(email)
+
+    wait = login_limiter.retry_after(ip, subject)
+    if wait is not None:
+        minutes = max(1, math.ceil(wait / 60))
+        raise TooManyRequests(
+            f"Too many failed sign-in attempts. Please wait about {minutes} minute"
+            f"{'s' if minutes != 1 else ''} and try again.",
+            headers={"Retry-After": str(wait)},
+        )
+
     password_ok = verify_password(payload.password, user.password_hash if user else None)
     if user is None or not password_ok or not user.is_active:
+        login_limiter.record_failure(ip, subject)
         raise Unauthorized("Invalid email or password.")
 
+    login_limiter.record_success(subject)
     token, expires_in = create_access_token(subject=str(user.user_id))
-    return TokenResponse(access_token=token, expires_in=expires_in)
+    return TokenResponse(
+        access_token=token, expires_in=expires_in, device_token=device_token.issue(user.user_id)
+    )
 
 
 def _me(db, user: User) -> MeResponse:

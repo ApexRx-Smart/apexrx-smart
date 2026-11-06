@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,6 +51,13 @@ app.add_middleware(
 )
 
 register_error_handlers(app)
+
+if os.environ.get("RENDER") and not settings.trusted_client_ip_header:
+    logging.getLogger("apexrx").warning(
+        "TRUSTED_CLIENT_IP_HEADER is not set: on Render every request comes from a private proxy address, "
+        "so per-IP login limiting is inactive (per-account and per-device limits still apply). Only set it "
+        "after verifying that the proxy overwrites the header (see tools/render-ip-check)."
+    )
 
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(search.router, prefix="/search", tags=["Search"])

@@ -8,6 +8,7 @@ all tables are truncated between tests.
 """
 
 import os
+import secrets
 import tempfile
 from pathlib import Path
 
@@ -23,7 +24,10 @@ if not (make_url(_test_url).database or "").endswith("_test"):
     pytest.exit("Refusing to run: the TEST_DATABASE_URL database name must end with '_test'.", returncode=2)
 
 os.environ["DATABASE_URL"] = _test_url
-os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-that-is-long-enough")
+# A fresh random signing secret per run (placeholders are rejected at startup).
+os.environ["JWT_SECRET_KEY"] = secrets.token_urlsafe(48)
+os.environ.pop("TRUSTED_CLIENT_IP_HEADER", None)
+os.environ.pop("RATE_LIMIT_STORAGE_URI", None)
 os.environ["UPLOAD_DIR"] = tempfile.mkdtemp(prefix="apexrx-uploads-")
 # Never touch a real Supabase bucket by accident: tests use the local backend or
 # the in-memory fake (see fake_bucket). tests/test_supabase_live.py builds its
@@ -58,7 +62,11 @@ def _schema():
 
 @pytest.fixture(autouse=True)
 def _clean():
+    from app.core.rate_limit import login_limiter
+
+    login_limiter.reset()
     yield
+    login_limiter.reset()
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {TABLES} RESTART IDENTITY CASCADE"))
 

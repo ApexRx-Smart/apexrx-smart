@@ -139,12 +139,16 @@ cp .env.example .env    # then edit DATABASE_URL and JWT_SECRET_KEY
 | Variable | Required | Purpose |
 |---|---|---|
 | `DATABASE_URL` | yes | `postgresql+psycopg://USER:PASSWORD@HOST:PORT/DB` |
-| `JWT_SECRET_KEY` | yes | At least 16 characters, random |
+| `JWT_SECRET_KEY` | yes | Token signing secret: **at least 32 random characters**. Placeholder/example values (including the one in `.env.example`) are rejected at startup, and the value is never echoed in errors. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | no | Default 30 |
 | `CORS_ORIGINS` | no | Comma-separated. Default: `http://127.0.0.1:5501,http://localhost:5501` |
 | `SUPABASE_URL` | production | Supabase project URL, e.g. `https://<project-ref>.supabase.co`. With the key, document files go to Supabase Storage |
 | `SUPABASE_SECRET_KEY` | production | Supabase **secret** key (`sb_secret_...`, or the legacy `service_role` key). Backend only: never put it in the frontend |
 | `SUPABASE_BUCKET_NAME` | no | Default `organization-documents`. The bucket must be **private** |
+| `TRUSTED_CLIENT_IP_HEADER` | no (leave unset) | Header holding the real client IP. **Set it only after `tools/render-ip-check` shows that the proxy overwrites it.** Otherwise clients choose their own value. `X-Forwarded-For` is refused. See [Login rate limiting](#login-rate-limiting) |
+| `DEVICE_TOKEN_MAX_AGE_DAYS` | no | Default 90. Lifetime of the "known browser" tokens |
+| `LOGIN_MAX_FAILURES_PER_ACCOUNT` / `LOGIN_MAX_FAILURES_PER_IP` / `LOGIN_FAILURE_WINDOW_SECONDS` | no | Defaults 5 / 20 / 900 (15 minutes) |
+| `RATE_LIMIT_STORAGE_URI` | no | Default `memory://` (per process). Use e.g. `redis://host:6379` with several instances |
 | `DOCUMENT_STORAGE` | no | `auto` (default: Supabase when the two variables above are set, otherwise local disk), `supabase` or `local` |
 | `UPLOAD_DIR` | no | Local document storage only (development). Default `backend/uploads/` |
 | `MAX_UPLOAD_SIZE_BYTES` | no | Default 10 MB |
@@ -180,7 +184,18 @@ python -m app.scripts.create_admin --email you@example.com --name "Your Name"
 python -m app.scripts.seed_demo     # local development only
 ```
 
-`create_admin` writes to the database in `DATABASE_URL` (environment first, otherwise `backend/.env`). It prints the target host and database and asks you to type `yes` (`--yes` skips the prompt). If the email already has an account, the account is promoted to platform admin and reactivated, with its password unchanged. Otherwise a new account is created and the password is prompted for, hidden (or read from `APEXRX_ADMIN_PASSWORD`).
+`create_admin` writes to the database in `DATABASE_URL` (environment first, otherwise `backend/.env`). Everything below is checked **before** anything is written:
+
+- **Target:** it prints the target host and database name, never the credentials.
+- **Non-local databases:** for a non-local or production-like database, you must **retype the exact host**, even with `--yes`.
+- **New email:** a new platform admin is created. The password is prompted for twice, hidden (or read from `APEXRX_ADMIN_PASSWORD`). Then you type `yes` to confirm (`--yes` skips this prompt only).
+- **Email that already has an account:** it shows the account (ID, name, active, admin, organizations) and changes nothing unless you pass the matching flag:
+  - `--promote-existing` grants admin to that existing account.
+  - `--reactivate` reactivates it if it was deactivated.
+  - Passing either flag for an email with no account is refused, since that is usually a typo.
+  - An existing account's password is never changed.
+
+`seed_demo` only runs against a **local** database (a loopback host whose name does not look like production: not `neondb`, nothing containing `prod` or `live`). Any other target is refused before anything is written, unless you pass `--allow-remote-database` **and** retype the host. It creates a platform admin with a public password, so never use that flag on production.
 
 `seed_demo` creates an approved pharmacy with two Kigali branches, an approved supplier, five catalogue products, and stock and prices. Its accounts all use the password `demo-password`:
 
@@ -210,6 +225,30 @@ ruff check app tests alembic
 ```
 
 The document tests use an in-memory fake of the Supabase Storage client, and the suite forces `DOCUMENT_STORAGE=local`, so tests never touch a real bucket. `tests/test_supabase_live.py` is an optional round trip against the real bucket (a dummy PDF under a random `test-.../` prefix, deleted afterwards). It runs only with `SUPABASE_LIVE_TESTS=1` and the `SUPABASE_*` variables set.
+
+## Login rate limiting
+
+Failed sign-ins (`POST /auth/login`) are limited with the [`limits`](https://pypi.org/project/limits/) library, using a moving window. The limits are checked **before** the password is verified. A blocked attempt gets **429** with `Retry-After` and "Too many failed sign-in attempts. Please wait about N minutes and try again". The right password is refused too.
+
+| Limit | Default | Counted for | Cleared by |
+|---|---|---|---|
+| Per account | 5 failures / 15 min | Browsers that haven't signed in to this account before. Keyed on a hash of the normalized email, **whether or not the account exists**, so no account is revealed | A successful sign-in from such a browser |
+| Per known browser | 5 failures / 15 min | A browser that sends a valid device token for this account | A successful sign-in from that browser |
+| Per client IP | 20 failures / 15 min | Only when the client IP is trustworthy (see below) | Expiry only |
+
+**Known browsers (protection against lockout):**
+- Every successful sign-in returns a signed `device_token`. It is tied to that user ID, expires after 90 days, and its signing key is derived from `JWT_SECRET_KEY`.
+- `js/api.js` keeps it in `localStorage` for that email and sends it with the next sign-in.
+- Someone who knows a user's email can still lock the account for **new** browsers with 5 wrong passwords. The owner's usual browser keeps working, because its attempts are counted separately.
+- A device token is not a credential: the password is always required, and a token for one account is ignored for any other.
+- Signing in from a new browser while an attack is under way still has to wait for the window to pass.
+
+**Client IP:**
+- `X-Forwarded-For` is never trusted: Render appends to it without clearing it.
+- Leave `TRUSTED_CLIENT_IP_HEADER` **unset** unless `tools/render-ip-check` shows that a header (for example `CF-Connecting-IP` or `True-Client-IP`) always carries your real IP and can't be forged. Cloudflare's documentation says `True-Client-IP` is added only when it's enabled, and can otherwise be spoofed.
+- Without the header, the TCP peer is used. On Render that's a private proxy address, so the per-IP limit is **skipped** rather than becoming one bucket shared by every user. The per-account and per-browser limits still apply, and a warning is logged at startup.
+
+**Storage:** counters live in process memory (`RATE_LIMIT_STORAGE_URI=memory://`). That fits the single Render instance, and the counters reset on restart or deploy. With several instances, use a shared store such as Redis.
 
 ## Document storage
 
@@ -323,7 +362,7 @@ Create a web service with root directory `backend`.
 |---|---|
 | Build command | `pip install -r requirements.txt` |
 | Start command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
-| Environment | `DATABASE_URL` (Neon), `JWT_SECRET_KEY`, `CORS_ORIGINS` (must include the Netlify URL, for example `https://your-site.netlify.app`), `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_BUCKET_NAME=organization-documents` |
+| Environment | `DATABASE_URL` (Neon), `JWT_SECRET_KEY` (**at least 32 random characters**, or the service will not start), `CORS_ORIGINS` (must include the Netlify URL, for example `https://your-site.netlify.app`), `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_BUCKET_NAME=organization-documents`. Leave `TRUSTED_CLIENT_IP_HEADER` unset unless `tools/render-ip-check` has verified a header |
 
 Limits of the free plan:
 
@@ -343,7 +382,7 @@ Deploy the repository with publish directory `frontend` and no build command. `f
 
 A new database has no medicines or pharmacies, so searches return nothing. Either:
 
-- Run `python -m app.scripts.seed_demo` against the database (fake data only), or
+- Run `python -m app.scripts.seed_demo` against a **local** database (fake data only; it refuses remote databases by default), or
 - Add real data through the API: an admin creates catalogue drugs and products, then approved pharmacies record their stock and prices per branch.
 
 Patient search shows only **approved** pharmacies, **active** locations and **listed** offers. By default it returns `in_stock` and `low_stock` results.

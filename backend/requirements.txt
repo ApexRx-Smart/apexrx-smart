@@ -11,3 +11,5 @@ python-multipart==0.0.20
 # Supabase Storage (official client) for verification documents
 storage3==2.34.0
 httpx==0.28.1
+# Login rate limiting
+limits==5.8.0

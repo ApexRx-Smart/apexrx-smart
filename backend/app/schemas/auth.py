@@ -20,12 +20,17 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
+    # Returned by an earlier successful sign-in on this browser (see
+    # app/core/device_token.py). Optional; never a credential on its own.
+    device_token: str | None = Field(default=None, max_length=512)
 
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+    # Keep on this browser and send with later sign-ins for this account.
+    device_token: str | None = None
 
 
 class UserResponse(ORMModel):
