@@ -53,7 +53,7 @@ def scenario(browser, name, status_route=None):
         page.fill(f"#account [name={field}]", value)
     page.click("#account button.primary")
     page.wait_for_function(
-        "!document.querySelector('#verify').hidden || !document.querySelector('#profile').hidden", timeout=20000)
+        "!!document.querySelector('#verify') || !!document.querySelector('#profile')", timeout=20000)
     return ctx, page, errors
 
 
@@ -63,13 +63,15 @@ def visible_step(page):
 
 def submit_profile(page, name):
     page.fill("#profile [name=name]", f"Fallback {name} Pharmacy")
-    page.fill("#profile [name=license]", "PH-FB")
+    page.fill("#profile [name=npc]", "NPC/RWA/2026/00456")
+    page.fill("#profile [name=lic]", "PH-FB")
     if not page.locator("#profile [name=phone]").evaluate("e => e.readOnly"):
         page.fill("#profile [name=phone]", "+250 788 444 333")
-    page.fill("#profile [name=address]", "KG 3 Ave")
+    for field in ("dist", "sect", "cell", "vill"):
+        page.select_option(f"[data-a={field}]", index=1)
     page.click("#profile button.primary")
     page.wait_for_function(
-        "!document.querySelector('#payment').hidden || !document.querySelector('#verify').hidden"
+        "!!document.querySelector('#payment') || !!document.querySelector('#verify')"
         " || document.querySelector('#form-error').textContent.length > 0", timeout=20000)
 
 

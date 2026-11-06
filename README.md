@@ -39,14 +39,20 @@ apexrx-smart/
 │   │   ├── config.js        # backend address (API_BASE_URL)
 │   │   ├── api.js           # API client used by every page (window.ApexAPI)
 │   │   ├── script.js        # homepage, including medicine search
-│   │   ├── pharmacies.js    # pharmacy onboarding and workspace
-│   │   ├── pharmacies-i18n.js
-│   │   └── pharmacies-motion.js
+│   │   ├── onboarding.js    # pharmacy and supplier registration
+│   │   ├── onboarding-i18n.js
+│   │   ├── dashboard.js     # pharmacy and supplier dashboards
+│   │   ├── dashboard-data.js
+│   │   ├── dashboard-forecast.js
+│   │   └── dashboard-i18n.js
 │   ├── tests/
 │   │   └── e2e_admin.py     # Playwright check of the admin dashboard (local only)
 │   ├── admin.html           # admin dashboard (ApexRX staff)
 │   ├── index.html
 │   ├── pharmacies.html
+│   ├── suppliers.html
+│   ├── pharmacy-dashboard.html
+│   ├── supplier-dashboard.html
 │   └── README.md            # how each page and control maps to the API
 ├── apexrx_customer_bases_roles_and_functions.md   # business rules for the v6 model
 ├── PHARMACY-WORKFLOW.md

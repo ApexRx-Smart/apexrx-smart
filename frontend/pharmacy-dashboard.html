@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Pharmacy dashboard — ApexRX Smart</title>
+<link rel="icon" href="assets/logos/logo-mark.svg">
+<script src="js/theme.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body data-role="pharmacy">
+<div class="app">
+<aside class="side">
+<a class="brand" href="index.html"><img src="assets/logos/logo-mark.svg" alt=""><span>ApexRX Smart</span></a>
+<nav id="nav" style="display:contents"></nav>
+<div class="pcard"><strong id="p-t"></strong><p id="p-d"></p><button id="p-b" data-a="nav"></button></div>
+</aside>
+<main>
+<div class="top"><h1 id="title"></h1>
+<div class="who"><span id="me-name"></span><label class="sr" for="br" id="br-l"></label><select id="br"></select><span class="ver" id="ver"></span>
+<label class="sr" for="lang">Language</label><select id="lang"><option value="en">English</option><option value="fr">Français</option><option value="rw">Kinyarwanda</option></select>
+<button class="tgl" id="theme" type="button"></button><button class="linkish" id="out" type="button"></button></div></div>
+<div id="view"></div>
+</main>
+</div>
+<dialog id="dlg"></dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/dashboard-i18n.js"></script>
+<script src="js/dashboard-data.js"></script>
+<script src="js/dashboard-forecast.js"></script>
+<script src="js/dashboard.js"></script>
+</body></html>

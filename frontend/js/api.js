@@ -20,7 +20,8 @@
   var DEFAULT_BASE =
     window.APEX_CONFIG?.API_BASE_URL || 'http://127.0.0.1:8000';
   var SESSION_KEY = 'apexrx_session';
-  var TIMEOUT_MS = 15000;
+  // Render's free plan sleeps when idle and can take about a minute to wake.
+  var TIMEOUT_MS = 75000;
 
   function resolveBase() {
     var meta = document.querySelector('meta[name="apexrx-api-base"]');
@@ -324,7 +325,11 @@
       setOffer: function (orgId, locId, productId, offer) { return put(stockPath(orgId, locId, productId) + '/offer', offer); },
       removeOffer: function (orgId, locId, productId) { return del(stockPath(orgId, locId, productId) + '/offer'); },
       adjustments: function (orgId, locId, productId, page) { return get(stockPath(orgId, locId, productId) + '/adjustments', page); },
-      confirmLocation: function (orgId, locId) { return post(org(orgId) + '/locations/' + enc(locId) + '/stock/confirm'); }
+      confirmLocation: function (orgId, locId) { return post(org(orgId) + '/locations/' + enc(locId) + '/stock/confirm'); },
+      // batch: {batch_number, expiry_date (YYYY-MM-DD), quantity}. The same number replaces that batch.
+      setBatch: function (orgId, locId, productId, batch) { return put(stockPath(orgId, locId, productId) + '/batches', batch); },
+      updateBatch: function (orgId, locId, productId, batchId, data) { return patch(stockPath(orgId, locId, productId) + '/batches/' + enc(batchId), data); },
+      removeBatch: function (orgId, locId, productId, batchId) { return del(stockPath(orgId, locId, productId) + '/batches/' + enc(batchId)); }
     },
 
     /* Pharmacies searching supplier stock (exact quantities). */
