@@ -250,6 +250,17 @@ The document tests use an in-memory fake of the Supabase Storage client, and the
 - Only an HMAC of the code is stored. It is keyed with a secret derived from `JWT_SECRET_KEY` and bound to the user, number and purpose. A code for one number or account never verifies another.
 - A new code invalidates the earlier ones. After 5 wrong attempts the code is dead.
 - Sending is limited by a 60-second cooldown per number, and per hour per number (5), per user (10) and per trustworthy client IP (20).
+  - **The limits live in PostgreSQL, not process memory.** They are counted from `phone_verification` rows inside one transaction.
+  - That transaction first locks the user's row, then takes transaction-scoped advisory locks for the number and the IP, always in that order.
+  - Checking and recording are therefore atomic, even with simultaneous requests or several app instances, and the limits survive restarts.
+  - Only one code per user is issued at a time.
+  - A partial unique index means the database itself refuses a second valid code for the same user and purpose.
+  - The client IP is stored only as an HMAC.
+- **The limits fail closed.** If the database can't check or record a limit, no SMS is sent and the client gets a generic 503 ("Verification codes cannot be sent right now"). Internal details are only logged.
+- **The code is saved before it is sent.** The row is committed first and only then is the SMS sent, so a code can never be delivered without being stored.
+  - If the provider refuses the message, the row is marked `delivery_failed_at` and invalidated. It still counts towards the hourly limits, so a failing provider can't be hammered, but not towards the cooldown, so the user can retry at once.
+  - Trade-off: issuing a new code invalidates the previous one *before* sending. If that send fails, the user simply requests another code.
+  - Remaining corner case: if recording a failed delivery also fails (the database is down at that moment), the undelivered code stays stored until it expires. Nobody knows it, but the user may have to wait out the cooldown.
 - Codes and full phone numbers never appear in API responses or logs; logs show a masked number such as `+2507*****456`.
 
 **Phone numbers:**
@@ -266,7 +277,7 @@ The document tests use an in-memory fake of the Supabase Storage client, and the
   - The tests use the mock automatically (`tests/conftest.py`).
 - **Production:** `APP_ENV=production`, the default.
   - The mock is refused. With no real provider configured, `send-code` answers **503** "SMS verification is not available right now", a warning is logged at startup, and new pharmacies can't register.
-  - A delivery failure answers **502**. Nothing falls back to the mock, and nothing is stored for the undelivered code.
+  - A delivery failure answers **502**. Nothing falls back to the mock, and the stored code is marked as failed and invalidated.
 - **Before a provider exists:** set `PHONE_VERIFICATION_REQUIRED=false`. The step is then skipped and pharmacies register without a verified number. There is never a fixed code.
 
 **Adding a real provider (adapter):**
@@ -401,6 +412,50 @@ See `/docs` on the backend for the full request and response schemas.
 ## Deployment (test environment)
 
 The test deployment uses free tiers only.
+
+### Database migrations: always before the code
+
+The service doesn't run migrations by itself: Render only starts `uvicorn`. The ORM models always expect the latest schema. **If code is deployed before its migration has been applied, sign-in, registration, the workspace and admin fail with 503 "A database error occurred".**
+- This happens even with `PHONE_VERIFICATION_REQUIRED=false`, because every query that loads a user selects the new columns. Public search keeps working.
+- `/health` returns **503** with "Database schema is not up to date … run `alembic upgrade head`", and the startup log says the same.
+- Optional safety net: if Render's **Health Check Path** is set to `/health`, Render won't switch traffic to a new deploy whose database hasn't been migrated.
+
+These are three separate actions:
+
+| Action | What it changes | How |
+|---|---|---|
+| **Apply a migration** | The database structure only | `alembic upgrade head`, run from your machine against the database |
+| **Deploy application code** | What Render runs | Merging to `main` (Render deploys automatically) |
+| **Turn mandatory phone verification on or off** | Whether a pharmacy needs an SMS-verified phone | The `PHONE_VERIFICATION_REQUIRED` environment variable on Render. It changes behaviour, not the schema, and needs no migration |
+
+**Safe order for the testing environment** (for example, PR #24 and migration `c4d1e8f2a9b7`):
+1. **Back up.** In Neon, open **Branches → Create branch** from the testing branch (for example `pre-c4d1e8f2a9b7`). That gives you an instant copy you can restore.
+2. **Record the counts before** (read-only, Neon SQL Editor):
+   ```sql
+   SELECT version_num FROM alembic_version;  -- expect a6f0c2d9e1b4
+   SELECT (SELECT count(*) FROM app_user) AS users, (SELECT count(*) FROM organization) AS orgs,
+          (SELECT count(*) FROM location) AS locations, (SELECT count(*) FROM product_offer) AS offers;
+   ```
+3. **Apply the migration** from your machine, with a role that can change the schema (not the read-only role):
+   ```bash
+   cd backend
+   DATABASE_URL="postgresql+psycopg://<owner role>:<password>@<host>/<db>?sslmode=require" alembic upgrade head
+   DATABASE_URL="..." alembic current        # must print: c4d1e8f2a9b7 (head)
+   ```
+   The migration is additive: two nullable columns on `app_user`, plus the new `phone_verification` table. The code currently deployed keeps working on the new schema (verified locally), so this step causes no downtime.
+4. **Verify** in the Neon SQL Editor:
+   ```sql
+   SELECT version_num FROM alembic_version;                -- c4d1e8f2a9b7
+   SELECT count(*) FROM app_user WHERE verified_phone IS NOT NULL;   -- 0: existing rows untouched
+   SELECT to_regclass('phone_verification');                -- phone_verification
+   ```
+   Re-run the counts from step 2. They must be identical.
+5. **Choose the verification setting** on Render *before* deploying. Use `PHONE_VERIFICATION_REQUIRED=false` until a real SMS provider is configured; otherwise new pharmacies can't register.
+6. **Deploy the code** by merging the PR. Then `GET /health` must return 200 with `"schema": "up to date"`. Check that sign-in and patient search work.
+
+**Rolling back:**
+- Revert or redeploy the previous code first. The previous code works on the new schema.
+- Only if the schema itself must go, run `alembic downgrade a6f0c2d9e1b4`. That drops `phone_verification` and the two columns, so verification records are lost. Alternatively, restore the Neon branch from step 1.
 
 ### Database: Neon
 

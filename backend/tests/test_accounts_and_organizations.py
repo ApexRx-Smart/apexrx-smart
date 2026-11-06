@@ -16,7 +16,7 @@ from tests.helpers import (
 
 
 def test_health(client):
-    assert client.get("/health").json() == {"status": "healthy", "database": "connected"}
+    assert client.get("/health").json() == {"status": "healthy", "database": "connected", "schema": "up to date"}
 
 
 def test_register_login_me(client):

@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.core.database import engine
 from app.main import app
 from app.services import otp
-from app.services.otp import generate_code, hash_code, send_limiter
+from app.services.otp import generate_code, hash_code
 from app.services.sms import set_sms_provider
 from app.services.sms.mock import mock_provider
 from tests.helpers import user
@@ -243,10 +243,7 @@ def small_send_limits(monkeypatch):
     monkeypatch.setattr(settings, "otp_max_sends_per_phone_per_hour", 2)
     monkeypatch.setattr(settings, "otp_max_sends_per_user_per_hour", 3)
     monkeypatch.setattr(settings, "otp_max_sends_per_ip_per_hour", 4)
-    send_limiter.configure()
-    yield
-    monkeypatch.undo()
-    send_limiter.configure()
+    # Limits are counted from phone_verification rows (PostgreSQL), read live.
 
 
 def test_per_phone_limit_across_users(client, small_send_limits):
@@ -289,16 +286,38 @@ def test_invalid_phone_numbers(client, h, bad):
     assert mock_provider.messages() == [] and rows() == []
 
 
-def test_provider_failure_is_reported_and_stores_nothing(client, h, monkeypatch):
-    no_cooldown(monkeypatch)
+def test_provider_failure_is_recorded_and_counted(client, h, monkeypatch):
+    """The code is stored before sending (never "delivered but not saved").
+    A failed delivery is marked and invalidated; it counts towards the hourly
+    limits but not the cooldown, so the user can retry at once."""
     send(client, h)
     good = sent_code()
     mock_provider.fail_with = "provider rejected"
+    with engine.begin() as c:  # past the cooldown for the first code
+        c.execute(text("UPDATE phone_verification SET created_at = now() - interval '2 minutes'"))
     r = send(client, h)
     assert r.status_code == 502 and "could not send the SMS" in r.json()["detail"]
-    assert len(rows()) == 1 and rows()[0]["invalidated_at"] is None
-    # The earlier, delivered code still works.
-    assert verify(client, h, good).status_code == 200
+    first, failed = rows()
+    assert failed["delivery_failed_at"] is not None and failed["invalidated_at"] is not None
+    # Issuing a new code invalidated the earlier one (one valid code at a time).
+    assert first["invalidated_at"] is not None
+    assert verify(client, h, good).json()["reason"] == "no_active_code"
+    # Immediate retry is allowed (no cooldown after a failure) and works.
+    mock_provider.fail_with = None
+    assert send(client, h).status_code == 200
+    assert verify(client, h, sent_code()).status_code == 200
+
+
+def test_failed_deliveries_count_towards_the_hourly_limit(client, h, monkeypatch):
+    no_cooldown(monkeypatch)
+    monkeypatch.setattr(settings, "otp_max_sends_per_phone_per_hour", 2)
+    mock_provider.fail_with = "down"
+    assert send(client, h).status_code == 502
+    assert send(client, h).status_code == 502
+    mock_provider.fail_with = None
+    r = send(client, h)
+    assert r.status_code == 429  # a failing provider cannot be hammered
+    assert mock_provider.messages() == []
 
 
 def test_sms_not_configured_fails_safely(client, h, monkeypatch):

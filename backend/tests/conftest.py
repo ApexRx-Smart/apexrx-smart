@@ -67,14 +67,13 @@ def _schema():
 @pytest.fixture(autouse=True)
 def _clean():
     from app.core.rate_limit import login_limiter
-    from app.services.otp import send_limiter
     from app.services.sms import set_sms_provider
     from app.services.sms.mock import mock_provider
 
-    for reset in (login_limiter.reset, send_limiter.reset, mock_provider.reset):
+    for reset in (login_limiter.reset, mock_provider.reset):
         reset()
     yield
-    for reset in (login_limiter.reset, send_limiter.reset, mock_provider.reset):
+    for reset in (login_limiter.reset, mock_provider.reset):
         reset()
     set_sms_provider(None)
     with engine.begin() as conn:

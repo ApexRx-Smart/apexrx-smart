@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api import admin, auth, catalogue, dev, inventory, orders, organizations, phone_verification, search
+from app.core import schema
 from app.core.config import settings
 from app.core.database import engine
 from app.core.errors import AppError, register_error_handlers
@@ -62,6 +63,17 @@ if os.environ.get("RENDER") and not settings.is_production:
         f"APP_ENV={settings.app_env!r} on Render. The hosted service must run with APP_ENV=production."
     )
 
+# Code that expects a newer schema than the database has breaks sign-in and
+# every user query; say so loudly at startup (the service keeps running so
+# public search stays up, and /health reports 503 until it is fixed).
+try:
+    with engine.connect() as _connection:
+        _schema_problem = schema.schema_problem(_connection)
+    if _schema_problem:
+        _log.critical(_schema_problem)
+except SQLAlchemyError as _exc:
+    _log.error("Could not check the database schema version at startup: %s", type(_exc).__name__)
+
 _sms_problem = sms_configuration_problem()
 if _sms_problem:
     _log.warning(
@@ -97,6 +109,9 @@ def health_check():
     try:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
+            problem = schema.schema_problem(connection)
     except SQLAlchemyError:
         raise AppError("Database unavailable.", status_code=503) from None
-    return {"status": "healthy", "database": "connected"}
+    if problem:
+        raise AppError(problem, status_code=503, extra={"database": "connected", "schema": "outdated"})
+    return {"status": "healthy", "database": "connected", "schema": "up to date"}
