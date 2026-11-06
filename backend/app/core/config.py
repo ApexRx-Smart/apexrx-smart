@@ -21,6 +21,10 @@ PLACEHOLDER_MARKERS = ("replace-with", "change-me", "changeme", "placeholder", "
 
 
 class Settings(BaseSettings):
+    # "production" unless explicitly set: development-only behaviour (the mock
+    # SMS provider, the /dev endpoints) is never enabled by accident.
+    app_env: Literal["development", "test", "production"] = "production"
+
     database_url: str
     # Validated by _strong_jwt_secret: at least 32 characters, not a placeholder.
     jwt_secret_key: str
@@ -73,6 +77,26 @@ class Settings(BaseSettings):
     # Default currency for offers and purchase orders (ISO 4217).
     default_currency: str = "RWF"
 
+    # Phone verification by SMS one-time code (see app/services/otp.py).
+    # When true, creating a pharmacy requires the owner's phone to be verified.
+    phone_verification_required: bool = True
+    # SMS provider adapter name (app/services/sms). Unset: SMS is not
+    # configured and sending a code fails with a clear 503. "mock" is refused
+    # in production.
+    sms_provider: str | None = None
+    # Optional sender name/number passed to real providers.
+    sms_sender_id: str | None = None
+    otp_ttl_seconds: int = Field(default=300, ge=30, le=3600)
+    otp_max_attempts: int = Field(default=5, ge=1, le=20)
+    otp_resend_cooldown_seconds: int = Field(default=60, ge=0, le=3600)
+    otp_max_sends_per_phone_per_hour: int = Field(default=5, ge=1)
+    otp_max_sends_per_user_per_hour: int = Field(default=10, ge=1)
+    otp_max_sends_per_ip_per_hour: int = Field(default=20, ge=1)
+    # Phone numbers: parsed with this default region, and only numbers from
+    # these regions are accepted (ISO 3166 codes, comma-separated).
+    phone_default_region: str = "RW"
+    phone_allowed_regions: Annotated[list[str], NoDecode] = ["RW"]
+
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",
         env_file_encoding="utf-8",
@@ -96,6 +120,25 @@ class Settings(BaseSettings):
             raise ValueError(f"JWT_SECRET_KEY must be at least {MIN_JWT_SECRET_LENGTH} characters long.")
         return value
 
+    @field_validator("phone_allowed_regions")
+    @classmethod
+    def _upper_regions(cls, value: list[str]) -> list[str]:
+        regions = [r.strip().upper() for r in value if r.strip()]
+        if not regions:
+            raise ValueError("PHONE_ALLOWED_REGIONS must list at least one region, e.g. RW.")
+        return regions
+
+    @field_validator("sms_provider", mode="before")
+    @classmethod
+    def _normalize_provider(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().lower() or None
+        return value
+
+    @property
+    def is_production(self) -> bool:
+        return self.app_env == "production"
+
     @field_validator("trusted_client_ip_header", mode="before")
     @classmethod
     def _blank_header_is_none(cls, value: object) -> object:
@@ -105,7 +148,7 @@ class Settings(BaseSettings):
             raise ValueError("TRUSTED_CLIENT_IP_HEADER must not be X-Forwarded-For (clients can forge it).")
         return value.strip() if isinstance(value, str) else value
 
-    @field_validator("cors_origins", "allowed_document_mime_types", mode="before")
+    @field_validator("cors_origins", "allowed_document_mime_types", "phone_allowed_regions", mode="before")
     @classmethod
     def _split_csv(cls, value: object) -> object:
         if isinstance(value, str):

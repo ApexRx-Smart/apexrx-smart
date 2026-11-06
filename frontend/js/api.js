@@ -239,6 +239,12 @@
     },
 
     auth: {
+      // Mobile number verification by SMS one-time code (signed in).
+      phone: {
+        status: function () { return get('/auth/phone/status'); },
+        sendCode: function (phone) { return post('/auth/phone/send-code', { phone: phone }); },
+        verify: function (phone, code) { return post('/auth/phone/verify', { phone: phone, code: code }); }
+      },
       register: function (data) { return post('/auth/register', data, { auth: false }); },
       login: function (email, password) {
         var body = { email: email, password: password };

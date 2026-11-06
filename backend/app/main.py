@@ -6,10 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.api import admin, auth, catalogue, inventory, orders, organizations, search
+from app.api import admin, auth, catalogue, dev, inventory, orders, organizations, phone_verification, search
+from app.core import schema
 from app.core.config import settings
 from app.core.database import engine
 from app.core.errors import AppError, register_error_handlers
+from app.services.sms import sms_configuration_problem
 
 logging.basicConfig(level=logging.INFO)
 
@@ -52,6 +54,34 @@ app.add_middleware(
 
 register_error_handlers(app)
 
+_log = logging.getLogger("apexrx")
+
+# Development behaviour (mock SMS, /dev endpoints) must never run on the hosted
+# service: refuse to start rather than expose test codes.
+if os.environ.get("RENDER") and not settings.is_production:
+    raise RuntimeError(
+        f"APP_ENV={settings.app_env!r} on Render. The hosted service must run with APP_ENV=production."
+    )
+
+# Code that expects a newer schema than the database has breaks sign-in and
+# every user query; say so loudly at startup (the service keeps running so
+# public search stays up, and /health reports 503 until it is fixed).
+try:
+    with engine.connect() as _connection:
+        _schema_problem = schema.schema_problem(_connection)
+    if _schema_problem:
+        _log.critical(_schema_problem)
+except SQLAlchemyError as _exc:
+    _log.error("Could not check the database schema version at startup: %s", type(_exc).__name__)
+
+_sms_problem = sms_configuration_problem()
+if _sms_problem:
+    _log.warning(
+        "SMS phone verification is unavailable (%s). Sending codes returns 503%s.",
+        _sms_problem,
+        "; new pharmacies cannot register until it is configured" if settings.phone_verification_required else "",
+    )
+
 if os.environ.get("RENDER") and not settings.trusted_client_ip_header:
     logging.getLogger("apexrx").warning(
         "TRUSTED_CLIENT_IP_HEADER is not set: on Render every request comes from a private proxy address, "
@@ -60,6 +90,7 @@ if os.environ.get("RENDER") and not settings.trusted_client_ip_header:
     )
 
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+app.include_router(phone_verification.router, prefix="/auth/phone", tags=["Phone verification"])
 app.include_router(search.router, prefix="/search", tags=["Search"])
 app.include_router(catalogue.router, prefix="/catalogue", tags=["Catalogue"])
 app.include_router(organizations.router, prefix="/organizations", tags=["Organizations"])
@@ -68,6 +99,9 @@ app.include_router(search.supplier_router, prefix="/supplier-offers", tags=["Sup
 app.include_router(orders.router, prefix="/purchase-orders", tags=["Purchase orders"])
 app.include_router(admin.router, prefix="/admin", tags=["Admin"])
 app.include_router(search.legacy_router, tags=["Search"])
+if not settings.is_production:
+    # Development/test only (the endpoint also refuses in production itself).
+    app.include_router(dev.router, prefix="/dev", tags=["Development only"])
 
 
 @app.get("/health", tags=["Health"])
@@ -75,6 +109,9 @@ def health_check():
     try:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
+            problem = schema.schema_problem(connection)
     except SQLAlchemyError:
         raise AppError("Database unavailable.", status_code=503) from None
-    return {"status": "healthy", "database": "connected"}
+    if problem:
+        raise AppError(problem, status_code=503, extra={"database": "connected", "schema": "outdated"})
+    return {"status": "healthy", "database": "connected", "schema": "up to date"}

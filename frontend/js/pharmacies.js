@@ -4,8 +4,12 @@
  * Steps:
  *   0 Account  -> POST /auth/register, then POST /auth/login. If the email is
  *                 already registered, the same form signs in instead.
- *   1 Verify   -> email verification is not in the v6 backend yet; the demo
- *                 code check is kept until it is.
+ *   1 Verify   -> mobile number by SMS one-time code: POST /auth/phone/send-code,
+ *                 then POST /auth/phone/verify. The backend decides: it refuses
+ *                 to create a pharmacy until the caller's phone is verified, and
+ *                 uses that verified number. GET /auth/phone/status says whether
+ *                 the step is needed (skipped when already verified or when the
+ *                 backend does not require it).
  *   2 Profile  -> POST /organizations (type pharmacy), POST .../locations,
  *                 POST .../documents for each selected file. Going back and
  *                 resubmitting updates the same records (PATCH).
@@ -19,7 +23,7 @@ const $ = s => document.querySelector(s);
 const API = window.ApexAPI;
 const forms = [...document.querySelectorAll('.step-form')];
 const titles = ['Create your pharmacy account', 'A little check. A stronger connection.', 'Make your pharmacy easy to find.', 'One plan. More possibilities.'];
-const descriptions = ['Join a connected community of pharmacies and suppliers in Kigali.', 'Verify your email to take the next step.', 'Add your practice details, location and licensing documents.', 'Access your pharmacy workspace for 5,000 RWF per month.'];
+const descriptions = ['Join a connected community of pharmacies and suppliers in Kigali.', 'Verify your mobile number to take the next step.', 'Add your practice details, location and licensing documents.', 'Access your pharmacy workspace for 5,000 RWF per month.'];
 const SAMPLE_PROFILE = { name: 'Kigali Pharmacy', license: 'PH-DEMO', phone: '+250 788 123 456', address: 'Kigali, Rwanda', latitude: '-1.9441', longitude: '30.0619' };
 const DEFAULT_CITY = 'Kigali';
 const STATUS_NOTES = {
@@ -130,7 +134,10 @@ function supplierContacts(orders) {
   return [...bySupplier.values()];
 }
 
-function resetLive() { live = null; accountEmail = ''; profile = { ...SAMPLE_PROFILE }; currentView = 'home'; }
+function resetLive() {
+  live = null; accountEmail = ''; profile = { ...SAMPLE_PROFILE }; currentView = 'home';
+  resetPhoneVerification();
+}
 
 /* -------------------------------------------------------- step 0: account */
 $('#account').addEventListener('submit', e => {
@@ -158,9 +165,8 @@ $('#account').addEventListener('submit', e => {
       }
       f.password.value = ''; f.confirm.value = '';
       await loadLive();
-      $('#entered-email').textContent = accountEmail;
       if (live.organization) { openDashboard(); notice('Welcome back. You are signed in.'); return; }
-      step(signedInExisting ? 2 : 1);
+      await continueToPhoneVerification();
     } catch (err) {
       formError(errorText(err));
     }
@@ -168,10 +174,131 @@ $('#account').addEventListener('submit', e => {
 });
 
 /* --------------------------------------------------------- step 1: verify */
+// Mobile number verification by SMS. Every decision is made by the backend;
+// this only drives the form. The code is never known to the browser until
+// the user types it from the SMS.
+const phoneState = { status: null, sentTo: null, resendAt: 0, timer: null };
+
+function resetPhoneVerification() {
+  clearInterval(phoneState.timer);
+  Object.assign(phoneState, { status: null, sentTo: null, resendAt: 0, timer: null });
+  const f = $('#verify').elements;
+  f.phone.value = ''; f.code.value = ''; f.code.dispatchEvent(new Event('input'));
+  $('#code-area').hidden = true; $('#code-sent').textContent = '';
+  renderResend();
+  const phone = $('#profile').elements.phone;
+  phone.readOnly = false; phone.removeAttribute('title');
+}
+
+function useVerifiedPhone(number) {
+  if (!number) return;
+  const phone = $('#profile').elements.phone;
+  phone.value = number; phone.readOnly = true; phone.title = 'Verified by SMS';
+}
+
+// After sign-in: verify the phone unless the backend says it is not needed.
+async function continueToPhoneVerification() {
+  let status = null;
+  try {
+    const result = await API.auth.phone.status();
+    // Only a well-formed answer counts; anything else is "unknown".
+    if (result && typeof result.required === 'boolean' && typeof result.verified === 'boolean') status = result;
+  } catch (err) {
+    if (err.status === 401) throw err;
+    // 404 (older backend during a deploy), network error, timeout: unknown.
+  }
+  phoneState.status = status;
+  if (!status) {
+    // Unknown is NOT verified: the backend still refuses an unverified
+    // pharmacy when verification is required (403), and the profile step
+    // then brings the user back here. When it is not required, they continue.
+    step(2); return;
+  }
+  if (status.verified) { useVerifiedPhone(status.verified_phone); step(2); return; }
+  if (!status.required) { step(2); return; }
+  step(1);
+  if (status && !status.sms_available) {
+    formError('SMS verification is not available right now. Please try again later or contact ApexRX.');
+  }
+}
+
+function renderResend() {
+  const button = $('#resend-code');
+  const left = Math.ceil((phoneState.resendAt - Date.now()) / 1000);
+  if (left > 0) { button.disabled = true; button.textContent = `Resend code in ${left}s`; return; }
+  button.disabled = false; button.textContent = 'Resend code';
+  clearInterval(phoneState.timer); phoneState.timer = null;
+}
+
+function startResendCountdown(seconds) {
+  phoneState.resendAt = Date.now() + Math.max(0, seconds) * 1000;
+  clearInterval(phoneState.timer);
+  phoneState.timer = setInterval(renderResend, 1000);
+  renderResend();
+}
+
+function sessionExpired() { resetLive(); step(0); formError('Your session has expired. Please sign in again.'); }
+
+async function requestCode() {
+  const form = $('#verify'), f = form.elements;
+  const phone = f.phone.value.trim();
+  if (!phone) { formError('Enter your mobile phone number.'); f.phone.focus(); return; }
+  if (phoneState.sentTo === phone && phoneState.resendAt > Date.now()) { renderResend(); return; }
+  formError('');
+  await busy(form, async () => {
+    try {
+      const sent = await API.auth.phone.sendCode(phone);
+      phoneState.sentTo = sent.phone;
+      f.phone.value = sent.phone; // the normalized number the SMS went to
+      $('#code-area').hidden = false;
+      $('#code-sent').textContent = `Code sent to ${sent.phone_masked}. It expires in ${Math.max(1, Math.round(sent.expires_in / 60))} minutes.`;
+      f.code.value = ''; f.code.dispatchEvent(new Event('input'));
+      startResendCountdown(sent.resend_after);
+      f.code.focus();
+    } catch (err) {
+      if (err.status === 401) { sessionExpired(); return; }
+      if (err.status === 429 && err.data && err.data.retry_after) startResendCountdown(err.data.retry_after);
+      formError(errorText(err));
+    }
+  });
+  renderResend(); // busy() re-enabled every button; keep the countdown
+}
+
+$('#send-code').addEventListener('click', requestCode);
+$('#resend-code').addEventListener('click', requestCode);
+$('#verify').elements.phone.addEventListener('input', e => {
+  // Editing the number after a code was sent means a new code is needed.
+  if (phoneState.sentTo && e.target.value.trim() !== phoneState.sentTo) {
+    phoneState.sentTo = null; $('#code-area').hidden = true; $('#code-sent').textContent = '';
+  }
+});
+
 $('#verify').addEventListener('submit', e => {
   e.preventDefault();
-  if (e.currentTarget.elements.code.value !== '472916') { formError('Enter the demo verification code: 472916.'); return; }
-  step(2);
+  const form = e.currentTarget, f = form.elements;
+  if (!phoneState.sentTo) { requestCode(); return; } // Enter in the phone field sends the code
+  const code = f.code.value.replace(/\D/g, '');
+  if (code.length !== 6) { formError('Enter the 6-digit code from the SMS.'); f.code.focus(); return; }
+  formError('');
+  busy(form, async () => {
+    try {
+      const result = await API.auth.phone.verify(phoneState.sentTo, code);
+      phoneState.status = { ...(phoneState.status || {}), verified: true, verified_phone: result.verified_phone };
+      clearInterval(phoneState.timer);
+      useVerifiedPhone(result.verified_phone);
+      step(2);
+      notice('Your mobile number is verified.');
+    } catch (err) {
+      if (err.status === 401) { sessionExpired(); return; }
+      const reason = err.data && err.data.reason;
+      if (['expired', 'too_many_attempts', 'no_active_code'].includes(reason)) {
+        f.code.value = ''; f.code.dispatchEvent(new Event('input'));
+        phoneState.resendAt = 0; // a new code can be requested now
+      }
+      formError(errorText(err));
+      if (reason === 'incorrect' || reason === 'format') f.code.select();
+    }
+  }).then(renderResend);
 });
 
 /* -------------------------------------------------------- step 2: profile */
@@ -224,6 +351,10 @@ $('#profile').addEventListener('submit', e => {
     if (live) {
       try { await saveProfile(values); } catch (err) {
         if (err.status === 401) { resetLive(); step(0); formError('Your session has expired. Please sign in again.'); return; }
+        if (err.status === 403 && !live.organization && !(phoneState.status && phoneState.status.verified)) {
+          // The backend requires a verified phone first: go to that step.
+          step(1); formError(errorText(err)); return;
+        }
         formError(errorText(err)); return;
       }
     }
@@ -478,9 +609,8 @@ $('#premium').addEventListener('click', () => notice('Premium preview: AI foreca
   // Resume a session from this tab (for example after a page refresh).
   try {
     await loadLive();
-    $('#entered-email').textContent = accountEmail;
     if (live.organization) openDashboard();
-    else { step(2, false); }
+    else await continueToPhoneVerification();
     fillProfileForm();
   } catch (err) {
     resetLive();

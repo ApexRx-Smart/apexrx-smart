@@ -34,6 +34,10 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(30))
+    # Set only by a successful SMS verification (E.164). Kept apart from the
+    # editable ``phone`` so changing that never carries a verification over.
+    verified_phone: Mapped[str | None] = mapped_column(String(20))
+    phone_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     # Platform-level administrator (ApexRx staff). Separate from membership roles.
     is_platform_admin: Mapped[bool] = mapped_column(

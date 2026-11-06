@@ -93,12 +93,13 @@ Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
 
 - **Homepage search** calls `GET /search/pharmacies`. It shows availability, price, location and how fresh the data is, never exact quantities.
 - **Pharmacy registration** (`pharmacies.html`) creates the account (`POST /auth/register`), signs in, creates the pharmacy organization and its location, and uploads the verification documents. An existing email signs in instead.
+- **Phone verification** (step 2): the user's mobile number is verified by SMS one-time code (`/auth/phone/*`). The backend only allows a pharmacy to be registered with that verified number. See [Phone verification (SMS)](#phone-verification-sms).
 - **The pharmacy workspace** shows the signed-in pharmacy's profile and document review status. It lists suppliers from the pharmacy's purchase orders and searches supplier stock with `GET /supplier-offers`, which works only for approved pharmacies. **Open chat** opens the supplier's WhatsApp or phone.
 - **Just exploring?** still opens the workspace with sample data and no account.
 
 - **The admin dashboard** (`admin.html`) lets ApexRX staff review registrations. See [Admin dashboard](#admin-dashboard).
 
-Still simulated in the browser, because the v6 data model has no support for them: the email verification code (`472916`), the plan and payment step, and in-app supplier chat. Inventory and purchase order screens don't exist yet, but `js/api.js` already has the calls for them.
+Still simulated in the browser, because the v6 data model has no support for them: the plan and payment step, and in-app supplier chat. Inventory and purchase order screens don't exist yet, but `js/api.js` already has the calls for them.
 
 ### Verify frontend changes
 
@@ -107,7 +108,7 @@ After making changes, check the following:
 1. Open the home page and verify the Kigali map, logos, audience images, and animations.
 2. Select English, French, and Kinyarwanda and verify that the language selection is applied.
 3. Search for a medicine on the home page and check that results come back from the backend. An empty database returns no results: see [Test data](#test-data).
-4. Open the pharmacy workflow and register with a new email and matching passwords (8 characters minimum). Enter the demonstration code `472916`, fill in the profile and upload the documents, then continue through the simulated payment step.
+4. Open the pharmacy workflow and register with a new email and matching passwords (8 characters minimum). With the local backend in development mode (`APP_ENV=development`, `SMS_PROVIDER=mock`), enter a Rwandan mobile number and choose **Send code by SMS**. Read the code from `GET /dev/sms/latest` (see [Phone verification (SMS)](#phone-verification-sms)) and enter it. Then fill in the profile, upload the documents and continue through the simulated payment step.
 5. In the workspace, check the profile and document statuses. Sign in as an **approved** pharmacy to try supplier search.
 6. Check narrow and wide layouts, navigation, return navigation, and social links.
 
@@ -153,6 +154,13 @@ cp .env.example .env    # then edit DATABASE_URL and JWT_SECRET_KEY
 | `UPLOAD_DIR` | no | Local document storage only (development). Default `backend/uploads/` |
 | `MAX_UPLOAD_SIZE_BYTES` | no | Default 10 MB |
 | `DEFAULT_CURRENCY` | no | Default `RWF` |
+| `APP_ENV` | no | `production` (default), `development` or `test`. Only non-production allows the mock SMS provider and the `/dev` endpoints. On Render, any value other than `production` stops the service from starting |
+| `PHONE_VERIFICATION_REQUIRED` | no | Default `true`: a pharmacy can only be registered with an SMS-verified number |
+| `SMS_PROVIDER` | for SMS | Adapter name. `mock` works only outside production; real adapters are added as described in [Phone verification (SMS)](#phone-verification-sms). If it is unset, sending a code returns 503 |
+| `SMS_SENDER_ID` | no | Sender name or number, for providers that support one |
+| `OTP_TTL_SECONDS` / `OTP_MAX_ATTEMPTS` / `OTP_RESEND_COOLDOWN_SECONDS` | no | Defaults 300 / 5 / 60 |
+| `OTP_MAX_SENDS_PER_PHONE_PER_HOUR` / `..._PER_USER_PER_HOUR` / `..._PER_IP_PER_HOUR` | no | Defaults 5 / 10 / 20. The IP limit applies only when the client IP is trustworthy |
+| `PHONE_DEFAULT_REGION` / `PHONE_ALLOWED_REGIONS` | no | Defaults `RW` / `RW` (ISO country codes, comma-separated) |
 
 **Security:** never commit `.env`, database credentials, JWT secrets or the Supabase secret key.
 
@@ -225,6 +233,68 @@ ruff check app tests alembic
 ```
 
 The document tests use an in-memory fake of the Supabase Storage client, and the suite forces `DOCUMENT_STORAGE=local`, so tests never touch a real bucket. `tests/test_supabase_live.py` is an optional round trip against the real bucket (a dummy PDF under a random `test-.../` prefix, deleted afterwards). It runs only with `SUPABASE_LIVE_TESTS=1` and the `SUPABASE_*` variables set.
+
+## Phone verification (SMS)
+
+**Flow:** a pharmacy owner signs in, verifies their mobile number by SMS, and only then can register the pharmacy. All decisions are made on the backend.
+
+| Endpoint | What it does |
+|---|---|
+| `GET /auth/phone/status` | `{required, verified, verified_phone, sms_available}`. The page uses it to decide whether to show the step |
+| `POST /auth/phone/send-code` `{phone}` | Normalizes the number to E.164, applies the limits, stores a hashed code and sends the SMS. Returns the normalized and masked number, `expires_in` and `resend_after`, **never the code** |
+| `POST /auth/phone/verify` `{phone, code}` | Single-use check. On success it sets `app_user.verified_phone` and `phone_verified_at` |
+| `POST /organizations` (pharmacy) | **403** without a verified phone. **400** if the requested phone isn't the verified number. If no phone is given, the verified number is used. Changing a pharmacy's phone later also needs that new number to be verified |
+
+**Codes:**
+- Six random digits (`secrets`), valid for 5 minutes, single-use. The row is locked while it is checked, so two simultaneous requests can't both use a code.
+- Only an HMAC of the code is stored. It is keyed with a secret derived from `JWT_SECRET_KEY` and bound to the user, number and purpose. A code for one number or account never verifies another.
+- A new code invalidates the earlier ones. After 5 wrong attempts the code is dead.
+- Sending is limited by a 60-second cooldown per number, and per hour per number (5), per user (10) and per trustworthy client IP (20).
+  - **The limits live in PostgreSQL, not process memory.** They are counted from `phone_verification` rows inside one transaction.
+  - That transaction first locks the user's row, then takes transaction-scoped advisory locks for the number and the IP, always in that order.
+  - Checking and recording are therefore atomic, even with simultaneous requests or several app instances, and the limits survive restarts.
+  - Only one code per user is issued at a time.
+  - A partial unique index means the database itself refuses a second valid code for the same user and purpose.
+  - The client IP is stored only as an HMAC.
+- **The limits fail closed.** If the database can't check or record a limit, no SMS is sent and the client gets a generic 503 ("Verification codes cannot be sent right now"). Internal details are only logged.
+- **The code is saved before it is sent.** The row is committed first and only then is the SMS sent, so a code can never be delivered without being stored.
+  - If the provider refuses the message, the row is marked `delivery_failed_at` and invalidated. It still counts towards the hourly limits, so a failing provider can't be hammered, but not towards the cooldown, so the user can retry at once.
+  - Trade-off: issuing a new code invalidates the previous one *before* sending. If that send fails, the user simply requests another code.
+  - Remaining corner case: if recording a failed delivery also fails (the database is down at that moment), the undelivered code stays stored until it expires. Nobody knows it, but the user may have to wait out the cooldown.
+- Codes and full phone numbers never appear in API responses or logs; logs show a masked number such as `+2507*****456`.
+
+**Phone numbers:**
+- Parsed with [`phonenumbers`](https://pypi.org/project/phonenumbers/) (libphonenumber).
+- Rwandan formats such as `0788 123 456`, `788123456`, `250788123456` and `+250 788 123 456` become `+250788123456`.
+- Only mobile numbers from `PHONE_ALLOWED_REGIONS` are accepted. Letters are refused, since libphonenumber would otherwise map them to keypad digits.
+- To support another country, add it to `PHONE_ALLOWED_REGIONS`.
+
+**Modes:**
+- **Development and tests:** `APP_ENV=development` (or `test`) with `SMS_PROVIDER=mock`.
+  - The mock sends nothing. It keeps messages in memory only.
+  - `GET /dev/sms/latest`, signed in, returns **your own** latest test code.
+  - The `/dev` routes aren't mounted in production, and the endpoint also answers 404 in production itself.
+  - The tests use the mock automatically (`tests/conftest.py`).
+- **Production:** `APP_ENV=production`, the default.
+  - The mock is refused. With no real provider configured, `send-code` answers **503** "SMS verification is not available right now", a warning is logged at startup, and new pharmacies can't register.
+  - A delivery failure answers **502**. Nothing falls back to the mock, and the stored code is marked as failed and invalidated.
+- **Before a provider exists:** set `PHONE_VERIFICATION_REQUIRED=false`. The step is then skipped and pharmacies register without a verified number. There is never a fixed code.
+
+**Adding a real provider (adapter):**
+1. Create `backend/app/services/sms/<name>.py` with a class that has `name` and `send(to, message) -> SmsResult`. It calls the provider's HTTP API and raises `SmsDeliveryError` on any failure, never failing silently.
+2. Read the provider's credentials inside the adapter from environment variables, for example `SMS_<NAME>_API_KEY` or a username and sender ID. Never commit them.
+3. Register a factory in `PROVIDERS` in `backend/app/services/sms/__init__.py`.
+4. Set `SMS_PROVIDER=<name>` and the credentials on Render. `GET /auth/phone/status` should then report `"sms_available": true`.
+
+Typical providers need an API key or token, an account ID or username, and a registered sender ID or number. Get the exact names from the provider you choose. No provider has been chosen or tested yet, so **real SMS delivery has not been verified**.
+
+**Testing locally:**
+```bash
+cd backend
+python -m pytest tests/test_phone_otp.py tests/test_pharmacy_phone_binding.py tests/test_phone_numbers_and_sms.py
+# Browser test: run the backend with APP_ENV=development SMS_PROVIDER=mock OTP_RESEND_COOLDOWN_SECONDS=5
+python ../frontend/tests/e2e_phone_otp.py
+```
 
 ## Login rate limiting
 
@@ -343,6 +413,50 @@ See `/docs` on the backend for the full request and response schemas.
 
 The test deployment uses free tiers only.
 
+### Database migrations: always before the code
+
+The service doesn't run migrations by itself: Render only starts `uvicorn`. The ORM models always expect the latest schema. **If code is deployed before its migration has been applied, sign-in, registration, the workspace and admin fail with 503 "A database error occurred".**
+- This happens even with `PHONE_VERIFICATION_REQUIRED=false`, because every query that loads a user selects the new columns. Public search keeps working.
+- `/health` returns **503** with "Database schema is not up to date … run `alembic upgrade head`", and the startup log says the same.
+- Optional safety net: if Render's **Health Check Path** is set to `/health`, Render won't switch traffic to a new deploy whose database hasn't been migrated.
+
+These are three separate actions:
+
+| Action | What it changes | How |
+|---|---|---|
+| **Apply a migration** | The database structure only | `alembic upgrade head`, run from your machine against the database |
+| **Deploy application code** | What Render runs | Merging to `main` (Render deploys automatically) |
+| **Turn mandatory phone verification on or off** | Whether a pharmacy needs an SMS-verified phone | The `PHONE_VERIFICATION_REQUIRED` environment variable on Render. It changes behaviour, not the schema, and needs no migration |
+
+**Safe order for the testing environment** (for example, PR #24 and migration `c4d1e8f2a9b7`):
+1. **Back up.** In Neon, open **Branches → Create branch** from the testing branch (for example `pre-c4d1e8f2a9b7`). That gives you an instant copy you can restore.
+2. **Record the counts before** (read-only, Neon SQL Editor):
+   ```sql
+   SELECT version_num FROM alembic_version;  -- expect a6f0c2d9e1b4
+   SELECT (SELECT count(*) FROM app_user) AS users, (SELECT count(*) FROM organization) AS orgs,
+          (SELECT count(*) FROM location) AS locations, (SELECT count(*) FROM product_offer) AS offers;
+   ```
+3. **Apply the migration** from your machine, with a role that can change the schema (not the read-only role):
+   ```bash
+   cd backend
+   DATABASE_URL="postgresql+psycopg://<owner role>:<password>@<host>/<db>?sslmode=require" alembic upgrade head
+   DATABASE_URL="..." alembic current        # must print: c4d1e8f2a9b7 (head)
+   ```
+   The migration is additive: two nullable columns on `app_user`, plus the new `phone_verification` table. The code currently deployed keeps working on the new schema (verified locally), so this step causes no downtime.
+4. **Verify** in the Neon SQL Editor:
+   ```sql
+   SELECT version_num FROM alembic_version;                -- c4d1e8f2a9b7
+   SELECT count(*) FROM app_user WHERE verified_phone IS NOT NULL;   -- 0: existing rows untouched
+   SELECT to_regclass('phone_verification');                -- phone_verification
+   ```
+   Re-run the counts from step 2. They must be identical.
+5. **Choose the verification setting** on Render *before* deploying. Use `PHONE_VERIFICATION_REQUIRED=false` until a real SMS provider is configured; otherwise new pharmacies can't register.
+6. **Deploy the code** by merging the PR. Then `GET /health` must return 200 with `"schema": "up to date"`. Check that sign-in and patient search work.
+
+**Rolling back:**
+- Revert or redeploy the previous code first. The previous code works on the new schema.
+- Only if the schema itself must go, run `alembic downgrade a6f0c2d9e1b4`. That drops `phone_verification` and the two columns, so verification records are lost. Alternatively, restore the Neon branch from step 1.
+
 ### Database: Neon
 
 1. Create a Neon project and copy its connection string. Change the scheme to `postgresql+psycopg://` and keep `?sslmode=require`.
@@ -362,7 +476,7 @@ Create a web service with root directory `backend`.
 |---|---|
 | Build command | `pip install -r requirements.txt` |
 | Start command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
-| Environment | `DATABASE_URL` (Neon), `JWT_SECRET_KEY` (**at least 32 random characters**, or the service will not start), `CORS_ORIGINS` (must include the Netlify URL, for example `https://your-site.netlify.app`), `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_BUCKET_NAME=organization-documents`. Leave `TRUSTED_CLIENT_IP_HEADER` unset unless `tools/render-ip-check` has verified a header |
+| Environment | `DATABASE_URL` (Neon), `JWT_SECRET_KEY` (**at least 32 random characters**, or the service will not start), `APP_ENV=production` (also the default), `SMS_PROVIDER` and the provider's credentials (or `PHONE_VERIFICATION_REQUIRED=false` until there is a provider), `CORS_ORIGINS` (must include the Netlify URL, for example `https://your-site.netlify.app`), `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_BUCKET_NAME=organization-documents`. Leave `TRUSTED_CLIENT_IP_HEADER` unset unless `tools/render-ip-check` has verified a header |
 
 Limits of the free plan:
 
@@ -391,6 +505,7 @@ Patient search shows only **approved** pharmacies, **active** locations and **li
 
 - Screens for inventory (stock and prices) and purchase orders. `frontend/js/api.js` already has these calls.
 - A catalogue import script for loading real medicine data.
+- A real SMS provider adapter (the infrastructure is ready; see [Phone verification (SMS)](#phone-verification-sms)).
 - Password reset and email verification.
 - Subscription plans and real payments (the plan step is simulated).
 - PostGIS for distance search at scale (bounding-box and haversine search is used today).

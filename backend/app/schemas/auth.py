@@ -38,6 +38,8 @@ class UserResponse(ORMModel):
     name: str
     email: EmailStr
     phone: str | None
+    verified_phone: str | None = None
+    phone_verified_at: datetime | None = None
     is_platform_admin: bool
     is_active: bool
     created_at: datetime
@@ -64,3 +66,33 @@ class UpdateMeRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str = Field(min_length=1, max_length=128)
     new_password: Password
+
+
+# Phone verification (SMS one-time code) --------------------------------------
+class PhoneCodeRequest(BaseModel):
+    # Validated and normalized by app/services/phone.py (clear messages).
+    phone: str = Field(max_length=40)
+
+
+class PhoneVerifyRequest(BaseModel):
+    phone: str = Field(max_length=40)
+    code: str = Field(max_length=20)
+
+
+class PhoneCodeSentResponse(BaseModel):
+    phone: str  # the normalized E.164 number the code was sent to
+    phone_masked: str
+    expires_in: int
+    resend_after: int
+
+
+class PhoneStatusResponse(BaseModel):
+    required: bool  # creating a pharmacy needs a verified phone
+    verified: bool
+    verified_phone: str | None
+    sms_available: bool
+
+
+class PhoneVerifiedResponse(BaseModel):
+    verified: bool = True
+    verified_phone: str

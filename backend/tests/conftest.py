@@ -27,6 +27,10 @@ os.environ["DATABASE_URL"] = _test_url
 # A fresh random signing secret per run (placeholders are rejected at startup).
 os.environ["JWT_SECRET_KEY"] = secrets.token_urlsafe(48)
 os.environ.pop("TRUSTED_CLIENT_IP_HEADER", None)
+# Test mode with the in-memory mock SMS provider (never a real provider).
+os.environ["APP_ENV"] = "test"
+os.environ["SMS_PROVIDER"] = "mock"
+os.environ.pop("PHONE_VERIFICATION_REQUIRED", None)
 os.environ.pop("RATE_LIMIT_STORAGE_URI", None)
 os.environ["UPLOAD_DIR"] = tempfile.mkdtemp(prefix="apexrx-uploads-")
 # Never touch a real Supabase bucket by accident: tests use the local backend or
@@ -44,7 +48,7 @@ from app.core.database import engine  # noqa: E402
 from app.main import app  # noqa: E402
 
 TABLES = (
-    "search_event, purchase_order_status_history, purchase_order_item, purchase_order, "
+    "phone_verification, search_event, purchase_order_status_history, purchase_order_item, purchase_order, "
     "stock_adjustment, product_offer, stock, product, drug, organization_document, "
     "location, membership, organization, app_user"
 )
@@ -63,10 +67,15 @@ def _schema():
 @pytest.fixture(autouse=True)
 def _clean():
     from app.core.rate_limit import login_limiter
+    from app.services.sms import set_sms_provider
+    from app.services.sms.mock import mock_provider
 
-    login_limiter.reset()
+    for reset in (login_limiter.reset, mock_provider.reset):
+        reset()
     yield
-    login_limiter.reset()
+    for reset in (login_limiter.reset, mock_provider.reset):
+        reset()
+    set_sms_provider(None)
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {TABLES} RESTART IDENTITY CASCADE"))
 

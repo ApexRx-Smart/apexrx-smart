@@ -16,9 +16,10 @@ from app.api.deps import (
     get_org_access,
     get_org_location,
 )
+from app.core.config import settings
 from app.core.errors import AppError, Conflict, Forbidden, NotFound
 from app.models import Location, Membership, Organization, OrganizationDocument, User
-from app.models.enums import DocumentStatus, MembershipRole, OrganizationStatus
+from app.models.enums import DocumentStatus, MembershipRole, OrganizationStatus, OrganizationType
 from app.schemas.common import Message
 from app.schemas.organizations import (
     DocumentResponse,
@@ -34,6 +35,7 @@ from app.schemas.organizations import (
     OrganizationUpdate,
 )
 from app.services import storage
+from app.services.phone import PhoneNumberError, normalize_phone
 
 router = APIRouter()
 
@@ -41,14 +43,46 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 # Organizations
 # ---------------------------------------------------------------------------
+def _same_number(a: str | None, b: str | None) -> bool:
+    if not a or not b:
+        return False
+    if a.strip() == b.strip():  # unchanged, even if it is not a valid number
+        return True
+    try:
+        return normalize_phone(a, mobile_only=False) == normalize_phone(b, mobile_only=False)
+    except PhoneNumberError:
+        return False
+
+
+def verified_pharmacy_phone(user: User, requested: str | None) -> str:
+    """The phone a pharmacy may use: the caller's SMS-verified number.
+
+    Enforced on the server whatever the frontend sends (see
+    app/api/phone_verification.py): no verified number -> 403; a different
+    number -> 400.
+    """
+    if not user.verified_phone:
+        raise Forbidden("Verify your mobile number by SMS before registering a pharmacy.")
+    if requested and not _same_number(requested, user.verified_phone):
+        raise AppError(f"The pharmacy phone must be the mobile number you verified ({user.verified_phone}).")
+    return user.verified_phone
+
+
 @router.post("", response_model=MyOrganizationResponse, status_code=status.HTTP_201_CREATED)
 def create_organization(payload: OrganizationCreate, user: CurrentUser, db: DbSession):
     """Register a pharmacy or supplier organization. The caller becomes its
-    owner. The organization stays ``pending`` until an ApexRx admin approves it."""
+    owner. The organization stays ``pending`` until an ApexRx admin approves it.
+
+    Pharmacies need the caller's phone verified by SMS first (when
+    PHONE_VERIFICATION_REQUIRED is on); the verified number becomes the
+    pharmacy's phone."""
+    phone = payload.phone
+    if payload.type == OrganizationType.PHARMACY and settings.phone_verification_required:
+        phone = verified_pharmacy_phone(user, payload.phone)
     organization = Organization(
         name=payload.name,
         type=payload.type,
-        phone=payload.phone,
+        phone=phone,
         email=str(payload.email).lower() if payload.email else None,
     )
     db.add(organization)
@@ -86,15 +120,25 @@ def get_organization(organization_id: int, user: CurrentUser, db: DbSession):
 
 
 @router.patch("/{organization_id}", response_model=OrganizationResponse)
-def update_organization(
-    organization_id: int, payload: OrganizationUpdate, user: CurrentUser, db: DbSession
-):
+def update_organization(organization_id: int, payload: OrganizationUpdate, user: CurrentUser, db: DbSession):
     organization = get_org_access(db, user, organization_id, roles=MANAGERS).organization
     data = payload.model_dump(exclude_unset=True)
     if "name" in data and data["name"] is None:
         raise AppError("name cannot be null.")
     if data.get("email"):
         data["email"] = str(data["email"]).lower()
+    if (
+        "phone" in data
+        and organization.type == OrganizationType.PHARMACY
+        and settings.phone_verification_required
+    ):
+        if _same_number(data["phone"], organization.phone):
+            data["phone"] = organization.phone  # unchanged: keep the stored (E.164) form
+        elif data["phone"] is None and organization.phone:
+            raise AppError("A pharmacy must keep a verified phone number.")
+        elif data["phone"] is not None:
+            # Changing a pharmacy's number needs the new number to be verified.
+            data["phone"] = verified_pharmacy_phone(user, data["phone"])
     for field, value in data.items():
         setattr(organization, field, value)
     db.commit()
@@ -149,10 +193,14 @@ def _assert_can_manage(actor_role: MembershipRole, target_role: MembershipRole) 
 
 
 def _active_owner_count(db, organization_id: int, excluding_membership_id: int | None = None) -> int:
-    stmt = select(func.count()).select_from(Membership).where(
-        Membership.organization_id == organization_id,
-        Membership.role == MembershipRole.OWNER,
-        Membership.is_active.is_(True),
+    stmt = (
+        select(func.count())
+        .select_from(Membership)
+        .where(
+            Membership.organization_id == organization_id,
+            Membership.role == MembershipRole.OWNER,
+            Membership.is_active.is_(True),
+        )
     )
     if excluding_membership_id is not None:
         stmt = stmt.where(Membership.membership_id != excluding_membership_id)
@@ -172,9 +220,7 @@ def list_members(organization_id: int, user: CurrentUser, db: DbSession):
     return list_member_responses(db, organization_id)
 
 
-@router.post(
-    "/{organization_id}/members", response_model=MemberResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/{organization_id}/members", response_model=MemberResponse, status_code=status.HTTP_201_CREATED)
 def add_member(organization_id: int, payload: MemberCreate, user: CurrentUser, db: DbSession):
     """Give an existing ApexRx user access to the organization. Each staff
     member uses their own account; accounts are never shared."""
@@ -197,9 +243,7 @@ def add_member(organization_id: int, payload: MemberCreate, user: CurrentUser, d
         membership.is_active = True
         membership.role = payload.role
     else:
-        membership = Membership(
-            user_id=member.user_id, organization_id=organization_id, role=payload.role
-        )
+        membership = Membership(user_id=member.user_id, organization_id=organization_id, role=payload.role)
         db.add(membership)
     db.commit()
     return _member_response(membership, member)
@@ -257,9 +301,7 @@ def remove_member(organization_id: int, membership_id: int, user: CurrentUser, d
 # Locations (pharmacy branches / supplier warehouses)
 # ---------------------------------------------------------------------------
 @router.get("/{organization_id}/locations", response_model=list[LocationResponse])
-def list_locations(
-    organization_id: int, user: CurrentUser, db: DbSession, include_inactive: bool = False
-):
+def list_locations(organization_id: int, user: CurrentUser, db: DbSession, include_inactive: bool = False):
     get_org_access(db, user, organization_id, allow_admin_read=True)
     stmt = select(Location).where(Location.organization_id == organization_id)
     if not include_inactive:
