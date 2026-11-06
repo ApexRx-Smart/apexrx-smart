@@ -6,10 +6,24 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
+MIN_JWT_SECRET_LENGTH = 32
+# Example/placeholder values that must never sign real tokens.
+KNOWN_PLACEHOLDER_SECRETS = frozenset(
+    {
+        "replace-with-a-long-random-secret",
+        "test-secret-key-that-is-long-enough",
+        "secret",
+        "changeme",
+        "change-me",
+    }
+)
+PLACEHOLDER_MARKERS = ("replace-with", "change-me", "changeme", "placeholder", "your-secret", "your_secret")
+
 
 class Settings(BaseSettings):
     database_url: str
-    jwt_secret_key: str = Field(min_length=16)
+    # Validated by _strong_jwt_secret: at least 32 characters, not a placeholder.
+    jwt_secret_key: str
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = Field(default=30, gt=0)
 
@@ -39,6 +53,19 @@ class Settings(BaseSettings):
     supabase_bucket_name: str = "organization-documents"
     supabase_timeout_seconds: int = Field(default=20, gt=0)
 
+    # Login throttling (failed attempts in a moving window). The counters live in
+    # RATE_LIMIT_STORAGE_URI: "memory://" (per process, reset on restart) or e.g.
+    # "redis://host:6379" when running several instances.
+    login_max_failures_per_account: int = Field(default=5, ge=1)
+    login_max_failures_per_ip: int = Field(default=20, ge=1)
+    login_failure_window_seconds: int = Field(default=900, ge=1)
+    rate_limit_storage_uri: str = "memory://"
+    # Header holding the real client IP, set by a trusted proxy that overwrites
+    # it (on Render: True-Client-IP, set by Cloudflare). Never X-Forwarded-For,
+    # which clients can forge. Unset: the TCP peer address is used, and per-IP
+    # limiting is skipped when that peer is a private proxy address.
+    trusted_client_ip_header: str | None = None
+
     # Default currency for offers and purchase orders (ISO 4217).
     default_currency: str = "RWF"
 
@@ -46,7 +73,33 @@ class Settings(BaseSettings):
         env_file=BACKEND_DIR / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        # Never echo submitted values (e.g. the JWT secret) in validation errors.
+        hide_input_in_errors=True,
     )
+
+    @field_validator("jwt_secret_key")
+    @classmethod
+    def _strong_jwt_secret(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("JWT_SECRET_KEY is empty. Set it to a long random value.")
+        lowered = value.strip().lower()
+        if lowered in KNOWN_PLACEHOLDER_SECRETS or any(marker in lowered for marker in PLACEHOLDER_MARKERS):
+            raise ValueError(
+                "JWT_SECRET_KEY is a placeholder/example value. Generate a real one with: "
+                'python -c "import secrets; print(secrets.token_urlsafe(48))"'
+            )
+        if len(value) < MIN_JWT_SECRET_LENGTH:
+            raise ValueError(f"JWT_SECRET_KEY must be at least {MIN_JWT_SECRET_LENGTH} characters long.")
+        return value
+
+    @field_validator("trusted_client_ip_header", mode="before")
+    @classmethod
+    def _blank_header_is_none(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        if isinstance(value, str) and value.strip().lower() == "x-forwarded-for":
+            raise ValueError("TRUSTED_CLIENT_IP_HEADER must not be X-Forwarded-For (clients can forge it).")
+        return value.strip() if isinstance(value, str) else value
 
     @field_validator("cors_origins", "allowed_document_mime_types", mode="before")
     @classmethod
