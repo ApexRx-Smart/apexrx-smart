@@ -19,7 +19,7 @@ The backend address is set in `js/config.js` (`window.APEX_CONFIG.API_BASE_URL`)
 
 ## How the pages use the API
 
-All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend endpoint, including inventory and purchase orders, which have no screens yet. It turns error responses into `ApiError` objects with a readable `message`. It keeps the access token in `sessionStorage`, so the token is cleared when the tab closes.
+All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend endpoint. The pharmacy workspace sections live in `js/workspace.js`. It turns error responses into `ApiError` objects with a readable `message`. It keeps the access token in `sessionStorage`, so the token is cleared when the tab closes.
 
 | Page / control | Endpoint |
 |---|---|
@@ -38,6 +38,25 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 | **Restart demo** | Signs out |
 
 **Just exploring?** still opens the workspace with sample data and no account.
+
+### Pharmacy workspace sections (`js/workspace.js`)
+
+| Section / control | Endpoint | Who |
+|---|---|---|
+| Organization selector (users in several pharmacies) | `GET /auth/me` memberships. The choice is kept for the tab | Everyone |
+| Overview | `GET /organizations/{id}`, `/locations`, `/members`, `GET /purchase-orders?organization_id=` | Everyone |
+| Branches: list | `GET /organizations/{id}/locations?include_inactive=true` | Everyone |
+| Branches: add, edit, deactivate/reactivate | `POST` / `PATCH /organizations/{id}/locations[/{loc}]` (`is_active`) | Owners, managers |
+| Employees: list | `GET /organizations/{id}/members` | Everyone |
+| Employees: add (existing account), change role, deactivate, remove | `POST` / `PATCH` / `DELETE /organizations/{id}/members[/{m}]` | Owners (everyone); managers (staff only) |
+| Inventory: branch selector, list | `GET /organizations/{id}/inventory?location_id=` | Everyone |
+| Inventory: set quantity, add a catalogue medicine | `PUT .../locations/{loc}/stock/{product}`, `GET /catalogue/products` | Everyone (approved pharmacies) |
+| Inventory: price and listing | `PUT .../stock/{product}/offer` | Owners, managers |
+| Orders: list, open, history | `GET /purchase-orders?organization_id=`, `GET /purchase-orders/{id}` | Everyone |
+| Orders: new draft (receiving branch, supplier stock search, lines, optional warehouse) | `GET /supplier-offers`, `POST /purchase-orders` | Everyone (approved pharmacies) |
+| Orders: edit draft lines, delete draft | `PATCH` / `DELETE /purchase-orders/{id}/items/{item}`, `DELETE /purchase-orders/{id}` | Everyone |
+| Orders: submit, cancel (with a reason), accept counteroffer, mark delivered | `POST /purchase-orders/{id}/{action}`. Buttons come from the order's `allowed_actions` | Submit and cancel: owners and managers only (enforced by the backend) |
+| Joining an existing pharmacy | `GET /auth/me` ("Check again") | A registered user with no pharmacy |
 
 ### Admin dashboard (`admin.html`)
 
@@ -60,4 +79,5 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 - **Supplier chat:** messages in the sample chat dialog stay in the browser. Live suppliers are contacted on WhatsApp or by phone, as the roles document describes.
 - **Homepage map pins and headline numbers:** illustrative content, unchanged. No public endpoint lists every pharmacy or returns platform totals.
 - **Supplier search by supplier name:** `/supplier-offers` searches by medicine. Supplier names are matched only among suppliers you have already ordered from.
-- **Inventory and purchase order screens:** `js/api.js` has the calls, but there are no screens for them yet.
+- **Supplier workspace:** suppliers have no screens yet. They manage stock and incoming orders through the API.
+- **Translations:** the new workspace sections are in English only (French and Kinyarwanda fall back to English).

@@ -94,12 +94,21 @@ Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
 - **Homepage search** calls `GET /search/pharmacies`. It shows availability, price, location and how fresh the data is, never exact quantities.
 - **Pharmacy registration** (`pharmacies.html`) creates the account (`POST /auth/register`), signs in, creates the pharmacy organization and its location, and uploads the verification documents. An existing email signs in instead.
 - **Phone verification** (step 2): the user's mobile number is verified by SMS one-time code (`/auth/phone/*`). The backend only allows a pharmacy to be registered with that verified number. See [Phone verification (SMS)](#phone-verification-sms).
-- **The pharmacy workspace** shows the signed-in pharmacy's profile and document review status. It lists suppliers from the pharmacy's purchase orders and searches supplier stock with `GET /supplier-offers`, which works only for approved pharmacies. **Open chat** opens the supplier's WhatsApp or phone.
+- **The pharmacy workspace** (`js/workspace.js`) runs the pharmacy day to day. All of it uses real backend data:
+  - **Overview:** organization, status, branches, members and purchase-order counts.
+  - **Branches:** list, add, edit, deactivate and reactivate.
+  - **Employees:** add an existing account by email, change roles, deactivate, remove.
+  - **Inventory:** per branch, set quantities, prices and listing.
+  - **Purchase orders:** create a draft with a receiving branch, edit lines, submit, cancel with a reason, view history.
+  - **Organization selector:** for users who belong to several pharmacies.
+  - It also lists suppliers from the pharmacy's purchase orders and searches supplier stock with `GET /supplier-offers`, which works only for approved pharmacies. **Open chat** opens the supplier's WhatsApp or phone.
+  - Buttons follow the user's role, but the backend enforces every rule.
+- **Joining an existing pharmacy:** someone who registers to work at an existing pharmacy chooses "Joining an existing pharmacy instead?". They wait for the owner or a manager to add their email, instead of registering a new pharmacy.
 - **Just exploring?** still opens the workspace with sample data and no account.
 
 - **The admin dashboard** (`admin.html`) lets ApexRX staff review registrations. See [Admin dashboard](#admin-dashboard).
 
-Still simulated in the browser, because the v6 data model has no support for them: the plan and payment step, and in-app supplier chat. Inventory and purchase order screens don't exist yet, but `js/api.js` already has the calls for them.
+Still simulated in the browser, because the v6 data model has no support for them: the plan and payment step, and in-app supplier chat. Supplier organizations have no workspace screens yet; they use the API.
 
 ### Verify frontend changes
 
@@ -383,7 +392,9 @@ Each purchase order includes `allowed_actions`, the actions the current user may
 | Organization profile, locations, documents | ✓ | ✓ | — |
 | Update stock quantities | ✓ | ✓ | ✓ |
 | Set prices and listings, delete stock | ✓ | ✓ | — |
-| Handle purchase orders | ✓ | ✓ | ✓ |
+| View orders, prepare and edit drafts | ✓ | ✓ | ✓ |
+| Submit and cancel orders (pharmacy side) | ✓ | ✓ | — |
+| Supplier side: accept, counter, reject, dispatch, cancel | ✓ | ✓ | ✓ |
 
 - Only **approved** organizations can write stock and offers, search suppliers, and create or act on orders. Cancelling is always possible.
 - An organization cannot be approved while it has pending documents. It must always keep at least one active owner.
@@ -503,7 +514,7 @@ Patient search shows only **approved** pharmacies, **active** locations and **li
 
 ## Development Roadmap
 
-- Screens for inventory (stock and prices) and purchase orders. `frontend/js/api.js` already has these calls.
+- Supplier workspace screens (stock, prices and incoming orders). The pharmacy workspace exists; suppliers still use the API.
 - A catalogue import script for loading real medicine data.
 - A real SMS provider adapter (the infrastructure is ready; see [Phone verification (SMS)](#phone-verification-sms)).
 - Password reset and email verification.

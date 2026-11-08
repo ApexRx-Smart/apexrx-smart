@@ -14,8 +14,11 @@
  *                 POST .../documents for each selected file. Going back and
  *                 resubmitting updates the same records (PATCH).
  *   3 Plan     -> subscriptions are not in the v6 backend; still simulated.
- *   4 Workspace-> supplier discovery via GET /supplier-offers (approved
- *                 pharmacies only), contact through WhatsApp/phone links.
+ *   4 Workspace-> overview, branches, employees, inventory and purchase
+ *                 orders (js/workspace.js), supplier discovery via
+ *                 GET /supplier-offers (approved pharmacies only), contact
+ *                 through WhatsApp/phone links. Users in several pharmacies
+ *                 choose one with the organization selector.
  *
  * "Just exploring?" still opens the workspace with sample data and no account.
  */
@@ -56,6 +59,8 @@ function step(index, focus = true) {
   $('#step-title').textContent = titles[index];
   $('#step-description').textContent = descriptions[index];
   formError('');
+  $('#join-existing').hidden = !(live && live.user && !live.organization && (index === 1 || index === 2));
+  $('#join-wait').hidden = true;
   if (focus) $('#step-title').focus();
 }
 
@@ -72,10 +77,32 @@ async function busy(form, task) {
 }
 
 /* ------------------------------------------------------------ live state */
+const ORG_KEY = 'apexrx_selected_pharmacy';
+function pharmacyMemberships(me) {
+  return (me.memberships || []).filter(m => m.organization_type === 'pharmacy');
+}
+// The organization chosen in the selector (kept for this tab), otherwise the
+// first one; users in several pharmacies can switch at any time.
 function pharmacyMembership(me) {
-  const active = (me.memberships || []).filter(m => m.organization_type === 'pharmacy');
-  // Prefer an organization the user can manage.
-  return active.find(m => m.role === 'owner') || active.find(m => m.role === 'manager') || active[0] || null;
+  const list = pharmacyMemberships(me);
+  let saved = null;
+  try { saved = sessionStorage.getItem(ORG_KEY); } catch (e) { /* storage unavailable */ }
+  return list.find(m => String(m.organization_id) === saved) || list[0] || null;
+}
+function selectOrganization(organizationId) {
+  try { sessionStorage.setItem(ORG_KEY, String(organizationId)); } catch (e) { /* storage unavailable */ }
+}
+function renderOrgSwitch() {
+  const label = $('#org-switch-label'), select = $('#org-switch');
+  const list = live && live.user ? pharmacyMemberships(live.user) : [];
+  label.hidden = list.length < 2;
+  select.replaceChildren(...list.map(m => {
+    const option = document.createElement('option');
+    option.value = m.organization_id;
+    option.textContent = `${m.organization_name} (${m.role})`;
+    option.selected = live.organization && m.organization_id === live.organization.organization_id;
+    return option;
+  }));
 }
 
 function profileFromLive() {
@@ -99,12 +126,18 @@ async function loadLive() {
   const me = await API.auth.me();
   accountEmail = me.email;
   const membership = pharmacyMembership(me);
-  live = { user: me, organization: null, location: null, role: membership ? membership.role : null };
-  if (!membership) return live;
-  live.organization = await API.organizations.get(membership.organization_id);
-  const locations = await API.organizations.locations(membership.organization_id);
-  live.location = (locations || []).find(l => l.is_active) || (locations || [])[0] || null;
-  await refreshWorkspaceData();
+  // Build the new state completely before replacing `live`, so nothing that
+  // runs meanwhile (a debounced search, a section render, an organization
+  // switch) ever sees a half-loaded organization.
+  const next = { user: me, organization: null, location: null, locations: [], role: membership ? membership.role : null };
+  if (membership) {
+    next.organization = await API.organizations.get(membership.organization_id);
+    // All branches (inactive ones too, for the Branches section).
+    next.locations = (await API.organizations.locations(membership.organization_id, { include_inactive: true })) || [];
+    next.location = next.locations.find(l => l.is_active) || next.locations[0] || null;
+  }
+  live = next;
+  if (live.organization) await refreshWorkspaceData();
   return live;
 }
 
@@ -137,6 +170,7 @@ function supplierContacts(orders) {
 function resetLive() {
   live = null; accountEmail = ''; profile = { ...SAMPLE_PROFILE }; currentView = 'home';
   resetPhoneVerification();
+  hideJoinWait();
 }
 
 /* -------------------------------------------------------- step 0: account */
@@ -409,6 +443,7 @@ function openDashboard() {
   if (live && live.organization) profile = { ...profile, ...profileFromLive() };
   $('#onboarding').hidden = true; $('#dashboard').hidden = false;
   $('#pharmacy-name').textContent = profile.name;
+  renderOrgSwitch();
   $('#today').textContent = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   paintWorkspace();
   view('home');
@@ -509,6 +544,7 @@ let supplierRequest = null, supplierTimer = null;
 //    filtered by name as you type, followed by supplier stock matching the search.
 //  - Find a source: supplier stock matching the search (GET /supplier-offers).
 async function renderLiveSuppliers() {
+  if (!live || !live.organization) return; // signed out while the search was debounced
   const container = $('#suppliers');
   const orgId = live.organization.organization_id;
   const q = $('#supplier-search').value.trim();
@@ -577,11 +613,19 @@ function renderProfile() {
 }
 
 let currentView = 'home';
+// Sections rendered by js/workspace.js (they replace the supplier list).
+const WORKSPACE_VIEWS = { branches: 'Branches', employees: 'Employees', inventory: 'Inventory', orders: 'Purchase orders' };
 function view(name) {
   currentView = name;
   document.querySelectorAll('.sidebar [data-view]').forEach(b => b.classList.toggle('selected', b.dataset.view === name));
-  $('#panel-title').textContent = ({ home: 'Recent supplier conversations', source: 'Find a medicine source', chat: 'Your supplier conversations', profile: 'Your pharmacy details' })[name];
-  $('#suppliers').hidden = name === 'profile'; $('#search-label').hidden = name === 'profile'; $('#profile-summary').hidden = name !== 'profile';
+  $('#panel-title').textContent = WORKSPACE_VIEWS[name] || ({ home: live && live.organization ? 'Overview' : 'Recent supplier conversations', source: 'Find a medicine source', chat: 'Your supplier conversations', profile: 'Your pharmacy details' })[name];
+  const section = !!WORKSPACE_VIEWS[name];
+  const summary = name === 'home' && live && live.organization;
+  $('#suppliers').hidden = name === 'profile' || section; $('#search-label').hidden = name === 'profile' || section;
+  $('#profile-summary').hidden = name !== 'profile';
+  $('#workspace-section').hidden = !(section || summary);
+  if (section || summary) window.ApexWorkspace.render(section ? name : 'overview');
+  if (section) { $('#panel-title').focus(); return; }
   if (name === 'profile') renderProfile();
   else {
     $('#supplier-search').value = '';
@@ -600,6 +644,42 @@ function chat(s) { activeSupplier = s.name; $('#chat-title').textContent = s.nam
 $('#close-dialog').addEventListener('click', () => $('#chat-dialog').close());
 $('#chat-form').addEventListener('submit', e => { e.preventDefault(); const text = $('#chat-message').value.trim(); if (!text) return; const history = conversations.get(activeSupplier) || []; history.push(text); conversations.set(activeSupplier, history); message(text, true); $('#chat-message').value = ''; });
 $('#premium').addEventListener('click', () => notice('Premium preview: AI forecasting and insurance tools are planned. No upgrade or charge is made.'));
+
+/* -------------------------------------------------- organization switch */
+$('#org-switch').addEventListener('change', async e => {
+  selectOrganization(e.target.value);
+  try {
+    await loadLive();
+    openDashboard();
+    notice(`Switched to ${live.organization.name}.`);
+  } catch (err) { notice(errorText(err)); }
+});
+
+/* ------------------------------------------- joining an existing pharmacy */
+function showJoinWait() {
+  forms.forEach(f => f.hidden = true);
+  $('#step-title').textContent = 'Join an existing pharmacy';
+  $('#step-description').textContent = 'Your pharmacy adds your account; you do not register a new one.';
+  $('#step-caption').textContent = '';
+  $('#join-email').textContent = accountEmail || (live && live.user && live.user.email) || '';
+  $('#join-status').textContent = '';
+  $('#join-existing').hidden = true; formError('');
+  $('#join-wait').hidden = false;
+}
+function hideJoinWait() { const w = $('#join-wait'); if (w) w.hidden = true; }
+$('#join-existing').addEventListener('click', showJoinWait);
+$('#join-check').addEventListener('click', async () => {
+  const button = $('#join-check'); button.disabled = true; $('#join-status').textContent = 'Checking…';
+  try {
+    await loadLive();
+    if (live.organization) { hideJoinWait(); openDashboard(); notice(`Welcome to ${live.organization.name}.`); return; }
+    $('#join-status').textContent = 'You have not been added to a pharmacy yet. Ask the owner or a manager to add ' + (live.user.email || 'your email') + '.';
+  } catch (err) {
+    $('#join-status').textContent = errorText(err);
+  } finally { button.disabled = false; }
+});
+$('#join-register').addEventListener('click', () => { hideJoinWait(); continueToPhoneVerification(); });
+$('#join-signout').addEventListener('click', () => { API.auth.logout(); resetLive(); step(0); });
 
 /* ---------------------------------------------------------------- startup */
 (async function start() {
