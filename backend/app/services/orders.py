@@ -92,9 +92,16 @@ CANCELLABLE_BY = {
 }
 
 # Pharmacy-side actions that commit or withdraw the organization's order are
-# reserved for its owners and managers. Staff may still view orders and
-# prepare drafts (create, edit, delete). Supplier-side rules are unchanged.
-PHARMACY_MANAGER_ACTIONS = frozenset({Action.SUBMIT, Action.CANCEL})
+# reserved for its owners and managers: submitting, cancelling and accepting
+# a supplier's counteroffer (which commits to the revised terms). Staff may
+# still view orders and counteroffers and prepare drafts (create, edit,
+# delete). Supplier-side rules are unchanged.
+PHARMACY_MANAGER_ACTIONS = frozenset({Action.SUBMIT, Action.CANCEL, Action.ACCEPT_COUNTER})
+_ROLE_ERRORS = {
+    Action.SUBMIT: "Only pharmacy owners and managers can submit purchase orders.",
+    Action.CANCEL: "Only pharmacy owners and managers can cancel purchase orders.",
+    Action.ACCEPT_COUNTER: "Only pharmacy owners and managers can accept a supplier's counteroffer.",
+}
 PHARMACY_MANAGER_ROLES = frozenset({"owner", "manager"})
 
 
@@ -178,9 +185,7 @@ def authorize(db: Session, order: PurchaseOrder, sides: set[Side], action: Actio
     side the user acts as."""
     status = OrderStatus(order.status)
     role = pharmacy_role(db, user, order) if Side.PHARMACY in sides else None
-    role_error = Forbidden(
-        f"Only pharmacy owners and managers can {action.value.replace('_', ' ')} purchase orders."
-    )
+    role_error = Forbidden(_ROLE_ERRORS.get(action, "Only pharmacy owners and managers can do this."))
     if action == Action.CANCEL:
         acting = [side for side in sides if status in CANCELLABLE_BY[side]]
         if not acting:

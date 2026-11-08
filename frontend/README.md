@@ -55,7 +55,7 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 | Orders: list, open, history | `GET /purchase-orders?organization_id=`, `GET /purchase-orders/{id}` | Everyone |
 | Orders: new draft (receiving branch, supplier stock search, lines, optional warehouse) | `GET /supplier-offers`, `POST /purchase-orders` | Everyone (approved pharmacies) |
 | Orders: edit draft lines, delete draft | `PATCH` / `DELETE /purchase-orders/{id}/items/{item}`, `DELETE /purchase-orders/{id}` | Everyone |
-| Orders: submit, cancel (with a reason), accept counteroffer, mark delivered | `POST /purchase-orders/{id}/{action}`. Buttons come from the order's `allowed_actions` | Submit and cancel: owners and managers only (enforced by the backend) |
+| Orders: submit, cancel (with a reason), accept counteroffer, mark delivered | `POST /purchase-orders/{id}/{action}`. Buttons come from the order's `allowed_actions` | Submit, cancel and accept counteroffer: owners and managers only (enforced by the backend) |
 | Joining an existing pharmacy | `GET /auth/me` ("Check again") | A registered user with no pharmacy |
 
 ### Admin dashboard (`admin.html`)

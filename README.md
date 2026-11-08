@@ -393,7 +393,7 @@ Each purchase order includes `allowed_actions`, the actions the current user may
 | Update stock quantities | ✓ | ✓ | ✓ |
 | Set prices and listings, delete stock | ✓ | ✓ | — |
 | View orders, prepare and edit drafts | ✓ | ✓ | ✓ |
-| Submit and cancel orders (pharmacy side) | ✓ | ✓ | — |
+| Submit, cancel and accept counteroffers (pharmacy side) | ✓ | ✓ | — |
 | Supplier side: accept, counter, reject, dispatch, cancel | ✓ | ✓ | ✓ |
 
 - Only **approved** organizations can write stock and offers, search suppliers, and create or act on orders. Cancelling is always possible.

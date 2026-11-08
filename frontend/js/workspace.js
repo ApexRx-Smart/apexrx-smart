@@ -349,7 +349,7 @@
         : msg('Purchase orders open once ApexRX approves your pharmacy.', 'warn'));
     const parts = [top, heading(`Orders (${page.total})`),
       table(['Order', 'Supplier', 'Receiving branch', 'Status', 'Total', 'Items', 'Updated', ''], rows, 'No purchase orders yet.')];
-    if (!canManage()) parts.push(msg('As staff you can view orders and prepare drafts. Owners and managers submit and cancel them.'));
+    if (!canManage()) parts.push(msg('As staff you can view orders and prepare drafts. Owners and managers submit, cancel and accept counteroffers.'));
     c.replaceChildren(...parts);
   }
 
@@ -489,7 +489,7 @@
     });
     if (!actions.children.length) actions.append(msg('No actions available to you at this stage.'));
     const roleNote = !canManage() && ['draft', 'submitted', 'countered', 'accepted'].includes(o.status)
-      ? msg('Only owners and managers can submit or cancel purchase orders.') : null;
+      ? msg('Only owners and managers can submit, cancel or accept counteroffers on purchase orders.') : null;
 
     const history = el('ol', { class: 'ws-history' }, o.history.map(h => el('li', {
       text: `${date(h.changed_at)}: ${h.from_status ? (ORDER_STATUS_LABELS[h.from_status] || h.from_status) + ' → ' : ''}${ORDER_STATUS_LABELS[h.to_status] || h.to_status}${h.changed_by_name ? ' by ' + h.changed_by_name : ''}${h.note ? ' (' + h.note + ')' : ''}`

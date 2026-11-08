@@ -96,6 +96,7 @@ def seed():
     w["prod"] = call("POST", "/catalogue/products", {"drug_id": drug, "product_name": f"Wstestamol {RUN} 500mg"}, admin)["product_id"]
     w["prod_name"] = f"Wstestamol {RUN} 500mg"
     sup_owner = account(f"ws-supplier-{RUN}@example.com", "Supplier Owner")
+    w["sup_owner"] = sup_owner
     w["sup"] = call("POST", "/organizations", {"name": f"Rwanda Distributors {RUN}", "type": "supplier"}, sup_owner)["organization_id"]
     wh = call("POST", f"/organizations/{w['sup']}/locations", {"name": "Gikondo Warehouse"}, sup_owner)["location_id"]
     approve(w["sup"])
@@ -139,6 +140,16 @@ def open_view(page, name):
     page.click(f".sidebar [data-view={name}]")
     page.wait_for_function("() => { const s = document.querySelector('#workspace-section');"
                            " return !s.hidden && !s.textContent.startsWith('Loading'); }", timeout=15000)
+
+
+def open_order(page, order_id):
+    open_view(page, "orders")
+    back = page.get_by_role("button", name="← Back to orders")
+    if back.count():
+        back.click()
+    page.wait_for_selector(f"tr[data-order='{order_id}']")
+    page.locator(f"tr[data-order='{order_id}']").get_by_role("button", name="Open").click()
+    page.wait_for_selector("#order-actions")
 
 
 def wait_text(page, selector, text, timeout=15000):
@@ -311,6 +322,26 @@ def main():
         o = call("GET", f"/purchase-orders/{o1['purchase_order_id']}", token=w["owner"])
         check("16. owner cancels with a reason; history recorded",
               o["status"] == "cancelled" and "Ordered by mistake (e2e)" in owner.text_content("#workspace-section"))
+
+        # Counteroffers: staff see the revised terms but cannot accept; a manager can.
+        body = {"pharmacy_organization_id": w["org"], "supplier_organization_id": w["sup"],
+                "pharmacy_location_id": w["kim"], "items": [{"product_id": w["prod"], "quantity": 30}]}
+        co = call("POST", "/purchase-orders", body, w["owner"])
+        call("POST", f"/purchase-orders/{co['purchase_order_id']}/submit", {}, w["owner"])
+        call("POST", f"/purchase-orders/{co['purchase_order_id']}/counter", {"items": [{
+            "purchase_order_item_id": co["items"][0]["purchase_order_item_id"], "confirmed_quantity": 25,
+            "confirmed_unit_price": "880.00"}], "note": "25 available"}, w["sup_owner"])
+        open_order(staff, co["purchase_order_id"])
+        stext = staff.text_content("#workspace-section")
+        s, _ = call("POST", f"/purchase-orders/{co['purchase_order_id']}/accept-counter", {}, w["staff"], expect_error=True)
+        check("counteroffer: staff see the revised terms, no Accept button, backend 403",
+              "Counteroffer received" in stext and "25 at" in stext
+              and staff.get_by_role("button", name="Accept counteroffer").count() == 0 and s == 403)
+        open_order(mgr, co["purchase_order_id"])
+        mgr.get_by_role("button", name="Accept counteroffer").click()
+        wait_text(mgr, "#workspace-section", "Accepted")
+        st = call("GET", f"/purchase-orders/{co['purchase_order_id']}", token=w["owner"])
+        check("counteroffer: manager accepts in the UI", st["status"] == "accepted" and st["confirmed_total"] == "22000.00")
 
         # 18 Switching organizations.
         check("18a. selector shown for a user in two pharmacies", mgr.is_visible("#org-switch-label")

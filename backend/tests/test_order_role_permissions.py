@@ -167,3 +167,49 @@ def test_receiving_branch_rules_and_cross_branch_listing(client, team):
     client.patch(f"/organizations/{world.pharmacy}/locations/{second}", json={"is_active": False},
                  headers=world.pharmacy_owner)
     assert _create(client, world, t["owner"], pharmacy_location_id=second).status_code == 409
+
+
+# ---------------------------------------------------------------- counteroffers
+def _countered(client, world, t):
+    """A submitted order that the supplier countered (lower quantity and price)."""
+    oid = _create(client, world, t["owner"]).json()["purchase_order_id"]
+    client.post(f"/purchase-orders/{oid}/submit", headers=t["owner"])
+    order = client.get(f"/purchase-orders/{oid}", headers=world.supplier_owner).json()
+    item = order["items"][0]["purchase_order_item_id"]
+    r = client.post(f"/purchase-orders/{oid}/counter", json={"items": [{"purchase_order_item_id": item,
+                    "confirmed_quantity": 8, "confirmed_unit_price": "140.00"}], "note": "Only 8 left"},
+                    headers=world.supplier_owner)
+    assert r.status_code == 200 and r.json()["status"] == "countered", r.text
+    return oid
+
+
+def test_staff_sees_counteroffer_but_cannot_accept(client, team):
+    world, t = team
+    oid = _countered(client, world, t)
+    view = client.get(f"/purchase-orders/{oid}", headers=t["staff"]).json()
+    assert view["status"] == "countered"
+    assert view["items"][0]["confirmed_quantity"] == 8 and view["items"][0]["confirmed_unit_price"] == "140.00"
+    assert view["allowed_actions"] == []  # neither accept_counter nor cancel
+    r = client.post(f"/purchase-orders/{oid}/accept-counter", json={}, headers=t["staff"])
+    assert r.status_code == 403
+    assert r.json()["detail"] == "Only pharmacy owners and managers can accept a supplier's counteroffer."
+    assert _status(oid) == "countered"
+
+
+@pytest.mark.parametrize("role", ["owner", "manager"])
+def test_owner_and_manager_can_accept_counteroffer(client, team, role):
+    world, t = team
+    oid = _countered(client, world, t)
+    assert set(client.get(f"/purchase-orders/{oid}", headers=t[role]).json()["allowed_actions"]) == {"accept_counter", "cancel"}
+    r = client.post(f"/purchase-orders/{oid}/accept-counter", json={}, headers=t[role])
+    assert r.status_code == 200 and r.json()["status"] == "accepted"
+    assert r.json()["confirmed_total"] == "1120.00"
+
+
+def test_supplier_cannot_accept_its_own_counteroffer(client, team):
+    world, t = team
+    oid = _countered(client, world, t)
+    supplier_view = client.get(f"/purchase-orders/{oid}", headers=world.supplier_owner).json()
+    assert "accept_counter" not in supplier_view["allowed_actions"]
+    r = client.post(f"/purchase-orders/{oid}/accept-counter", json={}, headers=world.supplier_owner)
+    assert r.status_code == 403 and r.json()["detail"] == "Only the pharmacy can accept counter this order."
