@@ -88,7 +88,7 @@ def _summary_fields(db: Session, order: PurchaseOrder) -> dict:
     )
 
 
-def order_response(db: Session, order: PurchaseOrder, sides: set[Side]) -> PurchaseOrderResponse:
+def order_response(db: Session, order: PurchaseOrder, sides: set[Side], user) -> PurchaseOrderResponse:
     db.expire(order)  # reload trigger-maintained columns, items and history
     products = {
         p.product_id: (p, d)
@@ -150,13 +150,13 @@ def order_response(db: Session, order: PurchaseOrder, sides: set[Side]) -> Purch
         status_changed_by=order.status_changed_by,
         items=items,
         history=history,
-        allowed_actions=svc.allowed_actions(db, order, sides),
+        allowed_actions=svc.allowed_actions(db, order, sides, user),
     )
 
 
 def _act(db: Session, user, order_id: int, action: Action):
     order, sides = svc.load_order(db, user, order_id, for_update=True)
-    svc.authorize(db, order, sides, action)
+    svc.authorize(db, order, sides, action, user)
     return order, sides
 
 
@@ -211,7 +211,7 @@ def create_order(payload: PurchaseOrderCreate, user: CurrentUser, db: DbSession)
             )
         )
     db.commit()
-    return order_response(db, order, {Side.PHARMACY})
+    return order_response(db, order, {Side.PHARMACY}, user)
 
 
 @router.get("", response_model=Page[PurchaseOrderSummary])
@@ -256,7 +256,7 @@ def list_orders(
 @router.get("/{purchase_order_id}", response_model=PurchaseOrderResponse)
 def get_order(purchase_order_id: int, user: CurrentUser, db: DbSession):
     order, sides = svc.load_order(db, user, purchase_order_id)
-    return order_response(db, order, sides)
+    return order_response(db, order, sides, user)
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +284,7 @@ def update_draft(
     if "notes" in data:
         order.notes = data["notes"]
     db.commit()
-    return order_response(db, order, sides)
+    return order_response(db, order, sides, user)
 
 
 @router.delete("/{purchase_order_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -313,7 +313,7 @@ def add_item(purchase_order_id: int, payload: OrderItemCreate, user: CurrentUser
         )
     )
     db.commit()
-    return order_response(db, order, sides)
+    return order_response(db, order, sides, user)
 
 
 @router.patch("/{purchase_order_id}/items/{item_id}", response_model=PurchaseOrderResponse)
@@ -323,7 +323,7 @@ def update_item(
     order, sides = _act(db, user, purchase_order_id, Action.EDIT)
     _get_item(order, item_id).requested_quantity = payload.quantity
     db.commit()
-    return order_response(db, order, sides)
+    return order_response(db, order, sides, user)
 
 
 @router.delete("/{purchase_order_id}/items/{item_id}", response_model=PurchaseOrderResponse)
@@ -331,7 +331,7 @@ def remove_item(purchase_order_id: int, item_id: int, user: CurrentUser, db: DbS
     order, sides = _act(db, user, purchase_order_id, Action.EDIT)
     db.delete(_get_item(order, item_id))
     db.commit()
-    return order_response(db, order, sides)
+    return order_response(db, order, sides, user)
 
 
 @router.post("/{purchase_order_id}/reprice", response_model=list[PriceChange])
@@ -356,7 +356,7 @@ def submit_order(
     order, sides = _act(db, user, purchase_order_id, Action.SUBMIT)
     svc.submit(db, order, payload.note if payload else None)
     db.commit()
-    return order_response(db, order, sides)
+    return order_response(db, order, sides, user)
 
 
 @router.post("/{purchase_order_id}/accept", response_model=PurchaseOrderResponse)
@@ -369,7 +369,7 @@ def accept_order(
     payload = payload or AcceptRequest()
     svc.accept(db, order, payload.supplier_location_id, payload.note)
     db.commit()
-    return order_response(db, order, sides)
+    return order_response(db, order, sides, user)
 
 
 @router.post("/{purchase_order_id}/counter", response_model=PurchaseOrderResponse)
@@ -379,7 +379,7 @@ def counter_order(purchase_order_id: int, payload: CounterRequest, user: Current
     order, sides = _act(db, user, purchase_order_id, Action.COUNTER)
     svc.counter(db, order, payload.items, payload.note)
     db.commit()
-    return order_response(db, order, sides)
+    return order_response(db, order, sides, user)
 
 
 @router.post("/{purchase_order_id}/reject", response_model=PurchaseOrderResponse)
@@ -387,7 +387,7 @@ def reject_order(purchase_order_id: int, payload: ReasonRequest, user: CurrentUs
     order, sides = _act(db, user, purchase_order_id, Action.REJECT)
     svc.reject(db, order, payload.reason)
     db.commit()
-    return order_response(db, order, sides)
+    return order_response(db, order, sides, user)
 
 
 @router.post("/{purchase_order_id}/accept-counter", response_model=PurchaseOrderResponse)
@@ -398,7 +398,7 @@ def accept_counteroffer(
     order, sides = _act(db, user, purchase_order_id, Action.ACCEPT_COUNTER)
     svc.transition(db, order, OrderStatus.ACCEPTED, payload.note if payload else None)
     db.commit()
-    return order_response(db, order, sides)
+    return order_response(db, order, sides, user)
 
 
 @router.post("/{purchase_order_id}/start-processing", response_model=PurchaseOrderResponse)
@@ -408,7 +408,7 @@ def start_processing(
     order, sides = _act(db, user, purchase_order_id, Action.START_PROCESSING)
     svc.transition(db, order, OrderStatus.PROCESSING, payload.note if payload else None)
     db.commit()
-    return order_response(db, order, sides)
+    return order_response(db, order, sides, user)
 
 
 @router.post("/{purchase_order_id}/dispatch", response_model=PurchaseOrderResponse)
@@ -418,7 +418,7 @@ def dispatch_order(
     order, sides = _act(db, user, purchase_order_id, Action.DISPATCH)
     svc.transition(db, order, OrderStatus.DISPATCHED, payload.note if payload else None)
     db.commit()
-    return order_response(db, order, sides)
+    return order_response(db, order, sides, user)
 
 
 @router.post("/{purchase_order_id}/mark-delivered", response_model=PurchaseOrderResponse)
@@ -429,7 +429,7 @@ def mark_delivered(
     order, sides = _act(db, user, purchase_order_id, Action.MARK_DELIVERED)
     svc.transition(db, order, OrderStatus.DELIVERED, payload.note if payload else None)
     db.commit()
-    return order_response(db, order, sides)
+    return order_response(db, order, sides, user)
 
 
 @router.post("/{purchase_order_id}/cancel", response_model=PurchaseOrderResponse)
@@ -439,4 +439,4 @@ def cancel_order(purchase_order_id: int, payload: ReasonRequest, user: CurrentUs
     order, sides = _act(db, user, purchase_order_id, Action.CANCEL)
     svc.cancel(db, order, payload.reason)
     db.commit()
-    return order_response(db, order, sides)
+    return order_response(db, order, sides, user)

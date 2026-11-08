@@ -91,6 +91,12 @@ CANCELLABLE_BY = {
     Side.SUPPLIER: frozenset({S.ACCEPTED, S.PROCESSING}),
 }
 
+# Pharmacy-side actions that commit or withdraw the organization's order are
+# reserved for its owners and managers. Staff may still view orders and
+# prepare drafts (create, edit, delete). Supplier-side rules are unchanged.
+PHARMACY_MANAGER_ACTIONS = frozenset({Action.SUBMIT, Action.CANCEL})
+PHARMACY_MANAGER_ROLES = frozenset({"owner", "manager"})
+
 
 # ---------------------------------------------------------------------------
 # Access
@@ -130,14 +136,33 @@ def load_order(db: Session, user: User, order_id: int, *, for_update: bool = Fal
     return order, sides
 
 
-def allowed_actions(db: Session, order: PurchaseOrder, sides: set[Side]) -> list[str]:
+def pharmacy_role(db: Session, user: User | None, order: PurchaseOrder) -> str | None:
+    """The user's active role in the ordering pharmacy, or None."""
+    if user is None:
+        return None
+    return db.scalar(
+        select(Membership.role).where(
+            Membership.user_id == user.user_id,
+            Membership.organization_id == order.pharmacy_organization_id,
+            Membership.is_active.is_(True),
+        )
+    )
+
+
+def _side_may(side: Side, action: Action, role: str | None) -> bool:
+    """Role check for one side: only pharmacy submit/cancel need owner/manager."""
+    return side != Side.PHARMACY or action not in PHARMACY_MANAGER_ACTIONS or role in PHARMACY_MANAGER_ROLES
+
+
+def allowed_actions(db: Session, order: PurchaseOrder, sides: set[Side], user: User | None = None) -> list[str]:
     status = OrderStatus(order.status)
+    role = pharmacy_role(db, user, order) if Side.PHARMACY in sides else None
     actions = [
         action.value
         for action, t in TRANSITIONS.items()
-        if status in t.from_statuses and sides & t.sides
+        if status in t.from_statuses and any(_side_may(s, action, role) for s in sides & t.sides)
     ]
-    if any(status in CANCELLABLE_BY[side] for side in sides):
+    if any(status in CANCELLABLE_BY[side] and _side_may(side, Action.CANCEL, role) for side in sides):
         actions.append(Action.CANCEL.value)
     return actions
 
@@ -148,15 +173,22 @@ def _org_status(db: Session, organization_id: int) -> str:
     )
 
 
-def authorize(db: Session, order: PurchaseOrder, sides: set[Side], action: Action) -> Side:
+def authorize(db: Session, order: PurchaseOrder, sides: set[Side], action: Action, user: User) -> Side:
     """Check the action is valid now and the user may perform it. Returns the
     side the user acts as."""
     status = OrderStatus(order.status)
+    role = pharmacy_role(db, user, order) if Side.PHARMACY in sides else None
+    role_error = Forbidden(
+        f"Only pharmacy owners and managers can {action.value.replace('_', ' ')} purchase orders."
+    )
     if action == Action.CANCEL:
         acting = [side for side in sides if status in CANCELLABLE_BY[side]]
         if not acting:
             raise Conflict(f"This order cannot be cancelled by you while it is '{status}'.")
-        side = acting[0]
+        permitted = [side for side in acting if _side_may(side, action, role)]
+        if not permitted:
+            raise role_error
+        side = Side.PHARMACY if Side.PHARMACY in permitted else Side.SUPPLIER
     else:
         t = TRANSITIONS[action]
         permitted = sides & t.sides
@@ -165,7 +197,10 @@ def authorize(db: Session, order: PurchaseOrder, sides: set[Side], action: Actio
             raise Forbidden(f"Only the {who} can {action.value.replace('_', ' ')} this order.")
         if status not in t.from_statuses:
             raise Conflict(f"Cannot {action.value.replace('_', ' ')} an order that is '{status}'.")
-        side = Side.PHARMACY if Side.PHARMACY in permitted else Side.SUPPLIER
+        allowed = {s for s in permitted if _side_may(s, action, role)}
+        if not allowed:
+            raise role_error
+        side = Side.PHARMACY if Side.PHARMACY in allowed else Side.SUPPLIER
 
     # Approved organizations only; cancelling stays possible so a suspended
     # counterpart never leaves an order stuck.
