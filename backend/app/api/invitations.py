@@ -62,12 +62,15 @@ def _invitation(db, organization_id: int, invitation_id: int) -> OrganizationInv
 def create_invitation(organization_id: int, payload: InvitationCreate, user: CurrentUser, db: DbSession):
     """Invite someone by email. They need no ApexRX account yet. No membership
     exists until they accept. ``email_sent`` says whether the email provider
-    accepted the message; if not, the invitation is kept for a resend."""
+    accepted the message. While email is disabled nothing is emailed:
+    ``share_token`` (returned only here and with a new link, never stored) lets
+    the inviter give <site>/accept-invitation.html#token=... to the employee."""
     access = get_org_access(db, user, organization_id, roles=MANAGERS)
     _assert_can_manage(access.role, payload.role)
     inv, token = invitations.create(db, access.organization, user, str(payload.email), payload.role)
-    outcome = invitations.send(db, inv, token)
-    return InvitationSendResponse(**_response(db, inv), email_sent=outcome.sent, detail=outcome.message)
+    outcome = invitations.deliver(db, inv, token)
+    return InvitationSendResponse(**_response(db, inv), email_sent=outcome.sent, detail=outcome.message,
+                                  share_token=outcome.share_token)
 
 
 @router.get("/{organization_id}/invitations", response_model=list[InvitationResponse])
@@ -88,7 +91,8 @@ def resend_invitation(organization_id: int, invitation_id: int, user: CurrentUse
     inv = _invitation(db, organization_id, invitation_id)
     _assert_can_manage(access.role, MembershipRole(inv.role))
     outcome = invitations.resend(db, inv)
-    return InvitationSendResponse(**_response(db, inv), email_sent=outcome.sent, detail=outcome.message)
+    return InvitationSendResponse(**_response(db, inv), email_sent=outcome.sent, detail=outcome.message,
+                                  share_token=outcome.share_token)
 
 
 @router.post("/{organization_id}/invitations/{invitation_id}/revoke", response_model=InvitationResponse)

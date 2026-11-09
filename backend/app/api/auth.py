@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 
 from app.api.deps import CurrentAuth, CurrentUser, DbSession
 from app.core import device_token
+from app.core.config import settings
 from app.core.errors import AppError, Conflict, TooManyRequests, Unauthorized
 from app.core.rate_limit import account_subject, client_ip, device_subject, login_limiter
 from app.core.security import hash_password, verify_password, verify_password_and_update
@@ -22,6 +23,7 @@ from app.schemas.auth import (
 )
 from app.schemas.common import Message
 from app.services import account_emails, sessions
+from app.services.email import email_delivery_available
 
 router = APIRouter()
 
@@ -106,6 +108,19 @@ def token_response(issued: sessions.IssuedToken, device_token: str | None = None
         idle_timeout_seconds=int(sessions.idle_timeout().total_seconds()),
         session_expires_at=issued.session.expires_at,
     )
+
+
+@router.get("/capabilities")
+def capabilities():
+    """What works on this server right now (public). Email delivery is
+    temporarily disabled, so the features that need it say so."""
+    email = email_delivery_available()
+    return {
+        "email_delivery": email,
+        "email_verification_required": settings.email_verification_required,
+        "password_reset": email,
+        "invitation_emails": email,
+    }
 
 
 @router.post("/session/activity", response_model=TokenResponse)

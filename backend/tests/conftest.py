@@ -31,8 +31,10 @@ os.environ.pop("TRUSTED_CLIENT_IP_HEADER", None)
 os.environ["APP_ENV"] = "test"
 os.environ["EMAIL_PROVIDER"] = "mock"
 os.environ["FRONTEND_BASE_URL"] = "http://frontend.test"
-for _name in ("EMAIL_VERIFICATION_REQUIRED", "RESEND_API_KEY", "BREVO_API_KEY", "EMAIL_FROM_ADDRESS"):
-    os.environ.pop(_name, None)
+# Most suites exercise the email-dependent code paths (kept for when email is
+# re-enabled) with the mock provider and verification required. The production
+# configuration (no email provider, verification off) is in test_without_email.py.
+os.environ["EMAIL_VERIFICATION_REQUIRED"] = "true"
 os.environ.pop("RATE_LIMIT_STORAGE_URI", None)
 os.environ["UPLOAD_DIR"] = tempfile.mkdtemp(prefix="apexrx-uploads-")
 # Never touch a real Supabase bucket by accident: tests use the local backend or

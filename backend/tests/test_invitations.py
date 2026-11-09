@@ -45,7 +45,7 @@ def test_invite_someone_without_an_account(team):
     inv = r.json()
     assert inv["email"] == "new.person@example.com" and inv["status"] == "pending" and inv["delivery"] == "sent"
     assert inv["email_sent"] is True and inv["send_count"] == 1 and inv["invited_by_name"] == "Olive Owner"
-    assert "token" not in r.text
+    assert inv["share_token"] is None  # emailed: the link is never returned to the inviter
     mail = _token(client, "new.person@example.com")
     assert mail["subject"] == "You're invited to join Invite Pharmacy on ApexRX Smart"
     assert "Olive Owner invited you to join Invite Pharmacy" in mail["text"] and "a staff member" in mail["text"]

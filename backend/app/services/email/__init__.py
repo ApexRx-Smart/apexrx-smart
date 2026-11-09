@@ -1,23 +1,23 @@
 """Provider-independent email sending.
 
-Business logic (app/services/email_verification.py) only calls
-``get_email_provider().send()``. Each provider is an adapter implementing
-``EmailProvider``; the one used is chosen by the EMAIL_PROVIDER setting
-through ``PROVIDERS``.
+Email delivery is TEMPORARILY DISABLED: no real email provider is integrated
+(the Gmail API, Resend and Brevo adapters were removed). The workflows that
+need email (email verification, password-reset links, invitation emails) call
+``get_email_provider()``; while no provider exists they report themselves as
+unavailable instead of pretending to send anything:
 
-Providers (HTTPS APIs: Render's free plan blocks outbound SMTP ports):
-  * "gmail":  the ApexRX Gmail account through the Gmail API (OAuth, gmail.send
-              scope only): GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET,
-              GMAIL_REFRESH_TOKEN, EMAIL_FROM_ADDRESS. The configured default.
-  * "resend": RESEND_API_KEY, EMAIL_FROM_ADDRESS (on a domain verified in Resend)
-  * "brevo":  BREVO_API_KEY,  EMAIL_FROM_ADDRESS (a verified Brevo sender)
-  * "mock":   development and tests only. Sends nothing; refused in production.
+  * email verification is not required (EMAIL_VERIFICATION_REQUIRED defaults to
+    false) and sending a verification link answers 503;
+  * "Forgot password?" answers 503 for every address;
+  * staff invitations are shared by the inviter as a link (shown once to them),
+    never reported as emailed.
 
-Rules enforced here:
-  * No usable provider -> ``EmailNotConfigured`` (the API answers 503).
-  * The mock provider is refused in production.
-  * A failed delivery raises ``EmailDeliveryError``; it is never retried
-    through another provider or the mock.
+Only the in-memory "mock" provider remains, for development and automated tests
+of those dormant workflows; it sends nothing and is refused in production.
+
+Re-enabling email later: add an adapter implementing ``EmailProvider`` (for
+example ``app/services/email/<name>.py``), register it in ``PROVIDERS``, set
+EMAIL_PROVIDER on the server, and send a real test message before relying on it.
 """
 
 import logging
@@ -34,7 +34,7 @@ class EmailError(Exception):
 
 
 class EmailNotConfigured(EmailError):
-    """No usable email provider (unset, unknown, incomplete, or mock in production)."""
+    """No usable email provider (unset, unknown, or mock in production)."""
 
 
 class EmailDeliveryError(EmailError):
@@ -69,29 +69,9 @@ def _mock_factory() -> EmailProvider:
     return mock_provider
 
 
-def _gmail_factory() -> EmailProvider:
-    from app.services.email.gmail import GmailProvider
-
-    return GmailProvider.from_settings()
-
-
-def _resend_factory() -> EmailProvider:
-    from app.services.email.http_providers import ResendProvider
-
-    return ResendProvider.from_settings()
-
-
-def _brevo_factory() -> EmailProvider:
-    from app.services.email.http_providers import BrevoProvider
-
-    return BrevoProvider.from_settings()
-
-
+# name -> factory. No real provider is registered at the moment.
 PROVIDERS: dict[str, Callable[[], EmailProvider]] = {
     "mock": _mock_factory,
-    "gmail": _gmail_factory,
-    "resend": _resend_factory,
-    "brevo": _brevo_factory,
 }
 
 _override: EmailProvider | None = None
@@ -108,14 +88,12 @@ def get_email_provider() -> EmailProvider:
         return _override
     name = settings.email_provider
     if not name:
-        raise EmailNotConfigured("EMAIL_PROVIDER is not set.")
+        raise EmailNotConfigured("Email delivery is not configured.")
     if name == "mock" and settings.is_production:
         raise EmailNotConfigured("The mock email provider cannot be used in production.")
-    if settings.is_production and not settings.frontend_base_url.startswith("https://"):
-        raise EmailNotConfigured("FRONTEND_BASE_URL must use https:// in production.")
     factory = PROVIDERS.get(name)
     if factory is None:
-        raise EmailNotConfigured(f"Unknown EMAIL_PROVIDER '{name}'.")
+        raise EmailNotConfigured(f"Unknown EMAIL_PROVIDER '{name}' (no real email provider is integrated).")
     return factory()
 
 
@@ -126,3 +104,7 @@ def email_configuration_problem() -> str | None:
     except EmailNotConfigured as exc:
         return str(exc)
     return None
+
+
+def email_delivery_available() -> bool:
+    return email_configuration_problem() is None

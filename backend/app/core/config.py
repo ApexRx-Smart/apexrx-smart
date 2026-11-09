@@ -86,31 +86,16 @@ class Settings(BaseSettings):
     # Default currency for offers and purchase orders (ISO 4217).
     default_currency: str = "RWF"
 
-    # Email verification (see app/services/email_verification.py). When true,
-    # registering a pharmacy or supplier requires the caller's account email to
-    # be verified through an emailed link.
-    email_verification_required: bool = True
-    # Email provider adapter name (app/services/email): "resend" or "brevo"
-    # (HTTPS APIs; Render's free plan blocks outbound SMTP). Unset: email is not
-    # configured and sending a link fails with a clear 503. "mock" (keeps
-    # messages in memory, sends nothing) is refused in production.
+    # Email delivery is temporarily disabled (no real provider is integrated;
+    # see app/services/email/__init__.py). Email verification is therefore not
+    # required by default. Setting this to true without an email provider
+    # blocks new organizations (logged at startup).
+    email_verification_required: bool = False
+    # Development and tests only: "mock" keeps messages in memory (refused in
+    # production). Unset: email features report themselves as unavailable.
     email_provider: str | None = None
-    # Sender shown to users, e.g. no-reply@your-domain. Must be an address the
-    # provider allows for your account (usually on a verified domain).
-    email_from_address: str | None = None
-    email_from_name: str = "ApexRX Smart"
-    # Provider API keys: server-side only, never sent to the browser or logged.
-    resend_api_key: SecretStr | None = None
-    brevo_api_key: SecretStr | None = None
-    # Gmail API (EMAIL_PROVIDER=gmail): an OAuth client and a refresh token for
-    # the sending Gmail account with only the gmail.send scope (see README,
-    # "Email delivery with the Gmail API"). Never the account's password.
-    gmail_client_id: str | None = None
-    gmail_client_secret: SecretStr | None = None
-    gmail_refresh_token: SecretStr | None = None
-    email_timeout_seconds: int = Field(default=15, gt=0, le=120)
-    # Where the frontend is served; verification links open
-    # <FRONTEND_BASE_URL>/verify-email.html. HTTPS in production.
+    # Where the frontend is served; used for links inside emails (development
+    # and tests while email is disabled).
     frontend_base_url: str = "http://127.0.0.1:5501"
     email_verification_ttl_minutes: int = Field(default=24 * 60, ge=10, le=7 * 24 * 60)
     email_verification_resend_cooldown_seconds: int = Field(default=60, ge=0, le=3600)
@@ -170,13 +155,6 @@ class Settings(BaseSettings):
     def _normalize_provider(cls, value: object) -> object:
         if isinstance(value, str):
             return value.strip().lower() or None
-        return value
-
-    @field_validator("email_from_address", "gmail_client_id", mode="before")
-    @classmethod
-    def _blank_is_none(cls, value: object) -> object:
-        if isinstance(value, str):
-            return value.strip() or None
         return value
 
     @field_validator("frontend_base_url")

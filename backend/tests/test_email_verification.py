@@ -5,19 +5,15 @@ Uses the in-memory mock provider (APP_ENV=test); never a real provider.
 """
 
 import hashlib
-import re
 from urllib.parse import parse_qs, urlparse
 
-import httpx
 import pytest
-from pydantic import SecretStr
 from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.database import engine
 from app.services import email as email_service
-from app.services.email import EmailDeliveryError, EmailMessage, EmailNotConfigured, get_email_provider
-from app.services.email.http_providers import BrevoProvider, ResendProvider
+from app.services.email import EmailNotConfigured, get_email_provider
 from app.services.email.mock import mock_provider
 from tests.helpers import user
 
@@ -287,85 +283,13 @@ def test_mock_provider_is_refused_in_production(monkeypatch):
         get_email_provider()
 
 
-def test_production_requires_an_https_frontend(monkeypatch):
-    monkeypatch.setattr(settings, "app_env", "production")
-    monkeypatch.setattr(settings, "email_provider", "resend")
-    monkeypatch.setattr(settings, "resend_api_key", SecretStr("re_test"))
-    monkeypatch.setattr(settings, "email_from_address", "no-reply@apexrx.example.com")
-    monkeypatch.setattr(settings, "frontend_base_url", "http://apexrx.example.com")
-    with pytest.raises(EmailNotConfigured, match="https"):
-        get_email_provider()
-    monkeypatch.setattr(settings, "frontend_base_url", "https://apexrx.example.com")
-    assert isinstance(get_email_provider(), ResendProvider)
-
-
-@pytest.mark.parametrize(
-    ("name", "missing"),
-    [("resend", "RESEND_API_KEY"), ("brevo", "BREVO_API_KEY"), ("postmark", "Unknown")],
-)
-def test_incomplete_provider_settings_are_not_configured(monkeypatch, name, missing):
-    monkeypatch.setattr(settings, "email_provider", name)
-    monkeypatch.setattr(settings, "resend_api_key", None)
-    monkeypatch.setattr(settings, "brevo_api_key", None)
-    assert missing in (email_service.email_configuration_problem() or "")
-
-
-def test_provider_needs_a_sender_address(monkeypatch):
-    monkeypatch.setattr(settings, "email_provider", "brevo")
-    monkeypatch.setattr(settings, "brevo_api_key", SecretStr("xkeysib-test"))
-    monkeypatch.setattr(settings, "email_from_address", None)
-    assert "EMAIL_FROM_ADDRESS" in email_service.email_configuration_problem()
-
-
-# ---------------------------------------------------------------------------
-# HTTP adapters (no network: httpx.post is replaced)
-# ---------------------------------------------------------------------------
-MESSAGE = EmailMessage(to="owner@x.example.com", subject="S", text="T", html="<p>H</p>")
-
-
-class _Recorder:
-    def __init__(self, status=200, payload=None, raises=None):
-        self.status, self.payload, self.raises, self.calls = status, payload or {}, raises, []
-
-    def __call__(self, url, headers=None, json=None, timeout=None):
-        self.calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
-        if self.raises:
-            raise self.raises
-        return httpx.Response(self.status, json=self.payload, request=httpx.Request("POST", url))
-
-
-def test_resend_request(monkeypatch):
-    rec = _Recorder(payload={"id": "re-123"})
-    monkeypatch.setattr(httpx, "post", rec)
-    result = ResendProvider("re_secret", "ApexRX Smart", "no-reply@apexrx.example.com").send(MESSAGE)
-    assert result.message_id == "re-123"
-    (call,) = rec.calls
-    assert call["url"] == "https://api.resend.com/emails"
-    assert call["headers"] == {"Authorization": "Bearer re_secret"}
-    assert call["json"] == {"from": "ApexRX Smart <no-reply@apexrx.example.com>", "to": ["owner@x.example.com"],
-                            "subject": "S", "text": "T", "html": "<p>H</p>"}
-
-
-def test_brevo_request(monkeypatch):
-    rec = _Recorder(status=201, payload={"messageId": "<b-1@brevo>"})
-    monkeypatch.setattr(httpx, "post", rec)
-    result = BrevoProvider("xkeysib-secret", "ApexRX Smart", "no-reply@apexrx.example.com").send(MESSAGE)
-    assert result.message_id == "<b-1@brevo>"
-    (call,) = rec.calls
-    assert call["url"] == "https://api.brevo.com/v3/smtp/email"
-    assert call["headers"]["api-key"] == "xkeysib-secret"
-    assert call["json"]["sender"] == {"name": "ApexRX Smart", "email": "no-reply@apexrx.example.com"}
-    assert call["json"]["to"] == [{"email": "owner@x.example.com"}]
-
-
-@pytest.mark.parametrize("rec", [_Recorder(status=403, payload={"message": "bad key re_secret"}),
-                                 _Recorder(raises=httpx.ConnectTimeout("timed out"))])
-def test_provider_errors_raise_without_leaking_the_key(monkeypatch, rec):
-    monkeypatch.setattr(httpx, "post", rec)
-    with pytest.raises(EmailDeliveryError) as info:
-        ResendProvider("re_secret", "ApexRX Smart", "no-reply@apexrx.example.com").send(MESSAGE)
-    assert "re_secret" not in str(info.value)
-    assert re.match(r"^resend: ", str(info.value))
+def test_no_real_provider_is_integrated(monkeypatch):
+    """Email delivery is disabled: only the dev/test mock exists."""
+    assert set(email_service.PROVIDERS) == {"mock"}
+    for name in ("gmail", "resend", "brevo"):
+        monkeypatch.setattr(settings, "email_provider", name)
+        with pytest.raises(EmailNotConfigured, match="no real email provider"):
+            get_email_provider()
 
 
 # ---------------------------------------------------------------------------

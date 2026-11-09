@@ -97,13 +97,17 @@ except SQLAlchemyError as _exc:
     _log.error("Could not check the database schema version at startup: %s", type(_exc).__name__)
 
 _email_problem = email_configuration_problem()
-if _email_problem:
+if _email_problem and settings.email_verification_required:
     _log.warning(
-        "Email verification is unavailable (%s). Sending verification emails returns 503%s.",
+        "EMAIL_VERIFICATION_REQUIRED is true but email is unavailable (%s): new pharmacies and "
+        "suppliers cannot register. Unset it while email delivery is disabled.",
         _email_problem,
-        "; new pharmacies and suppliers cannot register until it is configured"
-        if settings.email_verification_required
-        else "",
+    )
+elif _email_problem:
+    _log.info(
+        "Email delivery is disabled (%s). Email verification is not required, \"Forgot password?\" "
+        "answers 503 and staff invitations are shared as links by the inviter.",
+        _email_problem,
     )
 
 if os.environ.get("RENDER") and not settings.trusted_client_ip_header:

@@ -156,7 +156,7 @@ class InvitationResponse(BaseModel):
     email: str
     role: MembershipRole
     status: str  # pending | accepted | revoked | expired
-    delivery: str  # sent | failed | not_sent (the provider accepting the email, not proof of receipt)
+    delivery: str  # sent | failed | not_sent | link (shared by the inviter while email is disabled)
     created_at: datetime
     expires_at: datetime
     sent_at: datetime | None
@@ -170,6 +170,8 @@ class InvitationResponse(BaseModel):
 class InvitationSendResponse(InvitationResponse):
     email_sent: bool
     detail: str
+    # Only while email is disabled: the link's token, for the inviter to share.
+    share_token: str | None = None
 
 
 class InvitationTokenRequest(BaseModel):

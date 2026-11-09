@@ -34,7 +34,7 @@ from app.core.database import SessionLocal
 from app.core.errors import AppError, TooManyRequests
 from app.models import PasswordReset, User
 from app.services import sessions
-from app.services.email import EmailDeliveryError, get_email_provider, templates
+from app.services.email import EmailDeliveryError, email_delivery_available, get_email_provider, templates
 from app.services.email_verification import hash_ip, mask_email
 
 logger = logging.getLogger("apexrx.password_reset")
@@ -92,6 +92,10 @@ limiter = _Limiter()
 
 
 def request_reset(db: Session, email: str, ip: str | None, background: BackgroundTasks) -> None:
+    if not email_delivery_available():
+        # Decided before looking at the address: the same answer for everyone.
+        raise AppError("Password reset by email is temporarily unavailable. Contact ApexRX support for help "
+                       "with your account.", status_code=503, extra={"reason": "email_unavailable"})
     email = str(email).strip().lower()
     wait = limiter.hit(ip, email)
     if wait is not None:

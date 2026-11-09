@@ -16,6 +16,12 @@ States, kept apart on purpose: created (row) -> sent (the provider accepted the
 email; a failure is recorded and can be retried, nothing is activated) ->
 accepted (membership created or reactivated, account created or linked).
 Revoked and expired invitations can no longer be accepted.
+
+While email delivery is disabled (no provider; see app/services/email), no
+email is attempted: the link is returned ONCE to the owner or manager who
+created (or renewed) it, to pass on to the employee themselves, and the
+invitation's delivery is "link". Accepting such a link does not mark the email
+address verified, because nobody proved control of the mailbox.
 """
 
 import hashlib
@@ -33,7 +39,13 @@ from app.core.config import settings
 from app.core.errors import AppError, Conflict, Forbidden, TooManyRequests
 from app.models import Membership, Organization, OrganizationInvitation, User
 from app.models.enums import MembershipRole
-from app.services.email import EmailDeliveryError, EmailNotConfigured, get_email_provider, templates
+from app.services.email import (
+    EmailDeliveryError,
+    EmailNotConfigured,
+    email_delivery_available,
+    get_email_provider,
+    templates,
+)
 
 logger = logging.getLogger("apexrx.invitations")
 _TOKEN = re.compile(r"^[A-Za-z0-9_-]{43}$")
@@ -75,15 +87,23 @@ def state(inv: OrganizationInvitation, at: datetime | None = None) -> str:
 
 
 def delivery(inv: OrganizationInvitation) -> str:
-    if inv.send_failed_at is not None and (inv.sent_at is None or inv.send_failed_at > inv.sent_at):
+    """How the current link reached the invitee: sent (emailed), failed (email
+    refused), link (shared by the inviter; email disabled) or not_sent."""
+    if inv.sent_at is not None:
+        return "sent"
+    if inv.send_failed_at is not None:
         return "failed"
-    return "sent" if inv.sent_at is not None else "not_sent"
+    return "not_sent" if email_delivery_available() else "link"
 
 
 def _new_token(inv: OrganizationInvitation) -> str:
+    """A new link: the previous one stops working, a new validity period
+    starts, and the delivery state restarts (it describes the current link)."""
     token = secrets.token_urlsafe(32)
     inv.token_hash = hash_token(token)
     inv.expires_at = now() + timedelta(hours=settings.invitation_ttl_hours)
+    inv.sent_at = None
+    inv.send_failed_at = None
     return token
 
 
@@ -143,6 +163,18 @@ def create(db: Session, organization: Organization, inviter: User, email: str, r
 class SendOutcome:
     sent: bool
     message: str
+    share_token: str | None = None  # only when email is disabled: for the inviter to pass on
+
+
+def deliver(db: Session, inv: OrganizationInvitation, token: str) -> SendOutcome:
+    """Email the invitation, or (email disabled) hand the link to the inviter."""
+    if not email_delivery_available():
+        db.commit()
+        return SendOutcome(False, "Email is temporarily unavailable, so no email was sent. Copy the invitation "
+                                  "link below and give it to the employee yourself (for example by WhatsApp). "
+                                  "Anyone with the link can use it to join, so share it only with them.",
+                           share_token=token)
+    return send(db, inv, token)
 
 
 def send(db: Session, inv: OrganizationInvitation, token: str) -> SendOutcome:
@@ -178,6 +210,7 @@ def send(db: Session, inv: OrganizationInvitation, token: str) -> SendOutcome:
 
 
 def resend(db: Session, inv: OrganizationInvitation) -> SendOutcome:
+    """A new link (the earlier one stops working), emailed or handed to the inviter."""
     if state(inv) in ("accepted", "revoked"):
         raise Conflict(f"This invitation was {state(inv)} and cannot be resent.")
     cooldown = settings.invitation_resend_cooldown_seconds
@@ -188,7 +221,7 @@ def resend(db: Session, inv: OrganizationInvitation) -> SendOutcome:
                                   headers={"Retry-After": str(int(wait) + 1)}, extra={"retry_after": int(wait) + 1})
     token = _new_token(inv)  # the earlier link stops working; a new validity period starts
     db.commit()
-    return send(db, inv, token)
+    return deliver(db, inv, token)
 
 
 def revoke(db: Session, inv: OrganizationInvitation, by: User) -> None:
@@ -246,8 +279,8 @@ def _activate(db: Session, inv: OrganizationInvitation, user: User, *, account_c
     inv.accepted_at = t
     inv.accepted_by = user.user_id
     inv.account_created = account_created
-    if user.email_verified_at is None:
-        user.email_verified_at = t  # opening the emailed link proved control of the address
+    if user.email_verified_at is None and inv.sent_at is not None:
+        user.email_verified_at = t  # opening the EMAILED link proved control of the address
     db.flush()
     return membership
 
