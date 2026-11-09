@@ -1,82 +1,38 @@
 'use strict';
-/* Pharmacy onboarding and workspace, connected to the ApexRX API (js/api.js).
+/* Pharmacy workspace (pharmacies.html), connected to the ApexRX API (js/api.js).
  *
- * Steps:
- *   0 Account  -> "Create account": POST /auth/register, then POST /auth/login
- *                 (an email that is already registered signs in instead).
- *                 "Sign in" (the switch on this step, or pharmacies.html#signin):
- *                 POST /auth/login only, with email and password.
- *   1 Verify   -> mobile number by SMS one-time code: POST /auth/phone/send-code,
- *                 then POST /auth/phone/verify. The backend decides: it refuses
- *                 to create a pharmacy until the caller's phone is verified, and
- *                 uses that verified number. GET /auth/phone/status says whether
- *                 the step is needed (skipped when already verified or when the
- *                 backend does not require it).
- *   2 Profile  -> POST /organizations (type pharmacy), POST .../locations,
- *                 POST .../documents for each selected file. Going back and
- *                 resubmitting updates the same records (PATCH).
- *   3 Plan     -> subscriptions are not in the v6 backend; still simulated.
- *   4 Workspace-> overview, branches, employees, inventory and purchase
- *                 orders (js/workspace.js), supplier discovery via
- *                 GET /supplier-offers (approved pharmacies only), contact
- *                 through WhatsApp/phone links. Users in several pharmacies
- *                 choose one with the organization selector.
+ * Registration (account, email verification, details, documents, review) is
+ * js/registration.js, shared with suppliers.html. It opens this workspace
+ * through window.ApexPharmacyWorkspace once a pharmacy is registered:
+ *   overview, branches, employees, inventory and purchase orders
+ *   (js/workspace.js), supplier discovery via GET /supplier-offers (approved
+ *   pharmacies only), contact through WhatsApp/phone links. Users in several
+ *   pharmacies choose one with the organization selector.
  *
- * "Just exploring?" still opens the workspace with sample data and no account.
+ * "Just exploring?" opens the workspace with sample data and no account.
+ * There are no subscriptions or payments.
  */
 const $ = s => document.querySelector(s);
 const API = window.ApexAPI;
-const forms = [...document.querySelectorAll('.step-form')];
-const titles = ['Create your pharmacy account', 'A little check. A stronger connection.', 'Make your pharmacy easy to find.', 'One plan. More possibilities.'];
-const descriptions = ['Join a connected community of pharmacies and suppliers in Kigali.', 'Verify your mobile number to take the next step.', 'Add your practice details, location and licensing documents.', 'Access your pharmacy workspace for 5,000 RWF per month.'];
-const SAMPLE_PROFILE = { name: 'Kigali Pharmacy', license: 'PH-DEMO', phone: '+250 788 123 456', address: 'Kigali, Rwanda', latitude: '-1.9441', longitude: '30.0619' };
-const DEFAULT_CITY = 'Kigali';
+const SAMPLE_PROFILE = { name: 'Kigali Pharmacy', phone: '+250 788 123 456', address: 'Kigali, Rwanda', latitude: '-1.9441', longitude: '30.0619' };
 const STATUS_NOTES = {
   pending: 'Your pharmacy is awaiting verification by ApexRX. Supplier search opens once it is approved.',
   approved: 'Your pharmacy is verified. Listed medicines are visible to patients on ApexRX.',
-  rejected: 'Your registration was not approved. Update your details and documents, then contact ApexRX to resubmit.',
+  rejected: 'Your registration was not approved. Open your registration to correct it and resubmit it for review.',
   suspended: 'Your pharmacy is suspended. Contact ApexRX for help.'
 };
+const STATUS_LABELS_LIVE = { pending: 'Pending review', approved: 'Approved', rejected: 'Not approved', suspended: 'Suspended' };
 const NO_CONTACTS = 'No supplier conversations yet. Search for a medicine to find a supplier and contact them.';
 const SEARCH_HINT = 'Search for a medicine to see supplier stock, prices and contacts.';
-const LIVE_PANEL_NOTE = 'Supplier stock and prices are live. Conversations happen on WhatsApp or by phone; subscriptions are not live yet.';
+const LIVE_PANEL_NOTE = 'Supplier stock and prices are live. Conversations happen on WhatsApp or by phone.';
 
 let profile = { ...SAMPLE_PROFILE };
 // Live account state. null while previewing with sample data.
 let live = null; // { user, organization, location }
-let accountEmail = '';
 let noticeTimer;
 
 function notice(text) { $('#notice').textContent = text; clearTimeout(noticeTimer); noticeTimer = setTimeout(() => $('#notice').textContent = '', 7000); }
-function formError(text) { $('#form-error').textContent = text || ''; }
 function errorText(err) { return (err && err.message) || 'Something went wrong. Please try again.'; }
-
-function step(index, focus = true) {
-  forms.forEach((form, i) => form.hidden = i !== index);
-  document.querySelectorAll('.steps li').forEach((li, i) => {
-    li.classList.toggle('active', i === index); li.classList.toggle('done', i < index);
-    if (i === index) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
-  });
-  $('#step-caption').textContent = `STEP 0${index + 1} / 05`;
-  $('#step-title').textContent = titles[index];
-  $('#step-description').textContent = descriptions[index];
-  formError('');
-  $('#join-existing').hidden = !(live && live.user && !live.organization && (index === 1 || index === 2));
-  $('#join-wait').hidden = true;
-  if (focus) $('#step-title').focus();
-}
-
-// Disable a form's buttons while a request runs, so it is never sent twice.
-async function busy(form, task) {
-  const buttons = [...form.querySelectorAll('button')];
-  if (form.dataset.busy === 'true') return;
-  form.dataset.busy = 'true'; form.setAttribute('aria-busy', 'true');
-  buttons.forEach(b => b.disabled = true);
-  try { await task(); } finally {
-    form.dataset.busy = 'false'; form.removeAttribute('aria-busy');
-    buttons.forEach(b => b.disabled = false);
-  }
-}
 
 /* ------------------------------------------------------------ live state */
 const ORG_KEY = 'apexrx_selected_pharmacy';
@@ -109,14 +65,14 @@ function renderOrgSwitch() {
 
 function profileFromLive() {
   const o = live.organization, l = live.location || {};
+  const address = [l.address, l.village, l.cell, l.sector, l.city, l.region].filter(Boolean).join(', ');
   return {
     name: o.name,
-    license: profile.license && profile.license !== SAMPLE_PROFILE.license ? profile.license : '—',
-    phone: l.phone || o.phone || '—',
-    address: l.address || '—',
+    status: STATUS_LABELS_LIVE[o.status] || o.status,
+    phone: o.phone || l.phone || '—',
+    address: address || '—',
     latitude: l.latitude != null ? String(l.latitude) : '—',
     longitude: l.longitude != null ? String(l.longitude) : '—',
-    status: o.status,
     documents: (live.documents || []).length
       ? live.documents.map(d => `${DOCUMENT_LABELS[d.document_type] || d.document_type}: ${d.verification_status}`).join(' · ')
       : 'None uploaded'
@@ -126,7 +82,6 @@ function profileFromLive() {
 // Load the signed-in user, their pharmacy and its main location.
 async function loadLive() {
   const me = await API.auth.me();
-  accountEmail = me.email;
   const membership = pharmacyMembership(me);
   // Build the new state completely before replacing `live`, so nothing that
   // runs meanwhile (a debounced search, a section render, an organization
@@ -178,330 +133,8 @@ function supplierContacts(orders) {
 }
 
 function resetLive() {
-  live = null; accountEmail = ''; profile = { ...SAMPLE_PROFILE }; currentView = 'home';
-  resetPhoneVerification();
-  hideJoinWait();
+  live = null; profile = { ...SAMPLE_PROFILE }; currentView = 'home';
 }
-
-/* -------------------------------------------------------- step 0: account */
-// Two modes on the same form and the same API calls: create an account, or
-// sign in to an existing one (only email and password).
-let authMode = location.hash === '#signin' ? 'signin' : 'create';
-const AUTH_TEXT = {
-  create: {
-    title: titles[0], description: descriptions[0], submit: 'Create account', note: 'Your account is created on ApexRX Smart.',
-    switchText: 'Already have an account?', switchButton: 'Sign in'
-  },
-  signin: {
-    title: 'Sign in to ApexRX', description: 'Welcome back. Use the email and password of your ApexRX account.', submit: 'Sign in',
-    note: 'Signing in opens your pharmacy workspace.', switchText: 'New to ApexRX?', switchButton: 'Create a pharmacy account'
-  }
-};
-function setAuthMode(mode, focus) {
-  authMode = mode;
-  const text = AUTH_TEXT[mode], form = $('#account'), f = form.elements, signin = mode === 'signin';
-  titles[0] = text.title; descriptions[0] = text.description;
-  $('#confirm-field').hidden = signin;
-  $('#confirm-field').parentElement.classList.toggle('single', signin); // password uses the full width
-  f.confirm.required = !signin;
-  f.confirm.value = '';
-  f.password.setAttribute('autocomplete', signin ? 'current-password' : 'new-password');
-  if (signin) f.password.removeAttribute('minlength'); else f.password.setAttribute('minlength', '8');
-  f.password.placeholder = signin ? 'Your password' : 'At least 8 characters';
-  $('#account-submit').firstChild.nodeValue = text.submit + ' ';
-  $('#account-note').textContent = text.note;
-  $('#auth-switch-text').textContent = text.switchText;
-  $('#auth-switch').textContent = text.switchButton;
-  $('#supplier-continue').hidden = true;
-  if (!forms[0].hidden) { $('#step-title').textContent = text.title; $('#step-description').textContent = text.description; formError(''); }
-  try { history.replaceState(null, '', location.pathname + location.search + (signin ? '#signin' : '')); } catch (e) { /* ignore */ }
-  if (focus) (f.email.value ? f.password : f.email).focus();
-}
-$('#auth-switch').addEventListener('click', () => setAuthMode(authMode === 'signin' ? 'create' : 'signin', true));
-
-// After any sign-in: open the pharmacy, or (for an account that only belongs
-// to a supplier) point to the supplier page instead of registering a pharmacy.
-async function afterSignIn() {
-  await loadLive();
-  if (live.organization) { openDashboard(); notice('Welcome back. You are signed in.'); return; }
-  const supplier = (live.user.memberships || []).some(m => m.organization_type === 'supplier');
-  if (supplier) {
-    formError('This account belongs to a supplier, not a pharmacy.');
-    $('#supplier-continue').hidden = false;
-    return;
-  }
-  await continueToPhoneVerification();
-}
-
-$('#account').addEventListener('submit', e => {
-  e.preventDefault();
-  const form = e.currentTarget, f = form.elements;
-  if (authMode === 'signin') {
-    if (!f.email.value.trim() || !f.password.value) { formError('Enter your email and password.'); return; }
-    formError('');
-    busy(form, async () => {
-      try {
-        try { await API.auth.login(f.email.value.trim(), f.password.value); } catch (err) {
-          if (err.status === 401) throw new Error('Incorrect email or password.');
-          throw err;
-        }
-        f.password.value = '';
-        await afterSignIn();
-      } catch (err) {
-        formError(errorText(err));
-      }
-    });
-    return;
-  }
-  if (f.password.value !== f.confirm.value) { formError('Your passwords do not match.'); f.confirm.focus(); return; }
-  formError('');
-  busy(form, async () => {
-    const email = f.email.value.trim(), password = f.password.value;
-    try {
-      let signedInExisting = false;
-      try {
-        // The account form has no name field; the email name is used until
-        // the user changes it (PATCH /auth/me).
-        await API.auth.register({ name: email.split('@')[0].slice(0, 150) || email, email, password });
-      } catch (err) {
-        if (err.status !== 409) throw err;
-        signedInExisting = true; // already registered: sign in with these details
-      }
-      try { await API.auth.login(email, password); } catch (err) {
-        if (err.status === 401 && signedInExisting) {
-          throw new Error('An account with this email already exists. Enter its password to sign in.');
-        }
-        throw err;
-      }
-      f.password.value = ''; f.confirm.value = '';
-      await afterSignIn();
-    } catch (err) {
-      formError(errorText(err));
-    }
-  });
-});
-
-/* --------------------------------------------------------- step 1: verify */
-// Mobile number verification by SMS. Every decision is made by the backend;
-// this only drives the form. The code is never known to the browser until
-// the user types it from the SMS.
-const phoneState = { status: null, sentTo: null, resendAt: 0, timer: null };
-
-function resetPhoneVerification() {
-  clearInterval(phoneState.timer);
-  Object.assign(phoneState, { status: null, sentTo: null, resendAt: 0, timer: null });
-  const f = $('#verify').elements;
-  f.phone.value = ''; f.code.value = ''; f.code.dispatchEvent(new Event('input'));
-  $('#code-area').hidden = true; $('#code-sent').textContent = '';
-  renderResend();
-  const phone = $('#profile').elements.phone;
-  phone.readOnly = false; phone.removeAttribute('title');
-}
-
-function useVerifiedPhone(number) {
-  if (!number) return;
-  const phone = $('#profile').elements.phone;
-  phone.value = number; phone.readOnly = true; phone.title = 'Verified by SMS';
-}
-
-// After sign-in: verify the phone unless the backend says it is not needed.
-async function continueToPhoneVerification() {
-  let status = null;
-  try {
-    const result = await API.auth.phone.status();
-    // Only a well-formed answer counts; anything else is "unknown".
-    if (result && typeof result.required === 'boolean' && typeof result.verified === 'boolean') status = result;
-  } catch (err) {
-    if (err.status === 401) throw err;
-    // 404 (older backend during a deploy), network error, timeout: unknown.
-  }
-  phoneState.status = status;
-  if (!status) {
-    // Unknown is NOT verified: the backend still refuses an unverified
-    // pharmacy when verification is required (403), and the profile step
-    // then brings the user back here. When it is not required, they continue.
-    step(2); return;
-  }
-  if (status.verified) { useVerifiedPhone(status.verified_phone); step(2); return; }
-  if (!status.required) { step(2); return; }
-  step(1);
-  if (status && !status.sms_available) {
-    formError('SMS verification is not available right now. Please try again later or contact ApexRX.');
-  }
-}
-
-function renderResend() {
-  const button = $('#resend-code');
-  const left = Math.ceil((phoneState.resendAt - Date.now()) / 1000);
-  if (left > 0) { button.disabled = true; button.textContent = `Resend code in ${left}s`; return; }
-  button.disabled = false; button.textContent = 'Resend code';
-  clearInterval(phoneState.timer); phoneState.timer = null;
-}
-
-function startResendCountdown(seconds) {
-  phoneState.resendAt = Date.now() + Math.max(0, seconds) * 1000;
-  clearInterval(phoneState.timer);
-  phoneState.timer = setInterval(renderResend, 1000);
-  renderResend();
-}
-
-function sessionExpired() { resetLive(); step(0); formError('Your session has expired. Please sign in again.'); }
-
-async function requestCode() {
-  const form = $('#verify'), f = form.elements;
-  const phone = f.phone.value.trim();
-  if (!phone) { formError('Enter your mobile phone number.'); f.phone.focus(); return; }
-  if (phoneState.sentTo === phone && phoneState.resendAt > Date.now()) { renderResend(); return; }
-  formError('');
-  await busy(form, async () => {
-    try {
-      const sent = await API.auth.phone.sendCode(phone);
-      phoneState.sentTo = sent.phone;
-      f.phone.value = sent.phone; // the normalized number the SMS went to
-      $('#code-area').hidden = false;
-      $('#code-sent').textContent = `Code sent to ${sent.phone_masked}. It expires in ${Math.max(1, Math.round(sent.expires_in / 60))} minutes.`;
-      f.code.value = ''; f.code.dispatchEvent(new Event('input'));
-      startResendCountdown(sent.resend_after);
-      f.code.focus();
-    } catch (err) {
-      if (err.status === 401) { sessionExpired(); return; }
-      if (err.status === 429 && err.data && err.data.retry_after) startResendCountdown(err.data.retry_after);
-      formError(errorText(err));
-    }
-  });
-  renderResend(); // busy() re-enabled every button; keep the countdown
-}
-
-$('#send-code').addEventListener('click', requestCode);
-$('#resend-code').addEventListener('click', requestCode);
-$('#verify').elements.phone.addEventListener('input', e => {
-  // Editing the number after a code was sent means a new code is needed.
-  if (phoneState.sentTo && e.target.value.trim() !== phoneState.sentTo) {
-    phoneState.sentTo = null; $('#code-area').hidden = true; $('#code-sent').textContent = '';
-  }
-});
-
-$('#verify').addEventListener('submit', e => {
-  e.preventDefault();
-  const form = e.currentTarget, f = form.elements;
-  if (!phoneState.sentTo) { requestCode(); return; } // Enter in the phone field sends the code
-  const code = f.code.value.replace(/\D/g, '');
-  if (code.length !== 6) { formError('Enter the 6-digit code from the SMS.'); f.code.focus(); return; }
-  formError('');
-  busy(form, async () => {
-    try {
-      const result = await API.auth.phone.verify(phoneState.sentTo, code);
-      phoneState.status = { ...(phoneState.status || {}), verified: true, verified_phone: result.verified_phone };
-      clearInterval(phoneState.timer);
-      useVerifiedPhone(result.verified_phone);
-      step(2);
-      notice('Your mobile number is verified.');
-    } catch (err) {
-      if (err.status === 401) { sessionExpired(); return; }
-      const reason = err.data && err.data.reason;
-      if (['expired', 'too_many_attempts', 'no_active_code'].includes(reason)) {
-        f.code.value = ''; f.code.dispatchEvent(new Event('input'));
-        phoneState.resendAt = 0; // a new code can be requested now
-      }
-      formError(errorText(err));
-      if (reason === 'incorrect' || reason === 'format') f.code.select();
-    }
-  }).then(renderResend);
-});
-
-/* -------------------------------------------------------- step 2: profile */
-function profilePayloads(values) {
-  const lat = Number(values.latitude), lng = Number(values.longitude);
-  return {
-    organization: { name: values.name, phone: values.phone || null, email: accountEmail || null },
-    location: {
-      name: values.name, address: values.address || null, city: DEFAULT_CITY, phone: values.phone || null,
-      latitude: Number.isFinite(lat) ? Number(lat.toFixed(6)) : null,
-      longitude: Number.isFinite(lng) ? Number(lng.toFixed(6)) : null
-    }
-  };
-}
-
-async function uploadSelectedDocuments(organizationId) {
-  const inputs = [...document.querySelectorAll('#profile input[type=file][data-document-type]')].filter(i => i.files && i.files.length);
-  // Uploaded side by side. Each successful one is cleared, so it is not sent
-  // again if the user comes back to this step after another one failed.
-  const results = await Promise.allSettled(inputs.map(input =>
-    API.organizations.uploadDocument(organizationId, input.dataset.documentType, input.files[0])
-      .then(() => { input.value = ''; })));
-  const failed = results.find(r => r.status === 'rejected');
-  if (failed) throw failed.reason;
-  return inputs.length;
-}
-
-async function saveProfile(values) {
-  const { organization, location } = profilePayloads(values);
-  if (!live.organization) {
-    const created = await API.organizations.create({ ...organization, type: 'pharmacy' });
-    live.organization = created; live.role = created.my_role;
-  } else if (live.role === 'owner' || live.role === 'manager') {
-    live.organization = await API.organizations.update(live.organization.organization_id, organization);
-  }
-  const orgId = live.organization.organization_id;
-  if (live.role === 'owner' || live.role === 'manager') {
-    // The location and the documents don't depend on each other: send both at once.
-    const [savedLocation, uploaded] = await Promise.allSettled([
-      live.location
-        ? API.organizations.updateLocation(orgId, live.location.location_id, location)
-        : API.organizations.createLocation(orgId, location),
-      uploadSelectedDocuments(orgId)
-    ]);
-    if (savedLocation.status === 'fulfilled') live.location = savedLocation.value;
-    if (uploaded.status === 'fulfilled' && uploaded.value) live.documents = await API.organizations.documents(orgId);
-    if (savedLocation.status === 'rejected') throw savedLocation.reason;
-    if (uploaded.status === 'rejected') throw uploaded.reason;
-  }
-}
-
-$('#profile').addEventListener('submit', e => {
-  e.preventDefault();
-  const form = e.currentTarget, f = form.elements;
-  const values = {};
-  ['name', 'license', 'phone', 'address', 'latitude', 'longitude'].forEach(key => values[key] = f[key].value.trim());
-  if (!values.name) { formError('Please enter a pharmacy name.'); return; }
-  formError('');
-  busy(form, async () => {
-    if (live) {
-      try { await saveProfile(values); } catch (err) {
-        if (err.status === 401) { resetLive(); step(0); formError('Your session has expired. Please sign in again.'); return; }
-        if (err.status === 403 && !live.organization && !(phoneState.status && phoneState.status.verified)) {
-          // The backend requires a verified phone first: go to that step.
-          step(1); formError(errorText(err)); return;
-        }
-        formError(errorText(err)); return;
-      }
-    }
-    Object.assign(profile, values);
-    step(3);
-  });
-});
-
-document.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click', () => step(Number(b.dataset.back))));
-$('#location-map').addEventListener('click', e => {
-  const rect = e.currentTarget.getBoundingClientRect();
-  const x = e.detail === 0 ? .5 : Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  const y = e.detail === 0 ? .5 : Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-  $('#location-pin').style.left = `${x * 100}%`; $('#location-pin').style.top = `${y * 100}%`;
-  $('#profile').elements.latitude.value = (-1.88 - y * .13).toFixed(4);
-  $('#profile').elements.longitude.value = (29.98 + x * .17).toFixed(4);
-});
-
-function fillProfileForm() {
-  if (!live || !live.organization) return;
-  const f = $('#profile').elements, p = profileFromLive();
-  f.name.value = p.name;
-  if (p.phone !== '—') f.phone.value = p.phone;
-  if (p.address !== '—') f.address.value = p.address;
-  if (p.latitude !== '—') { f.latitude.value = p.latitude; f.longitude.value = p.longitude; }
-}
-
-/* ------------------------------------------------------ step 3: plan/pay */
-document.querySelectorAll('[name=method]').forEach(r => r.addEventListener('change', () => $('#payment-method').textContent = r.value));
 
 /* -------------------------------------------------------------- dashboard */
 // Show live text in a static element, remembering its sample text so the
@@ -521,6 +154,8 @@ function paintWorkspace() {
   setLiveText($('.panel-heading .demo'), isLive ? 'Live data' : null);
   setLiveText($('.dash-top .avatar'), isLive ? initials(live.organization.name) : null);
   setLiveText($('.dashboard-body > .note'), isLive ? LIVE_PANEL_NOTE : null);
+  const status = $('#status-card');
+  setLiveText(status && status.querySelector('small'), isLive ? (STATUS_LABELS_LIVE[live.organization.status] || live.organization.status) + ' · View details →' : null);
 }
 
 function openDashboard() {
@@ -534,21 +169,20 @@ function openDashboard() {
   window.scrollTo(0, 0);
 }
 
-$('#payment').addEventListener('submit', e => { e.preventDefault(); openDashboard(); notice('Demo subscription activated. No payment was taken.'); });
-$('#explore').addEventListener('click', () => {
-  if (live && live.organization) { openDashboard(); return; }
-  resetLive(); openDashboard();
-});
+// Opened by js/registration.js.
+window.ApexPharmacyWorkspace = {
+  async open() { await loadLive(); openDashboard(); },
+  preview() { resetLive(); openDashboard(); }
+};
 $('#restart').addEventListener('click', () => {
+  // Leaving the workspace signs out (or ends the preview).
   if (live) API.auth.logout();
   resetLive();
-  $('#dashboard').hidden = true; $('#onboarding').hidden = false; step(0);
+  window.ApexRegistration.reset();
 });
 window.addEventListener('apexrx:signed-out', () => {
-  if (!live) return;
-  resetLive();
-  $('#dashboard').hidden = true; $('#onboarding').hidden = false; step(0);
-  formError('Your session has expired. Please sign in again.');
+  // js/registration.js shows the sign-in step (with "session expired" when it was not on purpose).
+  if (live) resetLive();
 });
 
 /* Sample suppliers, used only when previewing without an account. */
@@ -694,6 +328,14 @@ function renderProfile() {
     ? (STATUS_NOTES[live.organization.status] || STATUS_NOTES.pending)
     : 'Demo profile only. Your pharmacy has not been published on the patient map.';
   $('#profile-summary').append(note);
+  if (live && live.organization) {
+    // Registration details, documents and resubmission live in js/registration.js.
+    const open = document.createElement('button');
+    open.type = 'button'; open.className = 'secondary'; open.id = 'open-registration';
+    open.textContent = 'Registration and documents →';
+    open.addEventListener('click', () => window.ApexRegistration.showReview());
+    $('#profile-summary').append(open);
+  }
 }
 
 let currentView = 'home';
@@ -738,47 +380,3 @@ $('#org-switch').addEventListener('change', async e => {
     notice(`Switched to ${live.organization.name}.`);
   } catch (err) { notice(errorText(err)); }
 });
-
-/* ------------------------------------------- joining an existing pharmacy */
-function showJoinWait() {
-  forms.forEach(f => f.hidden = true);
-  $('#step-title').textContent = 'Join an existing pharmacy';
-  $('#step-description').textContent = 'Your pharmacy adds your account; you do not register a new one.';
-  $('#step-caption').textContent = '';
-  $('#join-email').textContent = accountEmail || (live && live.user && live.user.email) || '';
-  $('#join-status').textContent = '';
-  $('#join-existing').hidden = true; formError('');
-  $('#join-wait').hidden = false;
-}
-function hideJoinWait() { const w = $('#join-wait'); if (w) w.hidden = true; }
-$('#join-existing').addEventListener('click', showJoinWait);
-$('#join-check').addEventListener('click', async () => {
-  const button = $('#join-check'); button.disabled = true; $('#join-status').textContent = 'Checking…';
-  try {
-    await loadLive();
-    if (live.organization) { hideJoinWait(); openDashboard(); notice(`Welcome to ${live.organization.name}.`); return; }
-    $('#join-status').textContent = 'You have not been added to a pharmacy yet. Ask the owner or a manager to add ' + (live.user.email || 'your email') + '.';
-  } catch (err) {
-    $('#join-status').textContent = errorText(err);
-  } finally { button.disabled = false; }
-});
-$('#join-register').addEventListener('click', () => { hideJoinWait(); continueToPhoneVerification(); });
-$('#join-signout').addEventListener('click', () => { API.auth.logout(); resetLive(); step(0); });
-
-/* ---------------------------------------------------------------- startup */
-(async function start() {
-  step(0, false);
-  setAuthMode(authMode, false);
-  if (authMode === 'signin') $('#account').elements.email.focus();
-  if (!API || !API.session.isSignedIn()) return;
-  // Resume a session from this tab (for example after a page refresh).
-  try {
-    await loadLive();
-    if (live.organization) openDashboard();
-    else await continueToPhoneVerification();
-    fillProfileForm();
-  } catch (err) {
-    resetLive();
-    if (err.status !== 401) formError(errorText(err));
-  }
-})();

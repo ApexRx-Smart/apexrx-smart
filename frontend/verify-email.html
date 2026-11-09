@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Verify your email — ApexRX Smart</title>
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="assets/logos/logo-mark.svg">
+<link rel="stylesheet" href="css/pharmacies.css">
+</head>
+<body class="verify-page">
+<!-- Opened from the verification email: verify-email.html?next=pharmacy#token=...
+     js/verify-email.js sends the token to POST /auth/email/verify. -->
+<header><a class="brand" href="index.html"><img src="assets/logos/logo-mark.svg" alt="" width="38"><span>ApexRX<span class="green"> Smart</span><small>Smarter access. Better health.</small></span></a><a class="home-link" href="index.html">← Back to website</a><label class="language-control"><span class="sr-only">Language</span><select id="workflow-language" aria-label="Language"><option value="en">English</option><option value="fr">Français</option><option value="rw">Kinyarwanda</option></select></label></header>
+<main class="verify-main">
+<section class="workspace verify-card" aria-labelledby="verify-title">
+<div class="mail-icon" id="verify-icon" aria-hidden="true">✉</div>
+<h2 id="verify-title" tabindex="-1">Checking your verification link…</h2>
+<p id="verify-message" class="muted" role="status">This takes a moment.</p>
+<p id="verify-email-row" class="note" hidden><span>Email address</span>: <strong id="verify-email"></strong></p>
+<div class="actions" id="verify-actions" hidden>
+<a class="primary" id="verify-continue" href="pharmacies.html">Continue registration <span>→</span></a>
+</div>
+<p class="note" id="verify-help" hidden>To get a new link, sign in on the registration page and choose “Resend verification email”.</p>
+</section>
+</main>
+<script src="js/pharmacies-i18n.js"></script>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/verify-email.js"></script>
+</body></html>

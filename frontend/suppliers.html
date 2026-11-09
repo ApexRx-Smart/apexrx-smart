@@ -5,9 +5,9 @@
 <link rel="icon" href="assets/logos/logo-mark.svg">
 <link rel="stylesheet" href="css/pharmacies.css">
 </head>
-<body class="supplier-page">
-<!-- Supplier registration, same layout and form styles as pharmacies.html.
-     js/suppliers.js drives it with the existing API (js/api.js). -->
+<body class="supplier-page" data-role="supplier">
+<!-- Supplier registration, same layout as pharmacies.html. js/registration.js
+     (shared with the pharmacy page) renders and drives it on the API (js/api.js). -->
 <header><a class="brand" href="index.html"><img src="assets/logos/logo-mark.svg" alt="" width="38"><span>ApexRX<span class="green"> Smart</span><small>Smarter access. Better health.</small></span></a><a class="home-link" href="index.html">← Back to website</a><label class="language-control"><span class="sr-only">Language</span><select id="workflow-language" aria-label="Language"><option value="en">English</option><option value="fr">Français</option><option value="rw">Kinyarwanda</option></select></label></header>
 
 <main id="onboarding" class="onboarding">
@@ -20,77 +20,13 @@
 </aside>
 
 <section class="workspace">
-<ol class="steps" aria-label="Registration progress"><li>Account</li><li>Business</li><li>Review</li></ol>
+<ol class="steps" aria-label="Registration progress"></ol>
 <div class="form-area">
 <p id="step-caption" class="eyebrow"></p>
 <h2 id="step-title" tabindex="-1"></h2>
 <p id="step-description" class="muted"></p>
-
-<form id="account" class="step-form" novalidate>
-<label>Email address<input name="email" type="email" autocomplete="email" placeholder="depot@example.com" required></label>
-<div class="fields">
-<label>Password<input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required></label>
-<label id="confirm-field">Confirm password<input name="confirm" type="password" autocomplete="new-password" minlength="8" placeholder="Re-enter your password" required></label>
-</div>
-<p class="note" id="account-note">Your account is created on ApexRX Smart.</p>
-<button class="primary" id="account-submit">Create account <span>→</span></button>
-<p class="auth-switch"><span id="auth-switch-text">Already have an account?</span> <button type="button" class="text-button" id="auth-switch">Sign in</button></p>
-<p class="role-hint">Registering a pharmacy? <a href="pharmacies.html">Register as a pharmacy →</a></p>
-</form>
-
-<form id="business" class="step-form" hidden novalidate>
-<div class="fields">
-<label>Business name<input name="name" maxlength="255" placeholder="Kigali Medical Supplies Ltd" required></label>
-<label>Business phone<input name="phone" type="tel" maxlength="30" placeholder="+250 788 123 456"></label>
-<label>Warehouse name<input name="warehouse" maxlength="255" placeholder="Main warehouse" required></label>
-<label>Warehouse address<input name="address" maxlength="500" placeholder="Street, area, Kigali" required></label>
-</div>
-<div class="location-heading"><strong>Pin your warehouse</strong><span>Illustrative map</span></div>
-<button type="button" id="location-map" aria-label="Choose approximate warehouse location on illustrative map"><img src="assets/images/kigali-map-bg.jpg" alt="Illustrated Kigali map"><span id="location-pin">+</span></button>
-<div class="fields coordinates">
-<label>Latitude<input name="latitude" type="number" min="-90" max="90" step="any" value="-1.9441" required></label>
-<label>Longitude<input name="longitude" type="number" min="-180" max="180" step="any" value="30.0619" required></label>
-</div>
-<p class="note">Click for an approximate pin, or enter exact coordinates. This illustration is not a geocoded map.</p>
-<strong class="document-heading">Verification documents <small>You can also add them later</small></strong>
-<div class="uploads">
-<label>Business license<input type="file" data-document-type="business_license" accept=".pdf,.png,.jpg,.jpeg"></label>
-<label>Owner ID<input type="file" data-document-type="owner_id" accept=".pdf,.png,.jpg,.jpeg"></label>
-</div>
-<p class="note">Documents are uploaded securely to ApexRX for verification (PDF, PNG or JPG, up to 10 MB each). ApexRX reviews your business before it can work with pharmacies.</p>
-<div class="actions">
-<button type="button" class="secondary" id="business-back">← Back</button>
-<button class="primary" id="business-submit">Submit for review →</button>
-</div>
-</form>
-
-<div id="review" hidden>
-<div class="supplier-status">
-<div class="status-head"><strong id="review-name"></strong><span class="ws-badge" id="review-status"></span></div>
-<p id="review-note" class="note"></p>
-<dl class="supplier-facts">
-<dt>Organization type</dt><dd>Supplier</dd>
-<dt>Your role</dt><dd id="review-role"></dd>
-<dt>Phone</dt><dd id="review-phone"></dd>
-<dt>Warehouses</dt><dd id="review-locations"></dd>
-</dl>
-<strong class="document-heading">Verification documents</strong>
-<ul id="review-documents" class="supplier-docs"></ul>
-<div id="review-upload" class="uploads" hidden>
-<label>Add a document<select id="upload-type" aria-label="Document type"><option value="business_license">Business license</option><option value="owner_id">Owner ID</option></select></label>
-<label>File<input type="file" id="upload-file" accept=".pdf,.png,.jpg,.jpeg"></label>
-<button type="button" class="secondary" id="upload-button">Upload document</button>
-</div>
-<p class="note">Supplier screens for stock, prices and incoming orders are not on the website yet.</p>
-</div>
-<label id="supplier-switch-label" hidden>Supplier<select id="supplier-switch"></select></label>
-<div class="actions">
-<button type="button" class="secondary" id="review-edit">Edit business details</button>
-<button type="button" class="secondary" id="review-refresh">Check status</button>
-</div>
-<button type="button" class="text-button" id="review-signout">Sign out</button>
-</div>
-
+<p id="signed-in-as" class="signed-in" hidden><span>Signed in as</span> <strong id="signed-in-email"></strong> · <button type="button" class="text-button" id="sign-out">Sign out</button></p>
+<div id="registration"></div>
 <p id="form-error" role="alert"></p>
 </div>
 <div class="workspace-foot">Reach every pharmacy from one place. <span>APEXRX SMART</span></div>
@@ -100,6 +36,6 @@
 <script src="js/pharmacies-i18n.js"></script>
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
-<script src="js/suppliers.js"></script>
+<script src="js/registration.js"></script>
 <script src="js/password-toggle.js"></script>
 </body></html>

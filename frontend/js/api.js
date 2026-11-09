@@ -294,11 +294,12 @@
     },
 
     auth: {
-      // Mobile number verification by SMS one-time code (signed in).
-      phone: {
-        status: function () { return get('/auth/phone/status'); },
-        sendCode: function (phone) { return post('/auth/phone/send-code', { phone: phone }); },
-        verify: function (phone, code) { return post('/auth/phone/verify', { phone: phone, code: code }); }
+      // Email verification by emailed link. status/send need a session;
+      // verify is opened from the link (verify-email.html) and needs none.
+      email: {
+        status: function () { return get('/auth/email/status'); },
+        send: function (next) { return post('/auth/email/send', next ? { next: next } : {}); },
+        verify: function (token) { return post('/auth/email/verify', { token: token }, { auth: false }); }
       },
       register: function (data) { return post('/auth/register', data, { auth: false }); },
       login: function (email, password) {
