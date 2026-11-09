@@ -871,6 +871,21 @@ Object.assign(workflowTranslations, {
  "A newer password reset email was sent.": {"fr": "Un e-mail de réinitialisation plus récent a été envoyé.", "rw": "Hoherejwe indi imeli nshya yo guhindura ijambobanga."},
  "This password reset link has expired.": {"fr": "Ce lien de réinitialisation a expiré.", "rw": "Uyu murongo wo guhindura ijambobanga wataye agaciro."}
 });
+
+// Email temporarily disabled. Kinyarwanda needs review by a native speaker.
+Object.assign(workflowTranslations, {
+ "Email verification is temporarily unavailable, so this step was skipped. ApexRX still reviews your business and documents before approving it.": {"fr": "La vérification par e-mail est temporairement indisponible : cette étape a été ignorée. ApexRX vérifie toujours votre entreprise et vos documents avant de l’approuver.", "rw": "Kwemeza imeli ntibishoboka by’agateganyo, bityo iyi ntambwe yasimbutswe. ApexRX iracyagenzura ubucuruzi bwawe n’inyandiko mbere yo kubwemeza."},
+ "Password reset is temporarily unavailable": {"fr": "La réinitialisation du mot de passe est temporairement indisponible", "rw": "Guhindura ijambobanga ntibishoboka by’agateganyo"},
+ "ApexRX cannot send emails at the moment, so passwords cannot be reset by email. If you cannot sign in, contact ApexRX support. Your account and its data are unchanged.": {"fr": "ApexRX ne peut pas envoyer d’e-mails pour le moment : les mots de passe ne peuvent pas être réinitialisés par e-mail. Si vous ne pouvez pas vous connecter, contactez le support ApexRX. Votre compte et ses données sont inchangés.", "rw": "ApexRX ntishobora kohereza imeli ubu, bityo amagambobanga ntashobora guhindurwa hakoreshejwe imeli. Niba udashobora kwinjira, vugana na ApexRX. Konti yawe n’amakuru yayo ntibyahindutse."},
+ "Password reset by email is temporarily unavailable. Contact ApexRX support for help with your account.": {"fr": "La réinitialisation par e-mail est temporairement indisponible. Contactez le support ApexRX pour obtenir de l’aide.", "rw": "Guhindura ijambobanga hakoreshejwe imeli ntibishoboka by’agateganyo. Vugana na ApexRX ngo agufashe."},
+ "Create invitation link": {"fr": "Créer un lien d’invitation", "rw": "Kora umurongo w’ubutumire"},
+ "Email is temporarily unavailable, so ApexRX cannot email invitations. Enter their email address and role to get an invitation link, then give it to the employee yourself (for example by WhatsApp). They use it to set up their own account (or sign in to an existing one) and join this pharmacy. Accounts are never shared.": {"fr": "L’e-mail est temporairement indisponible : ApexRX ne peut pas envoyer les invitations. Saisissez l’adresse e-mail et le rôle pour obtenir un lien d’invitation, puis donnez-le vous-même à l’employé (par exemple sur WhatsApp). Il l’utilise pour créer son propre compte (ou se connecter) et rejoindre cette pharmacie. Les comptes ne sont jamais partagés.", "rw": "Imeli ntikora by’agateganyo, bityo ApexRX ntishobora kohereza ubutumire. Andika imeli n’uruhare ubone umurongo w’ubutumire, hanyuma uwuhe umukozi ubwawe (urugero kuri WhatsApp). Awukoresha akora konti ye (cyangwa yinjira) akinjira muri iyi farumasi. Konti ntizisangirwa."},
+ "Email is temporarily unavailable, so no email was sent. Copy the invitation link below and give it to the employee yourself (for example by WhatsApp). Anyone with the link can use it to join, so share it only with them.": {"fr": "L’e-mail est temporairement indisponible : aucun e-mail n’a été envoyé. Copiez le lien ci-dessous et donnez-le vous-même à l’employé (par exemple sur WhatsApp). Toute personne qui a le lien peut l’utiliser : ne le partagez qu’avec lui.", "rw": "Imeli ntikora by’agateganyo, nta imeli yoherejwe. Koporora umurongo uri hepfo uwuhe umukozi ubwawe (urugero kuri WhatsApp). Ufite umurongo wese ashobora kuwukoresha, uwuhe we wenyine."},
+ "Copy link": {"fr": "Copier le lien", "rw": "Koporora umurongo"},
+ "Copied": {"fr": "Copié", "rw": "Byakoporowe"},
+ "New link": {"fr": "Nouveau lien", "rw": "Umurongo mushya"},
+ "Link given by you (no email)": {"fr": "Lien remis par vous (sans e-mail)", "rw": "Umurongo watanzwe nawe (nta imeli)"}
+});
 let workflowLang='en';
 try { workflowLang=new URLSearchParams(location.search).get('lang') || localStorage.getItem('apexrx_lang') || 'en'; } catch(e) {}
 if(!['en','fr','rw'].includes(workflowLang)) workflowLang='en';
@@ -906,7 +921,7 @@ function translateWorkflow(){
  const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
  let node;
  while(node=walker.nextNode()){
-  if(node.parentElement.closest('script,style,option,#pharmacy-name,#entered-email,#messages .own,#profile-summary dd,#review-facts dd,#review-name,#signed-in-email,#verify-address,#verify-email,#join-email,#address-text,#review-notes,.doc-file,#review-documents li>span:first-child,#dash-user,#invite-org,#invite-email,#invite-by,#reset-email,#org-choice-list strong,[data-invite] td:first-child'))continue;
+  if(node.parentElement.closest('script,style,option,#pharmacy-name,#entered-email,#messages .own,#profile-summary dd,#review-facts dd,#review-name,#signed-in-email,#verify-address,#verify-email,#join-email,#address-text,#review-notes,.doc-file,#review-documents li>span:first-child,#dash-user,#invite-org,#invite-email,#invite-by,#reset-email,#org-choice-list strong,[data-invite] td:first-child,#invite-link'))continue;
   const current=node.nodeValue;let saved=workflowTextSources.get(node);
   if(!saved || current!==saved.rendered)saved={source:current};
   const result=workflowTranslate(saved.source);saved.rendered=result;workflowTextSources.set(node,saved);if(current!==result)node.nodeValue=result;

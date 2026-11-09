@@ -78,7 +78,18 @@
   });
 
   (async function start() {
-    if (!token) { $('#forgot-form').hidden = false; return; }
+    if (!token) {
+      // Email delivery is temporarily disabled: say so instead of offering a form that cannot work.
+      let caps = null;
+      try { caps = await API.auth.capabilities(); } catch (e) { /* unknown: show the form; the backend answers */ }
+      if (caps && caps.password_reset === false) {
+        title('Password reset is temporarily unavailable',
+          'ApexRX cannot send emails at the moment, so passwords cannot be reset by email. If you cannot sign in, contact ApexRX support. Your account and its data are unchanged.', false);
+        return;
+      }
+      $('#forgot-form').hidden = false;
+      return;
+    }
     title('Choose a new password', 'This link works once.');
     try {
       const res = await API.auth.password.check(token);

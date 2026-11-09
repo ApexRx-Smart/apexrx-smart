@@ -93,3 +93,6 @@ header{background:#ffffffcc;backdrop-filter:blur(20px)}.onboarding{padding:24px;
 .ws-badge.inv-pending{background:#fff4e0;color:#9a5b00}.ws-badge.inv-accepted{background:var(--mint);color:#006b4b}.ws-badge.inv-expired,.ws-badge.inv-revoked{background:#edf0f2;color:#374151}.ws-badge.inv-failed{background:#fdecea;color:#b42318}
 .access-card{max-width:560px;width:100%;padding:40px}.access-card form{display:grid;gap:4px}.access-card .primary{width:100%;margin-top:14px}.access-card .muted{margin-bottom:22px}
 @media(max-width:720px){.access-card{padding:26px 20px}.dash-account{justify-content:flex-start}}
+
+/* Email temporarily disabled: invitation link box, registration note */
+.invite-link-box{display:grid;gap:8px}.invite-link-box p{margin:0}.invite-link-row{display:flex;gap:8px;flex-wrap:wrap}.invite-link-row input{flex:1;min-width:0;margin:0!important;font-size:12px}.email-off-note{margin:0 0 16px}

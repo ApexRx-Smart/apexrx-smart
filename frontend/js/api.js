@@ -489,6 +489,8 @@
       // page: the session is cleared and "apexrx:signed-out" fires immediately.
       logout: function () { endSession('signed_out', true); },
       session: function () { return get('/auth/session'); },
+      // What works on this server (public): email delivery is temporarily disabled.
+      capabilities: function () { return get('/auth/capabilities', null, { auth: false }); },
       // Adopt a TokenResponse obtained another way (accepting an invitation).
       useToken: function (t, email) {
         memorySession = null;

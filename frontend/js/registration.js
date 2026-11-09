@@ -112,6 +112,7 @@
 </form>
 
 <form id="details" class="step-form" hidden novalidate>
+  <p class="ws-msg warn email-off-note" id="email-off-note" hidden>Email verification is temporarily unavailable, so this step was skipped. ApexRX still reviews your business and documents before approving it.</p>
   <div class="fields">
     <label>${T.name}<input name="name" maxlength="255" placeholder="${T.namePh}" autocomplete="organization" required></label>
     <label>Business phone<input name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="30" placeholder="078 812 3456" required></label>
@@ -695,6 +696,8 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
 
   async function showDetails() {
     show(2);
+    const es = emailState.status;
+    $('#email-off-note').hidden = !(es && !es.verified && !es.required && !es.delivery_available);
     const f = $('#details').elements, o = reg && reg.org, l = reg && reg.location;
     f.name.value = o ? o.name : (f.name.value || '');
     f.phone.value = (o && o.phone) || (l && l.phone) || f.phone.value || '';
