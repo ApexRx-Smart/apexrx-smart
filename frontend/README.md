@@ -68,6 +68,7 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 | Organization counts | `GET /admin/organizations?limit=1` with each `type` / `status` filter, using its `total` |
 | Organization table, filters, search, pages | `GET /admin/organizations?type=&status=&q=&limit=&offset=` |
 | **Open** | `GET /admin/organizations/{id}`: profile, locations, members and documents |
+| Detail: stock and orders (read only) | `GET /organizations/{id}/inventory`, `GET .../locations/{loc}/stock/{product}/adjustments` (**History**), `GET /purchase-orders?organization_id=` |
 | **Approve** / **Reject** / **Suspend** | `POST /admin/organizations/{id}/review` (notes required to reject or suspend) |
 | Document **Download** | `GET /admin/documents/{id}/download`: streamed by the backend from the private bucket |
 | **Approve document** / **Reject document** | `POST /admin/documents/{id}/review` (a reason is required to reject) |

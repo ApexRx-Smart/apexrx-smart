@@ -361,6 +361,10 @@ Verification documents are files in a **private Supabase Storage bucket**. Their
   - **Information:** profile, contacts, review history, locations, members and verification documents.
   - **Documents:** download any document, then approve it or reject it with a reason.
   - **Organization:** approve, reject with notes, or suspend with notes. Only the actions the backend allows from the current status are shown. **Approve** stays disabled while any document is pending.
+  - **Stock and purchase orders (read only):**
+    - The organization's stock, prices and listing per branch, with each item's change history.
+    - Its 20 most recent purchase orders.
+    - Admins may read these but not change them. They cannot open a single order: the backend gives order details only to the organizations involved.
 
 - **Documents:** the review queue across all organizations (`GET /admin/documents`).
   - Filter by status: awaiting review, approved or rejected.

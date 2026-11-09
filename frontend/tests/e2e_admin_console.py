@@ -110,10 +110,13 @@ def seed():
         ok("POST", f"/organizations/{org['organization_id']}/documents", token=owner,
            multipart=({"document_type": doc_type}, (fname, PDF, "application/pdf")))
     target = account(f"console-target-{RUN}@example.com", f"Console Target {RUN}")
-    # Patient searches (anonymous): one that finds nothing, searched three times.
-    for _ in range(3):
+    # Patient searches (anonymous): one that finds nothing. Searched once more
+    # than today's most searched term, so it ranks first whatever earlier runs left.
+    top = ok("GET", "/admin/insights/searches?days=7&limit=1", token=admin_token())
+    searches = (top[0]["searches"] if top else 0) + 1
+    for _ in range(searches):
         ok("GET", "/search/pharmacies?" + urllib.parse.urlencode({"q": f"Unmetmedicine {RUN}"}))
-    return {"owner": owner, "org": org, "target": target}
+    return {"owner": owner, "org": org, "target": target, "searches": searches}
 
 
 # ------------------------------------------------------------ page helpers
@@ -195,7 +198,7 @@ def main():
         shown = {k: page.text_content(f"[data-overview={k}]") for k in expected}
         check("2. overview cards match the API totals", all(shown[k] == str(v) for k, v in expected.items()), (shown, expected))
         wait_text(page, "#overview-unmet", f"unmetmedicine {RUN}")
-        check("2. overview lists the unmet search", "3 searches" in page.inner_text("#overview-unmet"))
+        check("2. overview lists the unmet search", f"{world['searches']} searches" in page.inner_text("#overview-unmet"))
         page.click("[data-overview=docs_pending] >> xpath=..")
         page.wait_for_selector("[data-panel=documents]:not([hidden])")
         check("2. the documents card opens the document queue", True)
@@ -226,7 +229,15 @@ def main():
               docs[f"license-{RUN}.pdf"]["verification_status"] == "approved"
               and docs[f"id-{RUN}.pdf"]["rejection_reason"] == "Photo is blurry (console e2e)")
         page.select_option("#doc-filters [name=status]", "rejected")
-        wait_text(page, "#doc-rows", f"id-{RUN}.pdf")
+        # The backend lists documents oldest first (right for the pending queue),
+        # so on a database with history the newest rejection can be on a later page.
+        for _ in range(50):
+            settled(page, "#doc-rows")
+            if f"id-{RUN}.pdf" in page.inner_text("#doc-rows") or page.is_disabled("[data-page='documents:next']"):
+                break
+            page.click("[data-page='documents:next']")
+        statuses = page.locator("#doc-rows .badge").all_inner_texts()
+        check("3. rejected filter lists only rejected documents", statuses and all(t.lower() == "rejected" for t in statuses), statuses)
         check("3. status filter shows the rejected document and its reason",
               "Photo is blurry (console e2e)" in page.inner_text(f"#doc-rows tr:has-text('id-{RUN}.pdf')"))
         page.click(f"#doc-rows tr:has-text('id-{RUN}.pdf') button:has-text('Open organization')")
@@ -378,12 +389,37 @@ def main():
         wait_text(page, "#product-message", "is active again")
         check("7. reactivated", ok("GET", f"/catalogue/products/{product['product_id']}")["is_active"] is True)
 
+        # ---- 7b. Organization detail: stock, stock history and orders (read only).
+        ok("POST", f"/admin/organizations/{org_id}/review", {"decision": "approved"}, admin_token())
+        loc = ok("POST", f"/organizations/{org_id}/locations", {"name": f"Branch {RUN}", "latitude": -1.95, "longitude": 30.06}, world["owner"])
+        stock = f"/organizations/{org_id}/locations/{loc['location_id']}/stock/{product['product_id']}"
+        ok("PUT", stock, {"quantity": 40}, world["owner"])
+        ok("PUT", stock, {"quantity": 35}, world["owner"])
+        open_tab(page, "organizations")
+        page.wait_for_selector("#detail-view:not([hidden])")  # the tab reopens the last organization viewed
+        page.click("#back")
+        page.wait_for_selector("#list-view:not([hidden])")
+        page.fill("#filters [name=q]", f"Console Pharmacy {RUN}")
+        page.click("#filters button")
+        page.wait_for_selector(f"#org-rows tr:has-text('Console Pharmacy {RUN}')")
+        page.click(f"#org-rows tr:has-text('Console Pharmacy {RUN}') button")
+        wait_text(page, "#org-inventory", pname)
+        stock_row = f"#org-inventory tr:has-text('{pname}')"
+        check("7b. admin sees the organization's stock (read only)",
+              f"Branch {RUN}" in page.inner_text(stock_row) and "35" in page.inner_text(stock_row)
+              and page.locator("#org-inventory input").count() == 0)
+        page.click(f"{stock_row} button:has-text('History')")
+        wait_text(page, "#org-inventory .history", "40 → 35")
+        check("7b. stock history shows the change", True)
+        wait_text(page, "#org-orders", "No purchase orders yet")
+        check("7b. empty order list is explained", True)
+
         # ---- 9. Search insights: unmet demand and the catalogue link.
         open_tab(page, "insights")
         q = f"unmetmedicine {RUN}"
         wait_text(page, "#insight-rows", q)
         cells = page.inner_text(f"#insight-rows tr[data-query='{q}']")
-        check("9. search insights show the query with its counts", "3" in cells and "100%" in cells, cells)
+        check("9. search insights show the query with its counts", str(world["searches"]) in cells and "100%" in cells, cells)
         page.check("#insight-filters [name=only_unmet]")
         settled(page, "#insight-rows")
         rows = page.locator("#insight-rows tr[data-query]")

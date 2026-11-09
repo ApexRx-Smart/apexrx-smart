@@ -155,6 +155,10 @@ label.check input { width: auto; }
 .req { color: var(--red); }
 .drug-picker { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 
+/* Organization activity (read only) */
+.history-row td { background: #fbfcfc; }
+ul.history { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; display: grid; gap: 3px; }
+
 /* Search demand */
 ol.demand { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 .meter { display: block; height: 4px; background: var(--grey-bg); border-radius: 4px; margin-top: 6px; max-width: 120px; overflow: hidden; }

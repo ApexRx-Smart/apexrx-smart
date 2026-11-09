@@ -14,6 +14,8 @@
  *                    GET/POST /catalogue/products, PATCH /catalogue/products/{id}
  *                    (edit, retire and reactivate with is_active)
  *   Search insights  GET /admin/insights/searches?days=&limit=&only_unmet=
+ *   Organization     GET /organizations/{id}/inventory, GET .../stock/{product}/adjustments,
+ *   detail (read)    GET /purchase-orders?organization_id= (admins may read these, not change them)
  *
  * The backend checks the platform-admin flag on every one of these calls and
  * validates every change; hiding buttons here is only for usability. Values
@@ -448,18 +450,21 @@
     var select = $('#product-drug');
     return API.catalogue.drugs({ q: q || undefined, limit: 50 }).then(function (page) {
       if (seq !== drugSearchSeq) return;
-      var current = selected || (select.value ? { drug_id: Number(select.value), name: select.selectedOptions[0].textContent } : null);
+      // Once the admin has picked (or cleared) a drug, a late response must not undo it.
+      var picked = select.value ? { drug_id: Number(select.value), name: select.selectedOptions[0].textContent } : null;
+      var current = select.dataset.touched ? picked : (selected || picked);
       var items = page.items.slice();
       if (current && !items.some(function (d) { return d.drug_id === current.drug_id; })) items.unshift(current);
       var options = [el('option', { value: '', text: items.length ? 'Choose a drug' : 'No drugs match. Add the drug first.' })]
         .concat(items.map(function (d) { return el('option', { value: String(d.drug_id), text: d.name }); }));
       select.replaceChildren.apply(select, options);
       if (current) select.value = String(current.drug_id);
-      else if (items.length === 1) select.value = String(items[0].drug_id);
+      else if (items.length === 1 && !select.dataset.touched) select.value = String(items[0].drug_id);
     }).catch(function (err) {
       if (seq === drugSearchSeq && !signedOut(err)) $('#product-form-error').textContent = 'Could not load drugs: ' + errorText(err);
     });
   }
+  $('#product-drug').addEventListener('change', function (e) { e.target.dataset.touched = '1'; });
   $('#product-drug-search').addEventListener('input', function (e) {
     clearTimeout(drugSearchTimer);
     var q = e.target.value.trim();
@@ -474,6 +479,7 @@
     PRODUCT_FIELDS.forEach(function (f) { form.elements[f].value = p && p[f] ? p[f] : ''; });
     $('#product-drug-search').value = '';
     var select = $('#product-drug');
+    delete select.dataset.touched;
     select.replaceChildren(el('option', { value: '', text: 'Choose a drug' }));
     var initial = p ? { drug_id: p.drug_id, name: p.drug_name } : products.drug;
     if (initial) {
@@ -666,6 +672,113 @@
     ]);
   }
 
+  /* ------------------------- organization activity (read only, in detail) */
+  // Platform admins may read an organization's stock, offers, stock history
+  // and order list (allow_admin_read in the backend), but not change them.
+  var activity = { orgId: null, seq: 0 };
+  var ORDER_LIMIT = 20, STOCK_LIMIT = 100;
+
+  function money(value, currency) {
+    if (value === null || value === undefined) return '—';
+    var n = Number(value);
+    return (isNaN(n) ? value : n.toLocaleString(undefined, { maximumFractionDigits: 2 })) + ' ' + (currency || '');
+  }
+
+  function organizationActivity(org, force) {
+    if (!force && activity.orgId === org.organization_id) return;
+    activity.orgId = org.organization_id;
+    var seq = ++activity.seq;
+    var stockBox = $('#org-inventory'), orderBox = $('#org-orders');
+    stockBox.replaceChildren(el('p', { class: 'empty', text: 'Loading…' }));
+    orderBox.replaceChildren(el('p', { class: 'empty', text: 'Loading…' }));
+
+    API.inventory.list(org.organization_id, { limit: STOCK_LIMIT }).then(function (page) {
+      if (seq !== activity.seq) return;
+      if (!page.items.length) { stockBox.replaceChildren(el('p', { class: 'empty', text: 'No stock recorded yet.' })); return; }
+      var tbody = el('tbody', {}, page.items.map(function (item) { return stockRow(org, item); }));
+      stockBox.replaceChildren(
+        el('div', { class: 'table-wrap' }, [el('table', {}, [
+          el('thead', {}, [el('tr', {}, ['Branch', 'Product', 'Quantity', 'Price', 'Shown as', 'Updated', ''].map(function (h) {
+            return el('th', {}, [h ? h : el('span', { class: 'sr-only', text: 'History' })]);
+          }))]),
+          tbody
+        ])]),
+        page.total > page.items.length ? el('p', { class: 'muted', text: 'Showing the first ' + page.items.length + ' of ' + page.total + ' stock records.' }) : null
+      );
+    }).catch(function (err) {
+      if (seq === activity.seq && !signedOut(err)) stockBox.replaceChildren(el('p', { class: 'error', text: errorText(err) }));
+    });
+
+    API.purchaseOrders.list({ organization_id: org.organization_id, limit: ORDER_LIMIT }).then(function (page) {
+      if (seq !== activity.seq) return;
+      if (!page.items.length) {
+        orderBox.replaceChildren(el('p', { class: 'empty', text: org.type === 'supplier' ? 'No orders received yet.' : 'No purchase orders yet.' }));
+        return;
+      }
+      var other = org.type === 'supplier' ? 'pharmacy' : 'supplier';
+      orderBox.replaceChildren(
+        el('div', { class: 'table-wrap' }, [el('table', {}, [
+          el('thead', {}, [el('tr', {}, ['Order', 'Status', other === 'supplier' ? 'Supplier' : 'Pharmacy', 'Lines', 'Total', 'Created', 'Submitted']
+            .map(function (h) { return el('th', { text: h }); }))]),
+          el('tbody', {}, page.items.map(function (o) {
+            var party = o[other];
+            return el('tr', {}, [
+              el('td', { text: '#' + o.purchase_order_id }),
+              el('td', {}, [badge(o.status)]),
+              el('td', {}, [el('strong', { text: party.name }), party.location_name ? el('small', { text: party.location_name }) : null]),
+              el('td', { text: String(o.item_count) }),
+              el('td', {}, [money(o.confirmed_total !== null ? o.confirmed_total : o.requested_total, o.currency),
+                o.confirmed_total !== null ? el('small', { text: 'Confirmed' }) : el('small', { text: 'Requested' })]),
+              el('td', { text: date(o.created_at) }),
+              el('td', { text: o.submitted_at ? date(o.submitted_at) : '—' })
+            ]);
+          }))
+        ])]),
+        el('p', { class: 'muted', text: (page.total > page.items.length ? 'The ' + page.items.length + ' most recent of ' + page.total + ' orders. ' : '') +
+          'Admins can see this list but not open an order: the backend gives order details only to the organizations involved.' })
+      );
+    }).catch(function (err) {
+      if (seq === activity.seq && !signedOut(err)) orderBox.replaceChildren(el('p', { class: 'error', text: errorText(err) }));
+    });
+  }
+
+  function stockRow(org, item) {
+    var offer = item.offer;
+    var details = [item.strength, item.dosage_form, item.pack_size].filter(Boolean).join(' · ');
+    var history = el('button', { type: 'button', class: 'secondary small', text: 'History',
+      'aria-label': 'Stock history of ' + item.product_name + ' at ' + item.location_name });
+    var row = el('tr', {}, [
+      el('td', { text: item.location_name }),
+      el('td', {}, [el('strong', { text: item.product_name }), el('small', { text: item.drug_name + (details ? ' · ' + details : '') })]),
+      el('td', { text: String(item.quantity) }),
+      el('td', {}, offer ? [money(offer.unit_price, offer.currency), el('small', { text: offer.is_listed ? 'Listed' : 'Not listed' })] : ['No price']),
+      el('td', { text: item.availability_status ? item.availability_status.replace(/_/g, ' ') : 'Not listed' }),
+      el('td', { text: date(item.last_updated, true) }),
+      el('td', {}, [history])
+    ]);
+    var open = null;
+    history.addEventListener('click', function () {
+      if (open) { open.remove(); open = null; history.textContent = 'History'; return; }
+      var restore = working(history, 'Loading…');
+      API.inventory.adjustments(org.organization_id, item.location_id, item.product_id, { limit: 20 }).then(function (page) {
+        var items = page.items || page;
+        open = el('tr', { class: 'history-row' }, [el('td', { colspan: '7' }, [
+          items.length ? el('ul', { class: 'history' }, items.map(function (a) {
+            return el('li', { text: date(a.changed_at, true) + ': ' + (a.old_quantity === null ? 'set to ' : a.old_quantity + ' → ') + a.new_quantity +
+              ' (' + String(a.change_type).replace(/_/g, ' ') + (a.changed_by_name ? ', by ' + a.changed_by_name : '') + ')' });
+          })) : el('p', { class: 'empty', text: 'No changes recorded.' })
+        ])]);
+        row.after(open);
+        restore();
+        history.textContent = 'Hide history';
+      }).catch(function (err) {
+        restore();
+        if (!signedOut(err)) toast(errorText(err));
+      });
+    });
+    return row;
+  }
+
   /* ------------------------------------------------------------ routing */
   var loaders = {
     overview: loadOverview,
@@ -679,6 +792,7 @@
   });
 
   window.ApexAdminConsole = {
-    show: function (name) { var load = loaders[name]; if (load) load(); }
+    show: function (name) { var load = loaders[name]; if (load) load(); },
+    organizationActivity: organizationActivity
   };
 })();

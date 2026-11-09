@@ -275,7 +275,8 @@
 
   $('#prev').addEventListener('click', function () { state.offset = Math.max(0, state.offset - PAGE_SIZE); loadList(); });
   $('#next').addEventListener('click', function () { state.offset += PAGE_SIZE; loadList(); });
-  $('#refresh').addEventListener('click', refreshAll);
+  var reloadActivity = false;
+  $('#refresh').addEventListener('click', function () { reloadActivity = true; refreshAll(); });
 
   function refreshAll() {
     refreshCounts();
@@ -284,6 +285,7 @@
   }
 
   function showList() {
+    state.openSeq = (state.openSeq || 0) + 1; // a detail still loading must not reappear
     state.current = null;
     $('#detail-view').hidden = true;
     $('#list-view').hidden = false;
@@ -293,14 +295,20 @@
   /* -------------------------------------------------------------- detail */
   function openOrganization(id, keepMessage) {
     if (!keepMessage) detailMessage('');
+    var seq = state.openSeq = (state.openSeq || 0) + 1; // only the latest request may show its result
     return API.admin.organization(id).then(function (org) {
+      if (seq !== state.openSeq) return; // the admin went back to the list, or opened another one
       state.current = org;
       $('#list-view').hidden = true;
       $('#detail-view').hidden = false;
       renderDetail(org);
+      // Stock and orders (read only): loaded when an organization is opened or
+      // refreshed, not again after each review on the same screen.
+      if (window.ApexAdminConsole) window.ApexAdminConsole.organizationActivity(org, !keepMessage || reloadActivity);
+      reloadActivity = false;
       if (!keepMessage) $('#detail-name').focus();
     }).catch(function (err) {
-      if (err.status !== 401) toast(errorText(err));
+      if (seq === state.openSeq && err.status !== 401) toast(errorText(err));
     });
   }
 
