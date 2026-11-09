@@ -1,7 +1,10 @@
 /*
- * ApexRX admin dashboard (admin.html).
+ * ApexRX admin dashboard (admin.html): sign-in, section tabs, and the
+ * Organizations section. The other sections (Overview, Documents, Users,
+ * Catalogue, Search insights) live in js/admin-console.js and use the helpers
+ * this file exposes as window.ApexAdmin.
  *
- * Uses only existing endpoints, through js/api.js:
+ * The Organizations section uses these endpoints, through js/api.js:
  *   POST /auth/login, GET /auth/me                    sign in, check is_platform_admin
  *   GET  /admin/organizations?type=&status=&q=        list, and the overview counts (its `total`)
  *   GET  /admin/organizations/{id}                    detail: locations, members, documents
@@ -100,13 +103,51 @@
   }
 
   function showDashboard(me) {
+    kit.me = me;
     $('#login-view').hidden = true;
     $('#who-email').textContent = me.email;
     $('#who').hidden = false;
     $('#dashboard-view').hidden = false;
     showList();
-    refreshAll();
+    showTab(tabFromHash());
   }
+
+  /* ---------------------------------------------------------------- tabs */
+  // One section at a time; the URL hash (#users, #catalogue, ...) keeps the
+  // current section across reloads and makes the browser's back button work.
+  var TABS = ['overview', 'organizations', 'documents', 'users', 'catalogue', 'insights'];
+  var pendingOpen = null; // organization to open when the Organizations tab shows
+  function tabFromHash() {
+    var name = location.hash.replace(/^#/, '');
+    return TABS.indexOf(name) !== -1 ? name : 'overview';
+  }
+  function showTab(name) {
+    document.querySelectorAll('[data-panel]').forEach(function (p) { p.hidden = p.dataset.panel !== name; });
+    document.querySelectorAll('#admin-tabs [data-tab]').forEach(function (a) {
+      var on = a.dataset.tab === name;
+      a.classList.toggle('active', on);
+      if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    if (name === 'organizations') {
+      if (pendingOpen !== null) {
+        var id = pendingOpen;
+        pendingOpen = null;
+        refreshCounts();
+        openOrganization(id);
+      } else {
+        refreshAll();
+      }
+    } else if (window.ApexAdminConsole) {
+      window.ApexAdminConsole.show(name);
+    }
+  }
+  function goTo(name) {
+    if (location.hash === '#' + name) showTab(name);
+    else location.hash = name; // the hashchange listener shows it
+  }
+  window.addEventListener('hashchange', function () {
+    if (!$('#dashboard-view').hidden) showTab(tabFromHash());
+  });
 
   // Confirms the signed-in account is a platform admin (for the UI only; the
   // backend refuses every /admin call from anyone else).
@@ -234,7 +275,8 @@
 
   $('#prev').addEventListener('click', function () { state.offset = Math.max(0, state.offset - PAGE_SIZE); loadList(); });
   $('#next').addEventListener('click', function () { state.offset += PAGE_SIZE; loadList(); });
-  $('#refresh').addEventListener('click', refreshAll);
+  var reloadActivity = false;
+  $('#refresh').addEventListener('click', function () { reloadActivity = true; refreshAll(); });
 
   function refreshAll() {
     refreshCounts();
@@ -243,6 +285,7 @@
   }
 
   function showList() {
+    state.openSeq = (state.openSeq || 0) + 1; // a detail still loading must not reappear
     state.current = null;
     $('#detail-view').hidden = true;
     $('#list-view').hidden = false;
@@ -252,14 +295,20 @@
   /* -------------------------------------------------------------- detail */
   function openOrganization(id, keepMessage) {
     if (!keepMessage) detailMessage('');
+    var seq = state.openSeq = (state.openSeq || 0) + 1; // only the latest request may show its result
     return API.admin.organization(id).then(function (org) {
+      if (seq !== state.openSeq) return; // the admin went back to the list, or opened another one
       state.current = org;
       $('#list-view').hidden = true;
       $('#detail-view').hidden = false;
       renderDetail(org);
+      // Stock and orders (read only): loaded when an organization is opened or
+      // refreshed, not again after each review on the same screen.
+      if (window.ApexAdminConsole) window.ApexAdminConsole.organizationActivity(org, !keepMessage || reloadActivity);
+      reloadActivity = false;
       if (!keepMessage) $('#detail-name').focus();
     }).catch(function (err) {
-      if (err.status !== 401) toast(errorText(err));
+      if (seq === state.openSeq && err.status !== 401) toast(errorText(err));
     });
   }
 
@@ -421,6 +470,37 @@
       ]);
     }));
   }
+
+  /* ------------------------------------------- shared with admin-console.js */
+  var kit = window.ApexAdmin = {
+    me: null,
+    el: el,
+    date: date,
+    size: size,
+    badge: badge,
+    cap: cap,
+    errorText: errorText,
+    toast: toast,
+    DOCUMENT_LABELS: DOCUMENT_LABELS,
+    goTo: goTo,
+    // Open one organization's review screen (from the document queue).
+    openOrganization: function (id) {
+      showList();
+      pendingOpen = id;
+      goTo('organizations');
+    },
+    // The Organizations list with a status filter (from the overview cards).
+    showOrganizations: function (status) {
+      var form = $('#filters');
+      form.type.value = '';
+      form.status.value = status || '';
+      form.q.value = '';
+      state.filters = { type: '', status: status || '', q: '' };
+      state.offset = 0;
+      showList();
+      goTo('organizations');
+    }
+  };
 
   /* ---------------------------------------------------------------- start */
   if (API.session.isSignedIn()) {

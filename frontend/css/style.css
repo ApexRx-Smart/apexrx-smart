@@ -603,3 +603,7 @@ footer.site.footer-wide{background:#121329;padding:76px 0 26px;}
    the muted footer-bottom text style so it never competes with search. */
 .footer-bottom .footer-admin-link{color:inherit;font-size:inherit;text-decoration:none;display:inline-block;padding:6px 0;}
 .footer-bottom .footer-admin-link:hover{color:#fff;text-decoration:underline;text-underline-offset:3px;}
+/* Copyright and the admin link stay together on the left, clear of the
+   "Powered by Netlify" badge that Netlify pins to the bottom-right corner. */
+.footer-bottom .footer-legal{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;}
+.footer-bottom .footer-sep{opacity:.6;}

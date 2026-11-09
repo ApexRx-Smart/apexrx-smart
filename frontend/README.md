@@ -17,6 +17,35 @@ A static site (HTML, CSS and vanilla JavaScript, no build step) that talks to th
 
 The backend address is set in `js/config.js` (`window.APEX_CONFIG.API_BASE_URL`), which every page loads before `js/api.js`. It points at the hosted Render backend. To use a local backend, change it to `http://127.0.0.1:8000` and don't commit that change. Whichever backend you use must list the site's address in `CORS_ORIGINS`.
 
+## Public pages
+
+| Page | What it is |
+|---|---|
+| `index.html` | Landing page: medicine search (`#hero-search`), the numbers and the call to action |
+| `how-it-works.html` | "Built for everyone in the medicine chain" and "How it works", moved from the landing page |
+| `about.html` | About ApexRX_Smart, Our Mission, Our Vision, Our Team and Our Organization. Placeholder copy (Lorem ipsum, "Team member name") to replace; see the comment at the top of the file |
+| `legal.html#privacy`, `#terms`, `#cookies` | One layout for the legal pages (`js/legal.js` shows the one in the address). Clearly marked placeholders, not approved policies |
+| `pharmacies.html` | Pharmacy registration and sign-in, then the pharmacy workspace |
+| `suppliers.html` | Supplier registration and sign-in (`js/suppliers.js`) |
+| `admin.html` | Admin console (staff only) |
+
+- **Shared header and footer:** `js/site-layout.js` provides them for `index.html`, `how-it-works.html`, `about.html` and `legal.html`, so the navigation is defined once.
+  - Each page includes it twice: `data-part="header"` and `data-part="footer"`. It renders in place, before `js/script.js`.
+  - `<body data-page="…">` marks the current page.
+  - `js/script.js` adds the translations, the mobile menu, and the **Sign in** / **Get started** buttons on every one of these pages.
+- **Main navigation:** For Pharmacies, For Suppliers, How it works, About. **For Patients** is not in the main navigation: patients use the search on the landing page.
+- **Footer links:**
+  - Product: For Patients goes to `index.html#hero-search` (`#hero-search` on the landing page itself). The others go to the registration pages and How it works.
+  - Company: all four links go to `about.html` for now.
+  - Legal: the three legal pages.
+  - Admin Portal: bottom left, next to the copyright.
+- **Show/hide password:** `js/password-toggle.js` adds an eye button to every password field on `pharmacies.html`, `suppliers.html` and `admin.html`.
+  - It has a "Show password" / "Hide password" label (English, French, Kinyarwanda) and `aria-pressed`, and works from the keyboard.
+  - Fields go back to hidden when their form is submitted.
+- **Sign in or create account:** both registration pages have an "Already have an account? Sign in" switch on their first step, and `#signin` opens it directly; the homepage **Sign in** button uses `pharmacies.html#signin`.
+  - Sign-in mode asks only for email and password, and calls `POST /auth/login`.
+  - A supplier-only account signing in on the pharmacy page is pointed to `suppliers.html`, instead of being asked to register a pharmacy.
+
 ## How the pages use the API
 
 All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend endpoint. The pharmacy workspace sections live in `js/workspace.js`. It turns error responses into `ApiError` objects with a readable `message`. It keeps the access token in `sessionStorage`, so the token is cleared when the tab closes.
@@ -24,8 +53,8 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 | Page / control | Endpoint |
 |---|---|
 | Homepage medicine search | `GET /search/pharmacies?q=`: availability status, price, location and freshness. Never exact quantities. |
-| Homepage **Sign in** / **Get started** | Open `pharmacies.html` |
-| Pharmacies step 1, Account | `POST /auth/register`, then `POST /auth/login`. If the email already has an account, the same form signs in. |
+| Homepage **Sign in** / **Get started** | Open `pharmacies.html#signin` / `pharmacies.html` |
+| Pharmacies step 1, Account | **Create account:** `POST /auth/register`, then `POST /auth/login` (an email that already has an account signs in). **Sign in:** `POST /auth/login` only. |
 | Pharmacies step 2, Verify | `GET /auth/phone/status`, then `POST /auth/phone/send-code` and `POST /auth/phone/verify`. The step is skipped when the number is already verified or the backend doesn't require it. **Resend code** counts down `resend_after` |
 | Pharmacies step 3, Profile | `POST /organizations` (type `pharmacy`). The phone field is filled with the verified number, read-only, and the backend enforces it, `POST /organizations/{id}/locations`, `POST /organizations/{id}/documents` for each selected file. Coming back to this step updates the same records with `PATCH`. |
 | Workspace name, avatar and profile | `GET /auth/me`, `GET /organizations/{id}`, `GET /organizations/{id}/locations` |
@@ -38,6 +67,13 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 | **Restart demo** | Signs out |
 
 **Just exploring?** still opens the workspace with sample data and no account.
+
+| Supplier page (`suppliers.html`) | Endpoint |
+|---|---|
+| Step 1, Account | As on the pharmacy page: create an account, or sign in |
+| Step 2, Business | `POST /organizations` with **`type: "supplier"`**: the caller becomes owner, and the status starts as `pending`. Then `POST /organizations/{id}/locations` (the warehouse) and `POST /organizations/{id}/documents` (business license, owner ID). Coming back updates the same records with `PATCH`. No SMS step: the backend requires a verified phone only for pharmacies |
+| Step 3, Review | `GET /organizations/{id}`, `/locations`, `/documents`: status, warehouses and document review status. Owners and managers can **Edit business details** and **Add a document**. **Check status** reloads |
+| Approval | In the admin console, like pharmacies |
 
 ### Pharmacy workspace sections (`js/workspace.js`)
 
@@ -63,12 +99,25 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 | Control | Endpoint |
 |---|---|
 | Sign in | `POST /auth/login`, then `GET /auth/me`. Refused unless `is_platform_admin` |
-| Overview counts | `GET /admin/organizations?limit=1` with each `type` / `status` filter, using its `total` |
+| Tabs | Overview, Organizations, Documents, Users, Catalogue, Search insights. The current tab is in the URL hash. `js/admin.js` (sign-in, tabs, organizations) and `js/admin-console.js` (the other sections) |
+| **Overview** cards | The `total` of `GET /admin/organizations`, `/admin/documents?status=pending`, `/admin/users` (and `?is_platform_admin=true`), `/catalogue/drugs`, `/catalogue/products` (and `?include_inactive=true`), each with `limit=1`. Plus `GET /admin/insights/searches?days=30&limit=5` (and `&only_unmet=true`) |
+| Organization counts | `GET /admin/organizations?limit=1` with each `type` / `status` filter, using its `total` |
 | Organization table, filters, search, pages | `GET /admin/organizations?type=&status=&q=&limit=&offset=` |
 | **Open** | `GET /admin/organizations/{id}`: profile, locations, members and documents |
+| Detail: stock and orders (read only) | `GET /organizations/{id}/inventory`, `GET .../locations/{loc}/stock/{product}/adjustments` (**History**), `GET /purchase-orders?organization_id=` |
 | **Approve** / **Reject** / **Suspend** | `POST /admin/organizations/{id}/review` (notes required to reject or suspend) |
 | Document **Download** | `GET /admin/documents/{id}/download`: streamed by the backend from the private bucket |
 | **Approve document** / **Reject document** | `POST /admin/documents/{id}/review` (a reason is required to reject) |
+| **Documents** queue, status filter, pages | `GET /admin/documents?status=pending\|approved\|rejected`. Download and review as above. **Open organization** shows its detail |
+| **Users** list, search, admin filter, pages | `GET /admin/users?q=&is_platform_admin=` |
+| **Deactivate** / **Reactivate**, **Make admin** / **Remove admin** | `PATCH /admin/users/{id}` with `is_active` / `is_platform_admin`, after a confirmation. Not shown on your own row |
+| **Drugs** list, search, pages | `GET /catalogue/drugs?q=` |
+| **Add drug** / **Edit** | `POST /catalogue/drugs`, `PATCH /catalogue/drugs/{id}` (only the changed fields). A 409 duplicate is shown on the form |
+| **View products** (of a drug) | `GET /catalogue/products?drug_id=` |
+| **Products** list, search, include retired, pages | `GET /catalogue/products?q=&drug_id=&include_inactive=` |
+| **Add product** / **Edit** | `POST /catalogue/products`, `PATCH /catalogue/products/{id}` (only the changed fields; a cleared field is sent as `null`). The drug is chosen from `GET /catalogue/drugs?q=`. A 409 duplicate or barcode is shown on the form |
+| **Retire** / **Reactivate** | `PATCH /catalogue/products/{id}` with `is_active`, after a confirmation |
+| **Search insights** | `GET /admin/insights/searches?days=&limit=&only_unmet=`. **Check catalogue** searches the products list for that text |
 | **Sign out**, expired token | Clears the session and shows the sign-in screen |
 
 ## Not connected yet (no backend support in the v6 data model)
@@ -79,5 +128,7 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 - **Supplier chat:** messages in the sample chat dialog stay in the browser. Live suppliers are contacted on WhatsApp or by phone, as the roles document describes.
 - **Homepage map pins and headline numbers:** illustrative content, unchanged. No public endpoint lists every pharmacy or returns platform totals.
 - **Supplier search by supplier name:** `/supplier-offers` searches by medicine. Supplier names are matched only among suppliers you have already ordered from.
-- **Supplier workspace:** suppliers have no screens yet. They manage stock and incoming orders through the API.
+- **Supplier workspace:** suppliers can register and follow their verification on `suppliers.html`. There are no screens for stock, prices or incoming orders yet; suppliers use the API for those.
+- **Supplier documents:** suppliers are asked for a business license and an owner ID, the generic types the admin console already knows. The project's roles document says the exact supplier document requirements are still to be confirmed. The backend accepts any document type, so adding types later is a frontend change only.
+- **Translations:** the About and Legal page bodies are English only (their header and footer are translated). The new Kinyarwanda strings on the registration pages should be reviewed by a native speaker.
 - **Translations:** the new workspace sections are in English only (French and Kinyarwanda fall back to English).

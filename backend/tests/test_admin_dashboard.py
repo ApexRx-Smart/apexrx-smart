@@ -235,3 +235,34 @@ def test_approval_requires_reviewed_documents(client, orgs, fake_bucket):
 
     approve(client, h, org_id)
     assert _status_in_db(org_id)[0] == "approved"
+
+
+# ---------------------------------------------------------------------------
+# Every write the admin console (frontend/js/admin-console.js) can make is
+# refused to regular users and anonymous callers, and leaves nothing changed.
+# ---------------------------------------------------------------------------
+def test_admin_console_writes_require_platform_admin(client):
+    admin_h = admin(client)
+    drug = client.post("/catalogue/drugs", json={"name": "Consoletol"}, headers=admin_h).json()
+    product = client.post("/catalogue/products", json={"drug_id": drug["drug_id"], "product_name": "Consoletol 500mg"},
+                          headers=admin_h).json()
+    regular = user(client, "regular@x.example.com")
+    target = client.get("/admin/users", params={"q": "regular@x.example.com"}, headers=admin_h).json()["items"][0]
+
+    writes = [
+        ("patch", f"/admin/users/{target['user_id']}", {"is_platform_admin": True}),
+        ("patch", f"/admin/users/{target['user_id']}", {"is_active": False}),
+        ("post", "/catalogue/drugs", {"name": "Sneakytol"}),
+        ("patch", f"/catalogue/drugs/{drug['drug_id']}", {"name": "Renamed"}),
+        ("post", "/catalogue/products", {"drug_id": drug["drug_id"], "product_name": "Sneaky 1mg"}),
+        ("patch", f"/catalogue/products/{product['product_id']}", {"is_active": False}),
+    ]
+    for method, path, body in writes:
+        assert getattr(client, method)(path, json=body, headers=regular).status_code == 403, path
+        assert getattr(client, method)(path, json=body).status_code == 401, path
+
+    me = client.get("/auth/me", headers=regular).json()
+    assert me["is_platform_admin"] is False and me["is_active"] is True
+    assert client.get(f"/catalogue/drugs/{drug['drug_id']}").json()["name"] == "Consoletol"
+    assert client.get(f"/catalogue/products/{product['product_id']}").json()["is_active"] is True
+    assert client.get("/catalogue/drugs", params={"q": "Sneakytol"}).json()["total"] == 0
