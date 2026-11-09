@@ -242,8 +242,9 @@ def main():
         confirm_eye.click()
         page.click("#auth-switch")
         check("pharmacy: 'Already have an account? Sign in' switches to sign in",
-              page.is_hidden("#confirm-field") and page.inner_text("#step-title") == "Sign in to ApexRX"
-              and page.evaluate("location.hash") == "#signin")
+              page.is_hidden("#confirm-field") and page.inner_text("#step-title") == "Staff sign-in"
+              and page.evaluate("location.hash") == "#signin"
+              and page.get_attribute("#tab-signin", "aria-selected") == "true" and page.is_visible("#forgot-link"))
         page.click("#auth-switch")
         check("pharmacy: ...and back to create account", page.is_visible("#confirm-field"))
         steps = [s.strip() for s in page.locator(".steps li").all_inner_texts()]

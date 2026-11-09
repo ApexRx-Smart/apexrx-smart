@@ -17,6 +17,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 
@@ -128,14 +129,17 @@ def new_page(browser):
     return page
 
 
-def sign_in(page, email):
+def sign_in(page, email, org=None):
     page.goto(SITE + "/pharmacies.html")
     for field, value in (("email", email), ("password", PW), ("confirm", PW)):
         page.fill(f"#account [name={field}]", value)
     page.click("#account button.primary")
     page.wait_for_function("!document.querySelector('#dashboard').hidden || !document.querySelector('#verify-email').hidden"
-                           " || !document.querySelector('#details').hidden || !document.querySelector('#review').hidden",
-                           timeout=20000)
+                           " || !document.querySelector('#details').hidden || !document.querySelector('#review').hidden"
+                           " || !document.querySelector('#org-choice').hidden", timeout=20000)
+    if page.is_visible("#org-choice"):  # a member of several pharmacies chooses one
+        page.click(f"#org-choice-list button[data-org='{org}']" if org else "#org-choice-list button")
+        page.wait_for_selector("#dashboard:not([hidden])", timeout=20000)
 
 
 def open_view(page, name):
@@ -202,14 +206,20 @@ def main():
         # 5-7 Employees.
         open_view(owner, "employees")
         check("5. members listed", f"ws-owner-{RUN}@example.com" in owner.text_content("#workspace-section"))
-        m = owner.locator("#member-form")
+        m = owner.locator("#invite-form")
         for key, role in (("manager", "manager"), ("staff", "staff"), ("helper", "staff")):
             m.locator("[name=email]").fill(w[key + "_email"])
             m.locator("[name=role]").select_option(role)
             m.locator("button.primary-sm").click()
+            wait_text(owner, "#invite-status", f"Invitation emailed to {w[key + '_email']}")
+            # Each person accepts with their own account (the link from their email).
+            mail = call("GET", "/dev/email/latest-to?" + urllib.parse.urlencode({"to": w[key + "_email"]}))
+            call("POST", "/invitations/accept", {"token": mail["token"]}, w[key])
+        open_view(owner, "employees")
+        for key in ("manager", "staff", "helper"):
             owner.wait_for_selector(f"tr[data-member='{w[key + '_email']}']")
         members = {x["email"]: x["role"] for x in call("GET", f"/organizations/{w['org']}/members", token=w["owner"])}
-        check("6. existing accounts added with their roles (no new accounts)",
+        check("6. invited existing accounts joined with their roles (no new accounts)",
               members.get(w["manager_email"]) == "manager" and members.get(w["staff_email"]) == "staff")
         hr = owner.locator(f"tr[data-member='{w['helper_email']}']")
         hr.locator("select").select_option("manager")
@@ -217,11 +227,15 @@ def main():
         wait_text(owner, "#notice", f"{w['helper_email']} is now manager")  # the save finished
         members = {x["email"]: x["role"] for x in call("GET", f"/organizations/{w['org']}/members", token=w["owner"])}
         check("7. role updated by the owner", members.get(w["helper_email"]) == "manager")
-        s, body = call("POST", f"/organizations/{w['org']}/members", {"email": f"nobody-{RUN}@example.com", "role": "staff"}, w["owner"], expect_error=True)
+        owner.wait_for_selector("#workspace-section:not(.ws-refreshing)")  # the role save re-renders the section
+        owner.wait_for_selector(f"tr[data-member='{w['helper_email']}']")
         m.locator("[name=email]").fill(f"nobody-{RUN}@example.com")
         m.locator("button.primary-sm").click()
-        wait_text(owner, "#member-form", "Ask them to register first")
-        check("   adding an unknown email shows the backend's error", s == 404)
+        wait_text(owner, "#invite-status", f"Invitation emailed to nobody-{RUN}@example.com")
+        members = {x["email"] for x in call("GET", f"/organizations/{w['org']}/members", token=w["owner"])}
+        check("   an email without an account gets a pending invitation, not a membership",
+              f"nobody-{RUN}@example.com" not in members
+              and "Pending" in owner.inner_text(f"tr[data-invite='nobody-{RUN}@example.com']"))
 
         # 8-10 Inventory per branch.
         open_view(owner, "inventory")
@@ -264,7 +278,7 @@ def main():
 
         # 12-14 Purchase orders as a manager.
         mgr = new_page(browser)
-        sign_in(mgr, w["manager_email"])
+        sign_in(mgr, w["manager_email"], w["org"])
         if mgr.is_visible("#org-switch-label"):
             mgr.select_option("#org-switch", str(w["org"]))
             wait_text(mgr, "#pharmacy-name", f"Kigali Care {RUN}")
@@ -365,8 +379,12 @@ def main():
         joiner.click("#join-existing")
         joiner.wait_for_selector("#join-wait:not([hidden])")
         joiner.click("#join-check")
-        wait_text(joiner, "#join-status", "not been added")
-        call("POST", f"/organizations/{w['org']}/members", {"email": email, "role": "staff"}, w["owner"])
+        wait_text(joiner, "#join-status", "not joined a pharmacy yet")
+        # The owner invites them; they accept with their (already signed-in) account.
+        call("POST", f"/organizations/{w['org']}/invitations", {"email": email, "role": "staff"}, w["owner"])
+        link_token = call("GET", "/dev/email/latest-to?" + urllib.parse.urlencode({"to": email}))["token"]
+        call("POST", "/invitations/accept", {"token": link_token},
+             call("POST", "/auth/login", {"email": email, "password": PW})["access_token"])
         joiner.click("#join-check")
         joiner.wait_for_selector("#dashboard:not([hidden])")
         check("employee who registered waits, then joins without creating a pharmacy",

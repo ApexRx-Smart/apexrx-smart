@@ -338,9 +338,12 @@ def main():
         time.sleep(wait + 0.5)
         page.wait_for_function("!document.querySelector('#resend-email').disabled", timeout=10000)
         page.click("#resend-email")
-        page.wait_for_function(f"fetch('{API}/dev/email/latest', {{headers: {{Authorization: 'Bearer {token2}'}}}})"
-                               f".then(r => r.json()).then(m => m.token !== '{first['token']}')", timeout=15000)
+        # Wait (in Python) until the new email is there: the request runs after the click.
+        deadline = time.time() + 15
         second = latest_email(token2)
+        while second["token"] == first["token"] and time.time() < deadline:
+            time.sleep(0.3)
+            second = latest_email(token2)
         check("resend: a new email with a new link", second["token"] != first["token"])
         tab = open_link(ctx, first["link"], errors, allowed=("status of 400",))
         check("verify page: the older link is refused as replaced by a newer email",
