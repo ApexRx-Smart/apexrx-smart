@@ -436,8 +436,9 @@
     products.busy = true;
     var restore = working(button, active ? 'Reactivating…' : 'Retiring…');
     API.catalogue.updateProduct(p.product_id, { is_active: active }).then(function (updated) {
-      notice('#product-message', updated.product_name + (active ? ' is active again.' : ' has been retired.'));
-      return loadProducts();
+      return loadProducts().then(function () {
+        notice('#product-message', updated.product_name + (active ? ' is active again.' : ' has been retired.'));
+      });
     }).catch(function (err) {
       restore();
       if (!signedOut(err)) notice('#product-message', errorText(err), true);
@@ -524,10 +525,12 @@
     request.then(function (saved) {
       form.hidden = true;
       products.editing = null;
-      notice('#product-message', saved.product_name + (editing ? ' updated.' : ' added to the catalogue.'));
-      toast(editing ? 'Product updated.' : 'Product added.');
       if (!editing) products.offset = 0;
-      return loadProducts();
+      // Confirm once the list shows the change, not before.
+      return loadProducts().then(function () {
+        notice('#product-message', saved.product_name + (editing ? ' updated.' : ' added to the catalogue.'));
+        toast(editing ? 'Product updated.' : 'Product added.');
+      });
     }).catch(function (err) {
       if (signedOut(err)) return;
       error.textContent = err.status === 409 ? errorText(err) + ' Search for it before adding it again.' : errorText(err);
@@ -604,9 +607,11 @@
     request.then(function (saved) {
       form.hidden = true;
       drugs.editing = null;
-      notice('#drug-message', saved.name + (editing ? ' updated.' : ' added to the catalogue.'));
-      toast(editing ? 'Drug updated.' : 'Drug added.');
-      return loadDrugs();
+      // Confirm once the list shows the change, not before.
+      return loadDrugs().then(function () {
+        notice('#drug-message', saved.name + (editing ? ' updated.' : ' added to the catalogue.'));
+        toast(editing ? 'Drug updated.' : 'Drug added.');
+      });
     }).catch(function (err) {
       if (signedOut(err)) return;
       error.textContent = err.status === 409 ? errorText(err) + ' Search the list to find the existing drug.' : errorText(err);
