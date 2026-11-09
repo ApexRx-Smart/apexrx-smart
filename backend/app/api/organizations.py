@@ -19,7 +19,7 @@ from app.api.deps import (
 from app.core.config import settings
 from app.core.errors import AppError, Conflict, Forbidden, NotFound
 from app.models import Location, Membership, Organization, OrganizationDocument, User
-from app.models.enums import DocumentStatus, MembershipRole, OrganizationStatus, OrganizationType
+from app.models.enums import DocumentStatus, MembershipRole, OrganizationStatus
 from app.schemas.common import Message
 from app.schemas.organizations import (
     DocumentResponse,
@@ -43,29 +43,15 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 # Organizations
 # ---------------------------------------------------------------------------
-def _same_number(a: str | None, b: str | None) -> bool:
-    if not a or not b:
-        return False
-    if a.strip() == b.strip():  # unchanged, even if it is not a valid number
-        return True
+def _contact_phone(raw: str | None) -> str | None:
+    """Business contact number (also for future Mobile Money), stored in E.164.
+    Not a verification: nobody proves they own it."""
+    if raw is None or not raw.strip():
+        return None
     try:
-        return normalize_phone(a, mobile_only=False) == normalize_phone(b, mobile_only=False)
-    except PhoneNumberError:
-        return False
-
-
-def verified_pharmacy_phone(user: User, requested: str | None) -> str:
-    """The phone a pharmacy may use: the caller's SMS-verified number.
-
-    Enforced on the server whatever the frontend sends (see
-    app/api/phone_verification.py): no verified number -> 403; a different
-    number -> 400.
-    """
-    if not user.verified_phone:
-        raise Forbidden("Verify your mobile number by SMS before registering a pharmacy.")
-    if requested and not _same_number(requested, user.verified_phone):
-        raise AppError(f"The pharmacy phone must be the mobile number you verified ({user.verified_phone}).")
-    return user.verified_phone
+        return normalize_phone(raw, mobile_only=False)
+    except PhoneNumberError as exc:
+        raise AppError(str(exc), status_code=status.HTTP_422_UNPROCESSABLE_CONTENT) from None
 
 
 @router.post("", response_model=MyOrganizationResponse, status_code=status.HTTP_201_CREATED)
@@ -73,12 +59,14 @@ def create_organization(payload: OrganizationCreate, user: CurrentUser, db: DbSe
     """Register a pharmacy or supplier organization. The caller becomes its
     owner. The organization stays ``pending`` until an ApexRx admin approves it.
 
-    Pharmacies need the caller's phone verified by SMS first (when
-    PHONE_VERIFICATION_REQUIRED is on); the verified number becomes the
-    pharmacy's phone."""
-    phone = payload.phone
-    if payload.type == OrganizationType.PHARMACY and settings.phone_verification_required:
-        phone = verified_pharmacy_phone(user, payload.phone)
+    The caller's account email must be verified first (when
+    EMAIL_VERIFICATION_REQUIRED is on; see app/api/email_verification.py)."""
+    if settings.email_verification_required and user.email_verified_at is None:
+        raise Forbidden(
+            "Verify your email address before registering an organization.",
+            extra={"reason": "email_unverified"},
+        )
+    phone = _contact_phone(payload.phone)
     organization = Organization(
         name=payload.name,
         type=payload.type,
@@ -127,18 +115,8 @@ def update_organization(organization_id: int, payload: OrganizationUpdate, user:
         raise AppError("name cannot be null.")
     if data.get("email"):
         data["email"] = str(data["email"]).lower()
-    if (
-        "phone" in data
-        and organization.type == OrganizationType.PHARMACY
-        and settings.phone_verification_required
-    ):
-        if _same_number(data["phone"], organization.phone):
-            data["phone"] = organization.phone  # unchanged: keep the stored (E.164) form
-        elif data["phone"] is None and organization.phone:
-            raise AppError("A pharmacy must keep a verified phone number.")
-        elif data["phone"] is not None:
-            # Changing a pharmacy's number needs the new number to be verified.
-            data["phone"] = verified_pharmacy_phone(user, data["phone"])
+    if "phone" in data:
+        data["phone"] = _contact_phone(data["phone"])
     for field, value in data.items():
         setattr(organization, field, value)
     db.commit()

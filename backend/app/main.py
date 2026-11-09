@@ -6,12 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.api import admin, auth, catalogue, dev, inventory, orders, organizations, phone_verification, search
+from app.api import admin, auth, catalogue, dev, email_verification, inventory, orders, organizations, search
 from app.core import schema
 from app.core.config import settings
 from app.core.database import engine
 from app.core.errors import AppError, register_error_handlers
-from app.services.sms import sms_configuration_problem
+from app.services.email import email_configuration_problem
 
 logging.basicConfig(level=logging.INFO)
 
@@ -56,8 +56,8 @@ register_error_handlers(app)
 
 _log = logging.getLogger("apexrx")
 
-# Development behaviour (mock SMS, /dev endpoints) must never run on the hosted
-# service: refuse to start rather than expose test codes.
+# Development behaviour (mock email, /dev endpoints) must never run on the hosted
+# service: refuse to start rather than expose test verification links.
 if os.environ.get("RENDER") and not settings.is_production:
     raise RuntimeError(
         f"APP_ENV={settings.app_env!r} on Render. The hosted service must run with APP_ENV=production."
@@ -74,12 +74,14 @@ try:
 except SQLAlchemyError as _exc:
     _log.error("Could not check the database schema version at startup: %s", type(_exc).__name__)
 
-_sms_problem = sms_configuration_problem()
-if _sms_problem:
+_email_problem = email_configuration_problem()
+if _email_problem:
     _log.warning(
-        "SMS phone verification is unavailable (%s). Sending codes returns 503%s.",
-        _sms_problem,
-        "; new pharmacies cannot register until it is configured" if settings.phone_verification_required else "",
+        "Email verification is unavailable (%s). Sending verification emails returns 503%s.",
+        _email_problem,
+        "; new pharmacies and suppliers cannot register until it is configured"
+        if settings.email_verification_required
+        else "",
     )
 
 if os.environ.get("RENDER") and not settings.trusted_client_ip_header:
@@ -90,7 +92,7 @@ if os.environ.get("RENDER") and not settings.trusted_client_ip_header:
     )
 
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
-app.include_router(phone_verification.router, prefix="/auth/phone", tags=["Phone verification"])
+app.include_router(email_verification.router, prefix="/auth/email", tags=["Email verification"])
 app.include_router(search.router, prefix="/search", tags=["Search"])
 app.include_router(catalogue.router, prefix="/catalogue", tags=["Catalogue"])
 app.include_router(organizations.router, prefix="/organizations", tags=["Organizations"])

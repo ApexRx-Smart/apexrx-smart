@@ -13,17 +13,17 @@ from app.models.orders import (
     PurchaseOrderItem,
     PurchaseOrderStatusHistory,
 )
-from app.models.verification import PhoneVerification
+from app.models.verification import EmailVerification
 from app.models.views import patient_availability, supplier_listing
 
 __all__ = [
     "Base",
     "Drug",
+    "EmailVerification",
     "Location",
     "Membership",
     "Organization",
     "OrganizationDocument",
-    "PhoneVerification",
     "Product",
     "ProductOffer",
     "PurchaseOrder",

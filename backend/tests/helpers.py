@@ -31,35 +31,28 @@ def admin(client, email: str = "admin@apexrx.example.com") -> dict:
     return login(client, email)
 
 
-TEST_PHONE = "+250788000001"
-
-
-def mark_phone_verified(client, headers, phone: str = TEST_PHONE) -> None:
-    """Test shortcut: mark the caller's phone as SMS-verified directly in the
-    test database. The real flow is covered in tests/test_phone_otp.py."""
+def mark_email_verified(client, headers) -> None:
+    """Test shortcut: mark the caller's email as verified directly in the test
+    database. The real flow is covered in tests/test_email_verification.py."""
     me = client.get("/auth/me", headers=headers).json()
-    if me.get("verified_phone"):
+    if me.get("email_verified"):
         return
     with engine.begin() as conn:
-        conn.execute(
-            text("UPDATE app_user SET verified_phone = :p, phone_verified_at = now() WHERE user_id = :u"),
-            {"p": phone, "u": me["user_id"]},
-        )
+        conn.execute(text("UPDATE app_user SET email_verified_at = now() WHERE user_id = :u"), {"u": me["user_id"]})
 
 
-def verify_phone_via_api(client, headers, phone: str = "0788123456") -> str:
-    """The real flow: send a code (mock SMS), read it from /dev/sms/latest, verify."""
-    r = client.post("/auth/phone/send-code", json={"phone": phone}, headers=headers)
+def verify_email_via_api(client, headers, next_page: str | None = "pharmacy") -> str:
+    """The real flow: send a link (mock email), read it from /dev/email/latest, verify."""
+    r = client.post("/auth/email/send", json={"next": next_page}, headers=headers)
     assert r.status_code == 200, r.text
-    code = client.get("/dev/sms/latest", headers=headers).json()["code"]
-    r = client.post("/auth/phone/verify", json={"phone": phone, "code": code}, headers=headers)
+    token = client.get("/dev/email/latest", headers=headers).json()["token"]
+    r = client.post("/auth/email/verify", json={"token": token})
     assert r.status_code == 200, r.text
-    return r.json()["verified_phone"]
+    return token
 
 
 def organization(client, headers, type_: str, name: str) -> int:
-    if type_ == "pharmacy":
-        mark_phone_verified(client, headers)
+    mark_email_verified(client, headers)
     r = client.post("/organizations", json={"name": name, "type": type_}, headers=headers)
     assert r.status_code == 201, r.text
     return r.json()["organization_id"]

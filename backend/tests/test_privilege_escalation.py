@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.database import engine
-from tests.helpers import PASSWORD, admin, login, mark_phone_verified, organization, register, user
+from tests.helpers import PASSWORD, admin, login, mark_email_verified, organization, register, user
 
 
 def _is_admin(email):
@@ -61,7 +61,7 @@ def test_non_admin_cannot_use_admin_user_endpoint_on_self(client):
 
 def test_organization_requests_cannot_self_approve_or_promote(client):
     h = user(client, "m@x.example.com")
-    mark_phone_verified(client, h)
+    mark_email_verified(client, h)
     org = client.post(
         "/organizations",
         json={"name": "Mine", "type": "pharmacy", "status": "approved", "is_platform_admin": True},

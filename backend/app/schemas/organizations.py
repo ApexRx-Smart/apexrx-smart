@@ -77,9 +77,14 @@ class MemberResponse(BaseModel):
 
 # Locations --------------------------------------------------------------------
 class _LocationFields(BaseModel):
+    # Rwandan address: region = province, city = district, then sector, cell
+    # and village; address = street or landmark.
     address: LongText | None = None
     city: ShortText | None = None
     region: ShortText | None = None
+    sector: ShortText | None = None
+    cell: ShortText | None = None
+    village: ShortText | None = None
     latitude: Latitude | None = None
     longitude: Longitude | None = None
     phone: Phone | None = None
@@ -113,6 +118,9 @@ class LocationResponse(ORMModel):
     address: str | None
     city: str | None
     region: str | None
+    sector: str | None = None
+    cell: str | None = None
+    village: str | None = None
     latitude: Decimal | None
     longitude: Decimal | None
     phone: str | None
