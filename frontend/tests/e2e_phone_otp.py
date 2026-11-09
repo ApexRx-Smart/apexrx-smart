@@ -106,7 +106,14 @@ def main():
         page.wait_for_function("!document.querySelector('#resend-code').disabled", timeout=15000)
         page.click("#resend-code")
         page.wait_for_function("document.querySelector('#resend-code').disabled")
-        new_code = page.evaluate(DEV_CODE, API)
+        # The button is disabled as soon as it is clicked, before the new SMS is
+        # sent: wait until the latest SMS carries a different code.
+        new_code = code
+        for _ in range(50):
+            new_code = page.evaluate(DEV_CODE, API)
+            if new_code and new_code != code:
+                break
+            page.wait_for_timeout(200)
         check("resend sent a new code", bool(new_code))
         if new_code != code:
             page.fill("#verify [name=code]", code)
