@@ -104,6 +104,15 @@ Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
   - It also lists suppliers from the pharmacy's purchase orders and searches supplier stock with `GET /supplier-offers`, which works only for approved pharmacies. **Open chat** opens the supplier's WhatsApp or phone.
   - Buttons follow the user's role, but the backend enforces every rule.
 - **Joining an existing pharmacy:** someone who registers to work at an existing pharmacy chooses "Joining an existing pharmacy instead?". They wait for the owner or a manager to add their email, instead of registering a new pharmacy.
+- **Supplier registration (`suppliers.html`):**
+  - A supplier creates an account (or signs in).
+  - It then registers the business, its warehouse and its documents with `POST /organizations` and `type: "supplier"`, and follows its verification status.
+  - Same API and admin review as pharmacies. No SMS step, because the backend requires it only for pharmacies.
+- **Public pages:**
+  - `how-it-works.html`, `about.html` (placeholder content to replace) and `legal.html` (placeholder privacy, terms and cookie pages, not approved policies).
+  - They share one header and footer, from `js/site-layout.js`.
+  - Both registration pages have an "Already have an account? Sign in" switch, and every password field has a show/hide button.
+  - See `frontend/README.md`.
 - **Just exploring?** still opens the workspace with sample data and no account.
 
 - **The admin dashboard** (`admin.html`) lets ApexRX staff review registrations. See [Admin dashboard](#admin-dashboard).
@@ -362,7 +371,7 @@ Verification documents are files in a **private Supabase Storage bucket**. Their
 
 ## Admin dashboard
 
-`frontend/admin.html` is for ApexRX staff. It is not linked from the public pages and is marked `noindex`. It uses only the existing endpoints:
+`frontend/admin.html` is for ApexRX staff. It is marked `noindex`; the only public link is the discreet "Admin Portal" link in the homepage footer, which sits on the left, next to the copyright, clear of the "Powered by Netlify" badge in the bottom-right corner. It uses only existing endpoints, and has one tab per area. The current tab is kept in the URL (`#users`, `#catalogue` and so on).
 
 - **Sign in:** with the normal ApexRX login. Accounts that aren't platform admins are refused, and their token is cleared. The token is kept in `sessionStorage`, like the rest of the site. An expired or invalid token returns you to the sign-in screen. **Sign out** clears it.
 - **Overview:**
@@ -370,14 +379,53 @@ Verification documents are files in a **private Supabase Storage bucket**. Their
   - They come from `GET /admin/organizations/counts`: one request and one grouped query for all seven numbers.
   - Clicking a count filters the list by it.
 - **Organizations:** a table of name, type, registration date, status and contact details. It has type and status filters, a name or email search, and pagination.
+  - What needs attention: organizations and documents awaiting review.
+  - Platform numbers: organizations, user accounts, platform administrators, drugs, active products and retired products.
+  - The five most searched medicines, and the five searches with no results, over the last 30 days.
+  - Each number is the `total` of an existing list endpoint (`limit=1`). There is no summary endpoint. Each card opens the matching section.
+- **Organizations:**
+  - Seven counts at the top: total, pharmacies, suppliers, pending, approved, rejected and suspended. Clicking a count filters the list by it.
+  - A table of name, type, registration date, status and contact details, with type and status filters, a name or email search, and pagination.
 - **Organization detail:**
   - **Information:** profile, contacts, review history, locations, members and verification documents.
   - **Documents:** download any document, then approve it or reject it with a reason.
   - **Organization:** approve, reject with notes, or suspend with notes. Only the actions the backend allows from the current status are shown. **Approve** stays disabled while any document is pending.
+  - **Stock and purchase orders (read only):**
+    - The organization's stock, prices and listing per branch, with each item's change history.
+    - Its 20 most recent purchase orders.
+    - Admins may read these but not change them. They cannot open a single order: the backend gives order details only to the organizations involved.
 
-Every rule is enforced by the backend (`require_platform_admin` on every `/admin` route, `ORG_TRANSITIONS`, the pending-documents check). The page's buttons are only for usability. All values from the API are inserted as text, never as HTML.
+- **Documents:** the review queue across all organizations (`GET /admin/documents`).
+  - Filter by status: awaiting review, approved or rejected.
+  - From each row: download the file, approve it, reject it with a reason, or open the organization.
+- **Users:** every account, with a name or email search and a filter for platform administrators.
+  - Each row shows the phone and whether it was verified by SMS, the registration date, active or inactive, and admin.
+  - **Deactivate** / **Reactivate** and **Make admin** / **Remove admin** use `PATCH /admin/users/{id}`, after a confirmation.
+  - Your own row has no buttons. The backend refuses deactivating yourself or removing your own admin access anyway.
+  - A deactivated account loses access straight away: existing tokens stop working.
+- **Catalogue:**
+  - **Drugs:** search by name or therapeutic class, add, edit. **View products** lists the drug's products.
+  - **Products:** search by product, brand, drug or exact barcode, with an option to include retired products.
+  - Add or edit a product, choosing its drug from a searchable list. A field you clear is removed.
+  - **Retire** / **Reactivate** use `is_active`, after a confirmation. Retired products are greyed out and labelled.
+  - Duplicate names, products and barcodes are refused by the backend (409), and its message is shown on the form. Save buttons are disabled while saving, so a double click can't create a duplicate.
+- **Search insights:** anonymous patient searches (`GET /admin/insights/searches`).
+  - Choose the period (7, 30, 90 or 365 days) and how many to show, or show only searches that found nothing.
+  - **Check catalogue** looks the search up in the products list, to spot catalogue gaps.
+  - Only the search text and counts are shown. No patient details are recorded.
 
-To check the dashboard end to end against a **local** backend and a disposable database, see `frontend/tests/e2e_admin.py`.
+Every rule is enforced by the backend:
+- `require_platform_admin` on every `/admin` route and every catalogue write;
+- `ORG_TRANSITIONS`;
+- the pending-documents check;
+- the self-protection rule for user changes;
+- the catalogue duplicate checks.
+
+The page's buttons are only for usability. All values from the API are inserted as text, never as HTML.
+
+To check the dashboard end to end against a **local** backend and a disposable database:
+- `frontend/tests/e2e_admin.py`: organizations, document review, the session;
+- `frontend/tests/e2e_admin_console.py`: overview, document queue, users, catalogue, search insights, loading, empty and error states, and access control.
 
 ## API Overview
 

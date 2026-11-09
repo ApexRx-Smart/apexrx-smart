@@ -2,8 +2,10 @@
 /* Pharmacy onboarding and workspace, connected to the ApexRX API (js/api.js).
  *
  * Steps:
- *   0 Account  -> POST /auth/register, then POST /auth/login. If the email is
- *                 already registered, the same form signs in instead.
+ *   0 Account  -> "Create account": POST /auth/register, then POST /auth/login
+ *                 (an email that is already registered signs in instead).
+ *                 "Sign in" (the switch on this step, or pharmacies.html#signin):
+ *                 POST /auth/login only, with email and password.
  *   1 Verify   -> mobile number by SMS one-time code: POST /auth/phone/send-code,
  *                 then POST /auth/phone/verify. The backend decides: it refuses
  *                 to create a pharmacy until the caller's phone is verified, and
@@ -182,9 +184,75 @@ function resetLive() {
 }
 
 /* -------------------------------------------------------- step 0: account */
+// Two modes on the same form and the same API calls: create an account, or
+// sign in to an existing one (only email and password).
+let authMode = location.hash === '#signin' ? 'signin' : 'create';
+const AUTH_TEXT = {
+  create: {
+    title: titles[0], description: descriptions[0], submit: 'Create account', note: 'Your account is created on ApexRX Smart.',
+    switchText: 'Already have an account?', switchButton: 'Sign in'
+  },
+  signin: {
+    title: 'Sign in to ApexRX', description: 'Welcome back. Use the email and password of your ApexRX account.', submit: 'Sign in',
+    note: 'Signing in opens your pharmacy workspace.', switchText: 'New to ApexRX?', switchButton: 'Create a pharmacy account'
+  }
+};
+function setAuthMode(mode, focus) {
+  authMode = mode;
+  const text = AUTH_TEXT[mode], form = $('#account'), f = form.elements, signin = mode === 'signin';
+  titles[0] = text.title; descriptions[0] = text.description;
+  $('#confirm-field').hidden = signin;
+  $('#confirm-field').parentElement.classList.toggle('single', signin); // password uses the full width
+  f.confirm.required = !signin;
+  f.confirm.value = '';
+  f.password.setAttribute('autocomplete', signin ? 'current-password' : 'new-password');
+  if (signin) f.password.removeAttribute('minlength'); else f.password.setAttribute('minlength', '8');
+  f.password.placeholder = signin ? 'Your password' : 'At least 8 characters';
+  $('#account-submit').firstChild.nodeValue = text.submit + ' ';
+  $('#account-note').textContent = text.note;
+  $('#auth-switch-text').textContent = text.switchText;
+  $('#auth-switch').textContent = text.switchButton;
+  $('#supplier-continue').hidden = true;
+  if (!forms[0].hidden) { $('#step-title').textContent = text.title; $('#step-description').textContent = text.description; formError(''); }
+  try { history.replaceState(null, '', location.pathname + location.search + (signin ? '#signin' : '')); } catch (e) { /* ignore */ }
+  if (focus) (f.email.value ? f.password : f.email).focus();
+}
+$('#auth-switch').addEventListener('click', () => setAuthMode(authMode === 'signin' ? 'create' : 'signin', true));
+
+// After any sign-in: open the pharmacy, or (for an account that only belongs
+// to a supplier) point to the supplier page instead of registering a pharmacy.
+async function afterSignIn() {
+  await loadLive();
+  if (live.organization) { openDashboard(); notice('Welcome back. You are signed in.'); return; }
+  const supplier = (live.user.memberships || []).some(m => m.organization_type === 'supplier');
+  if (supplier) {
+    formError('This account belongs to a supplier, not a pharmacy.');
+    $('#supplier-continue').hidden = false;
+    return;
+  }
+  await continueToPhoneVerification();
+}
+
 $('#account').addEventListener('submit', e => {
   e.preventDefault();
   const form = e.currentTarget, f = form.elements;
+  if (authMode === 'signin') {
+    if (!f.email.value.trim() || !f.password.value) { formError('Enter your email and password.'); return; }
+    formError('');
+    busy(form, async () => {
+      try {
+        try { await API.auth.login(f.email.value.trim(), f.password.value); } catch (err) {
+          if (err.status === 401) throw new Error('Incorrect email or password.');
+          throw err;
+        }
+        f.password.value = '';
+        await afterSignIn();
+      } catch (err) {
+        formError(errorText(err));
+      }
+    });
+    return;
+  }
   if (f.password.value !== f.confirm.value) { formError('Your passwords do not match.'); f.confirm.focus(); return; }
   formError('');
   busy(form, async () => {
@@ -206,9 +274,7 @@ $('#account').addEventListener('submit', e => {
         throw err;
       }
       f.password.value = ''; f.confirm.value = '';
-      await loadLive();
-      if (live.organization) { openDashboard(); notice('Welcome back. You are signed in.'); return; }
-      await continueToPhoneVerification();
+      await afterSignIn();
     } catch (err) {
       formError(errorText(err));
     }
@@ -702,7 +768,8 @@ $('#join-signout').addEventListener('click', () => { API.auth.logout(); resetLiv
 /* ---------------------------------------------------------------- startup */
 (async function start() {
   step(0, false);
-  if (location.hash === '#signin') $('#account').elements.email.focus();
+  setAuthMode(authMode, false);
+  if (authMode === 'signin') $('#account').elements.email.focus();
   if (!API || !API.session.isSignedIn()) return;
   // Resume a session from this tab (for example after a page refresh).
   try {
