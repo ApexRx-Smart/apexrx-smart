@@ -63,12 +63,24 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 | Control | Endpoint |
 |---|---|
 | Sign in | `POST /auth/login`, then `GET /auth/me`. Refused unless `is_platform_admin` |
-| Overview counts | `GET /admin/organizations?limit=1` with each `type` / `status` filter, using its `total` |
+| Tabs | Overview, Organizations, Documents, Users, Catalogue, Search insights. The current tab is in the URL hash. `js/admin.js` (sign-in, tabs, organizations) and `js/admin-console.js` (the other sections) |
+| **Overview** cards | The `total` of `GET /admin/organizations`, `/admin/documents?status=pending`, `/admin/users` (and `?is_platform_admin=true`), `/catalogue/drugs`, `/catalogue/products` (and `?include_inactive=true`), each with `limit=1`. Plus `GET /admin/insights/searches?days=30&limit=5` (and `&only_unmet=true`) |
+| Organization counts | `GET /admin/organizations?limit=1` with each `type` / `status` filter, using its `total` |
 | Organization table, filters, search, pages | `GET /admin/organizations?type=&status=&q=&limit=&offset=` |
 | **Open** | `GET /admin/organizations/{id}`: profile, locations, members and documents |
 | **Approve** / **Reject** / **Suspend** | `POST /admin/organizations/{id}/review` (notes required to reject or suspend) |
 | Document **Download** | `GET /admin/documents/{id}/download`: streamed by the backend from the private bucket |
 | **Approve document** / **Reject document** | `POST /admin/documents/{id}/review` (a reason is required to reject) |
+| **Documents** queue, status filter, pages | `GET /admin/documents?status=pending\|approved\|rejected`. Download and review as above. **Open organization** shows its detail |
+| **Users** list, search, admin filter, pages | `GET /admin/users?q=&is_platform_admin=` |
+| **Deactivate** / **Reactivate**, **Make admin** / **Remove admin** | `PATCH /admin/users/{id}` with `is_active` / `is_platform_admin`, after a confirmation. Not shown on your own row |
+| **Drugs** list, search, pages | `GET /catalogue/drugs?q=` |
+| **Add drug** / **Edit** | `POST /catalogue/drugs`, `PATCH /catalogue/drugs/{id}` (only the changed fields). A 409 duplicate is shown on the form |
+| **View products** (of a drug) | `GET /catalogue/products?drug_id=` |
+| **Products** list, search, include retired, pages | `GET /catalogue/products?q=&drug_id=&include_inactive=` |
+| **Add product** / **Edit** | `POST /catalogue/products`, `PATCH /catalogue/products/{id}` (only the changed fields; a cleared field is sent as `null`). The drug is chosen from `GET /catalogue/drugs?q=`. A 409 duplicate or barcode is shown on the form |
+| **Retire** / **Reactivate** | `PATCH /catalogue/products/{id}` with `is_active`, after a confirmation |
+| **Search insights** | `GET /admin/insights/searches?days=&limit=&only_unmet=`. **Check catalogue** searches the products list for that text |
 | **Sign out**, expired token | Clears the session and shows the sign-in screen |
 
 ## Not connected yet (no backend support in the v6 data model)

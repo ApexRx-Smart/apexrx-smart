@@ -29,6 +29,43 @@
 
   <!-- Dashboard -->
   <main id="dashboard-view" class="dashboard" hidden>
+    <nav class="tabs" id="admin-tabs" aria-label="Administration sections">
+      <a href="#overview" data-tab="overview">Overview</a>
+      <a href="#organizations" data-tab="organizations">Organizations</a>
+      <a href="#documents" data-tab="documents">Documents</a>
+      <a href="#users" data-tab="users">Users</a>
+      <a href="#catalogue" data-tab="catalogue">Catalogue</a>
+      <a href="#insights" data-tab="insights">Search insights</a>
+    </nav>
+
+    <!-- Overview -->
+    <div class="panel" data-panel="overview" hidden>
+      <div class="section-head"><h1>Overview</h1><button type="button" class="secondary small" data-refresh="overview">Refresh</button></div>
+      <p class="notice bad" id="overview-message" role="status" hidden></p>
+      <h2 class="sub">Needs attention</h2>
+      <div class="stats">
+        <a class="stat pending" href="#organizations" data-goto-orgs="pending"><strong data-overview="orgs_pending">–</strong><span>Organizations awaiting review</span></a>
+        <a class="stat pending" href="#documents"><strong data-overview="docs_pending">–</strong><span>Documents awaiting review</span></a>
+      </div>
+      <h2 class="sub">Platform</h2>
+      <div class="stats">
+        <a class="stat" href="#organizations" data-goto-orgs=""><strong data-overview="orgs_total">–</strong><span>Registered organizations</span></a>
+        <a class="stat" href="#users"><strong data-overview="users_total">–</strong><span>User accounts</span></a>
+        <a class="stat" href="#users" data-goto-users="admins"><strong data-overview="users_admins">–</strong><span>Platform administrators</span></a>
+        <a class="stat" href="#catalogue" data-goto-catalogue="drugs"><strong data-overview="drugs_total">–</strong><span>Drugs in the catalogue</span></a>
+        <a class="stat approved" href="#catalogue" data-goto-catalogue="products"><strong data-overview="products_active">–</strong><span>Active products</span></a>
+        <a class="stat suspended" href="#catalogue" data-goto-catalogue="retired"><strong data-overview="products_retired">–</strong><span>Retired products</span></a>
+      </div>
+      <h2 class="sub">Patient search demand <small class="muted">(last 30 days)</small></h2>
+      <div class="grid">
+        <div class="card flat"><h3>Most searched</h3><div id="overview-top"></div></div>
+        <div class="card flat"><h3>Searches with no results</h3><div id="overview-unmet"></div></div>
+      </div>
+      <p><a class="text-button" href="#insights">Open search insights →</a></p>
+    </div>
+
+    <!-- Organizations (the existing review screens) -->
+    <div class="panel" data-panel="organizations" hidden>
     <section aria-labelledby="overview-title">
       <div class="section-head"><h1 id="overview-title">Organizations</h1><button type="button" class="secondary small" id="refresh">Refresh</button></div>
       <div class="stats" id="stats">
@@ -95,11 +132,148 @@
       <h3>Members</h3>
       <div id="members"></div>
     </section>
+    </div>
+
+    <!-- Documents: review queue across all organizations -->
+    <div class="panel" data-panel="documents" hidden>
+      <div class="section-head"><h1>Verification documents</h1><button type="button" class="secondary small" data-refresh="documents">Refresh</button></div>
+      <section class="card">
+        <form id="doc-filters" class="filters">
+          <label>Status<select name="status">
+            <option value="pending">Awaiting review</option><option value="approved">Approved</option>
+            <option value="rejected">Rejected</option></select></label>
+        </form>
+        <p id="doc-message" class="notice" role="status" hidden></p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Organization</th><th>Document</th><th>Uploaded</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
+            <tbody id="doc-rows"></tbody>
+          </table>
+        </div>
+        <p id="doc-list-message" class="muted" role="status"></p>
+        <div class="pager"><button type="button" class="secondary small" data-page="documents:prev">← Previous</button><span class="muted" id="doc-page-info"></span><button type="button" class="secondary small" data-page="documents:next">Next →</button></div>
+      </section>
+    </div>
+
+    <!-- Users -->
+    <div class="panel" data-panel="users" hidden>
+      <div class="section-head"><h1>User accounts</h1><button type="button" class="secondary small" data-refresh="users">Refresh</button></div>
+      <section class="card">
+        <form id="user-filters" class="filters">
+          <label>Role<select name="role"><option value="">All accounts</option><option value="admins">Platform administrators</option><option value="others">Other accounts</option></select></label>
+          <label class="grow">Search<input name="q" type="search" maxlength="100" placeholder="Name or email"></label>
+          <button class="primary small">Search</button>
+        </form>
+        <p class="muted small-print">Deactivated accounts lose access straight away and cannot sign in until reactivated. Platform administrators can review organizations and documents, manage user accounts and edit the catalogue.</p>
+        <p id="user-message" class="notice" role="status" hidden></p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Registered</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
+            <tbody id="user-rows"></tbody>
+          </table>
+        </div>
+        <p id="user-list-message" class="muted" role="status"></p>
+        <div class="pager"><button type="button" class="secondary small" data-page="users:prev">← Previous</button><span class="muted" id="user-page-info"></span><button type="button" class="secondary small" data-page="users:next">Next →</button></div>
+      </section>
+    </div>
+
+    <!-- Catalogue -->
+    <div class="panel" data-panel="catalogue" hidden>
+      <div class="section-head"><h1>Medicine catalogue</h1><button type="button" class="secondary small" data-refresh="catalogue">Refresh</button></div>
+      <div class="segmented" role="tablist" aria-label="Catalogue">
+        <button type="button" role="tab" data-catalogue-view="products" aria-selected="true">Products</button>
+        <button type="button" role="tab" data-catalogue-view="drugs" aria-selected="false">Drugs</button>
+      </div>
+
+      <section class="card" id="products-view">
+        <div class="section-head"><h2>Products</h2><button type="button" class="primary small" id="product-new">Add product</button></div>
+        <form id="product-form" class="card flat form-grid" hidden novalidate>
+          <h3 id="product-form-title" class="wide">Add product</h3>
+          <div class="field wide">
+            <span class="label">Drug (active ingredient) <span class="req">*</span></span>
+            <div class="drug-picker">
+              <input id="product-drug-search" type="search" maxlength="100" placeholder="Search drugs…" aria-label="Search drugs">
+              <select id="product-drug" name="drug_id" aria-label="Drug" required><option value="">Choose a drug</option></select>
+            </div>
+          </div>
+          <label class="wide">Product name <span class="req">*</span><input name="product_name" maxlength="255" required placeholder="e.g. Paracetamol 500mg tablets"></label>
+          <label>Brand<input name="brand" maxlength="255"></label>
+          <label>Strength<input name="strength" maxlength="100" placeholder="e.g. 500mg"></label>
+          <label>Dosage form<input name="dosage_form" maxlength="100" placeholder="e.g. tablet"></label>
+          <label>Pack size<input name="pack_size" maxlength="100" placeholder="e.g. 100 tablets"></label>
+          <label>Barcode<input name="barcode" maxlength="100"></label>
+          <label>Manufacturer<input name="manufacturer" maxlength="255"></label>
+          <p class="error wide" id="product-form-error" role="alert"></p>
+          <div class="actions wide"><button class="primary" id="product-save">Save product</button><button type="button" class="secondary" id="product-cancel">Cancel</button></div>
+        </form>
+        <form id="product-filters" class="filters">
+          <label class="grow">Search<input name="q" type="search" maxlength="100" placeholder="Product, brand, drug or exact barcode"></label>
+          <label class="check"><input type="checkbox" name="include_inactive"> Include retired products</label>
+          <button class="primary small">Search</button>
+        </form>
+        <p id="product-drug-filter" class="chip" hidden></p>
+        <p id="product-message" class="notice" role="status" hidden></p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Product</th><th>Drug</th><th>Strength · form · pack</th><th>Barcode</th><th>Manufacturer</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
+            <tbody id="product-rows"></tbody>
+          </table>
+        </div>
+        <p id="product-list-message" class="muted" role="status"></p>
+        <div class="pager"><button type="button" class="secondary small" data-page="products:prev">← Previous</button><span class="muted" id="product-page-info"></span><button type="button" class="secondary small" data-page="products:next">Next →</button></div>
+      </section>
+
+      <section class="card" id="drugs-view" hidden>
+        <div class="section-head"><h2>Drugs</h2><button type="button" class="primary small" id="drug-new">Add drug</button></div>
+        <form id="drug-form" class="card flat form-grid" hidden novalidate>
+          <h3 id="drug-form-title" class="wide">Add drug</h3>
+          <label>Name (active ingredient) <span class="req">*</span><input name="name" maxlength="255" required placeholder="e.g. Paracetamol"></label>
+          <label>Therapeutic class<input name="therapeutic_class" maxlength="255" placeholder="e.g. Analgesic"></label>
+          <p class="error wide" id="drug-form-error" role="alert"></p>
+          <div class="actions wide"><button class="primary" id="drug-save">Save drug</button><button type="button" class="secondary" id="drug-cancel">Cancel</button></div>
+        </form>
+        <form id="drug-filters" class="filters">
+          <label class="grow">Search<input name="q" type="search" maxlength="100" placeholder="Name or therapeutic class"></label>
+          <button class="primary small">Search</button>
+        </form>
+        <p id="drug-message" class="notice" role="status" hidden></p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Therapeutic class</th><th>Added</th><th><span class="sr-only">Actions</span></th></tr></thead>
+            <tbody id="drug-rows"></tbody>
+          </table>
+        </div>
+        <p id="drug-list-message" class="muted" role="status"></p>
+        <div class="pager"><button type="button" class="secondary small" data-page="drugs:prev">← Previous</button><span class="muted" id="drug-page-info"></span><button type="button" class="secondary small" data-page="drugs:next">Next →</button></div>
+      </section>
+    </div>
+
+    <!-- Search insights -->
+    <div class="panel" data-panel="insights" hidden>
+      <div class="section-head"><h1>Patient search insights</h1><button type="button" class="secondary small" data-refresh="insights">Refresh</button></div>
+      <section class="card">
+        <p class="muted small-print">Anonymous: only the search text, how often it was searched and whether it found anything. No patient details are recorded. Searches with no results point to medicines missing from the catalogue or not stocked by any approved pharmacy.</p>
+        <form id="insight-filters" class="filters">
+          <label>Period<select name="days"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option></select></label>
+          <label>Show<select name="limit"><option value="20">Top 20</option><option value="50">Top 50</option><option value="100">Top 100</option></select></label>
+          <label class="check"><input type="checkbox" name="only_unmet"> Only searches that found nothing</label>
+        </form>
+        <p id="insight-summary" class="muted" role="status"></p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Search</th><th>Searches</th><th>With no results</th><th>Last searched</th><th><span class="sr-only">Actions</span></th></tr></thead>
+            <tbody id="insight-rows"></tbody>
+          </table>
+        </div>
+        <p id="insight-list-message" class="muted" role="status"></p>
+      </section>
+    </div>
   </main>
 
   <div id="toast" role="status" aria-live="polite"></div>
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
   <script src="js/admin.js"></script>
+  <script src="js/admin-console.js"></script>
 </body>
 </html>

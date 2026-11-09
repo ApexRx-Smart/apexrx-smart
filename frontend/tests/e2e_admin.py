@@ -149,7 +149,7 @@ def main():
         page.on("dialog", lambda d: d.accept())
 
         # 1. A non-admin account is refused.
-        page.goto(SITE + "/admin.html")
+        page.goto(SITE + "/admin.html#organizations")  # sign-in would land on Overview otherwise
         page.fill("#login-form [name=email]", f"plain-{RUN}@example.com")
         page.fill("#login-form [name=password]", PASSWORD)
         page.click("#login-button")

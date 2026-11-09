@@ -58,6 +58,7 @@ def link_checks(page, label):
       const fs = el => parseFloat(getComputedStyle(el).fontSize);
       const r = a.getBoundingClientRect();
       return {link: fs(a), copyright: fs(s), search: fs(search), height: r.height,
+              left: r.left < window.innerWidth / 2,
               sameColor: getComputedStyle(a).color === getComputedStyle(s).color,
               scroll: document.documentElement.scrollWidth <= window.innerWidth};
     }""")
@@ -66,6 +67,8 @@ def link_checks(page, label):
     check(f"[{label}] less prominent than the medicine search", sizes["link"] < sizes["search"])
     check(f"[{label}] tap target at least 24px high", sizes["height"] >= 24)
     check(f"[{label}] no horizontal page scroll", sizes["scroll"])
+    # Netlify pins its "Powered by Netlify" badge to the bottom-right corner.
+    check(f"[{label}] link sits on the left, clear of the Netlify badge", sizes["left"])
 
 
 def main():

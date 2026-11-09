@@ -328,10 +328,15 @@
       </nav>
     </div>
     <div class="footer-bottom">
-      <span data-i18n="f_rights">© 2026 ApexRX_Smart. All rights reserved.</span>
-      <!-- Navigation only: admin.html requires an ApexRX administrator sign-in,
-           and every /admin API call is checked by the backend. -->
-      <a class="footer-admin-link" href="admin.html" rel="nofollow" data-i18n="f_admin">Admin Portal</a>
+      <!-- Left-aligned on purpose: Netlify's "Powered by Netlify" badge sits in
+           the bottom-right corner and would cover a right-aligned link. -->
+      <div class="footer-legal">
+        <span data-i18n="f_rights">© 2026 ApexRX_Smart. All rights reserved.</span>
+        <span class="footer-sep" aria-hidden="true">·</span>
+        <!-- Navigation only: admin.html requires an ApexRX administrator sign-in,
+             and every /admin API call is checked by the backend. -->
+        <a class="footer-admin-link" href="admin.html" rel="nofollow" data-i18n="f_admin">Admin Portal</a>
+      </div>
     </div>
   </div>
 </footer>

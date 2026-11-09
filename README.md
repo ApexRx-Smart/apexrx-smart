@@ -346,22 +346,53 @@ Verification documents are files in a **private Supabase Storage bucket**. Their
 
 ## Admin dashboard
 
-`frontend/admin.html` is for ApexRX staff. It is not linked from the public pages and is marked `noindex`. It uses only the existing endpoints:
+`frontend/admin.html` is for ApexRX staff. It is marked `noindex`; the only public link is the discreet "Admin Portal" link in the homepage footer, which sits on the left, next to the copyright, clear of the "Powered by Netlify" badge in the bottom-right corner. It uses only existing endpoints, and has one tab per area. The current tab is kept in the URL (`#users`, `#catalogue` and so on).
 
 - **Sign in:** with the normal ApexRX login. Accounts that aren't platform admins are refused, and their token is cleared. The token is kept in `sessionStorage`, like the rest of the site. An expired or invalid token returns you to the sign-in screen. **Sign out** clears it.
 - **Overview:**
-  - Seven counts: total, pharmacies, suppliers, pending, approved, rejected and suspended.
-  - They come from the `total` of `GET /admin/organizations` with each filter, so no summary endpoint is needed.
-  - Clicking a count filters the list by it.
-- **Organizations:** a table of name, type, registration date, status and contact details. It has type and status filters, a name or email search, and pagination.
+  - What needs attention: organizations and documents awaiting review.
+  - Platform numbers: organizations, user accounts, platform administrators, drugs, active products and retired products.
+  - The five most searched medicines, and the five searches with no results, over the last 30 days.
+  - Each number is the `total` of an existing list endpoint (`limit=1`). There is no summary endpoint. Each card opens the matching section.
+- **Organizations:**
+  - Seven counts at the top: total, pharmacies, suppliers, pending, approved, rejected and suspended. Clicking a count filters the list by it.
+  - A table of name, type, registration date, status and contact details, with type and status filters, a name or email search, and pagination.
 - **Organization detail:**
   - **Information:** profile, contacts, review history, locations, members and verification documents.
   - **Documents:** download any document, then approve it or reject it with a reason.
   - **Organization:** approve, reject with notes, or suspend with notes. Only the actions the backend allows from the current status are shown. **Approve** stays disabled while any document is pending.
 
-Every rule is enforced by the backend (`require_platform_admin` on every `/admin` route, `ORG_TRANSITIONS`, the pending-documents check). The page's buttons are only for usability. All values from the API are inserted as text, never as HTML.
+- **Documents:** the review queue across all organizations (`GET /admin/documents`).
+  - Filter by status: awaiting review, approved or rejected.
+  - From each row: download the file, approve it, reject it with a reason, or open the organization.
+- **Users:** every account, with a name or email search and a filter for platform administrators.
+  - Each row shows the phone and whether it was verified by SMS, the registration date, active or inactive, and admin.
+  - **Deactivate** / **Reactivate** and **Make admin** / **Remove admin** use `PATCH /admin/users/{id}`, after a confirmation.
+  - Your own row has no buttons. The backend refuses deactivating yourself or removing your own admin access anyway.
+  - A deactivated account loses access straight away: existing tokens stop working.
+- **Catalogue:**
+  - **Drugs:** search by name or therapeutic class, add, edit. **View products** lists the drug's products.
+  - **Products:** search by product, brand, drug or exact barcode, with an option to include retired products.
+  - Add or edit a product, choosing its drug from a searchable list. A field you clear is removed.
+  - **Retire** / **Reactivate** use `is_active`, after a confirmation. Retired products are greyed out and labelled.
+  - Duplicate names, products and barcodes are refused by the backend (409), and its message is shown on the form. Save buttons are disabled while saving, so a double click can't create a duplicate.
+- **Search insights:** anonymous patient searches (`GET /admin/insights/searches`).
+  - Choose the period (7, 30, 90 or 365 days) and how many to show, or show only searches that found nothing.
+  - **Check catalogue** looks the search up in the products list, to spot catalogue gaps.
+  - Only the search text and counts are shown. No patient details are recorded.
 
-To check the dashboard end to end against a **local** backend and a disposable database, see `frontend/tests/e2e_admin.py`.
+Every rule is enforced by the backend:
+- `require_platform_admin` on every `/admin` route and every catalogue write;
+- `ORG_TRANSITIONS`;
+- the pending-documents check;
+- the self-protection rule for user changes;
+- the catalogue duplicate checks.
+
+The page's buttons are only for usability. All values from the API are inserted as text, never as HTML.
+
+To check the dashboard end to end against a **local** backend and a disposable database:
+- `frontend/tests/e2e_admin.py`: organizations, document review, the session;
+- `frontend/tests/e2e_admin_console.py`: overview, document queue, users, catalogue, search insights, loading, empty and error states, and access control.
 
 ## API Overview
 
