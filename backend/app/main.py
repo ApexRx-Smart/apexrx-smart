@@ -6,7 +6,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.api import admin, auth, catalogue, dev, email_verification, inventory, orders, organizations, search
+from app.api import (
+    admin,
+    auth,
+    catalogue,
+    dev,
+    email_verification,
+    inventory,
+    invitations,
+    orders,
+    organizations,
+    password_reset,
+    search,
+)
 from app.core import schema
 from app.core.config import settings
 from app.core.database import engine
@@ -54,6 +66,16 @@ app.add_middleware(
 
 register_error_handlers(app)
 
+
+@app.middleware("http")
+async def no_store_for_signed_in_requests(request, call_next):
+    """Responses to signed-in requests hold private data: never cache them, so
+    nothing is shown again from a cache after signing out."""
+    response = await call_next(request)
+    if request.headers.get("authorization"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
 _log = logging.getLogger("apexrx")
 
 # Development behaviour (mock email, /dev endpoints) must never run on the hosted
@@ -93,9 +115,12 @@ if os.environ.get("RENDER") and not settings.trusted_client_ip_header:
 
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(email_verification.router, prefix="/auth/email", tags=["Email verification"])
+app.include_router(password_reset.router, prefix="/auth/password", tags=["Password reset"])
 app.include_router(search.router, prefix="/search", tags=["Search"])
 app.include_router(catalogue.router, prefix="/catalogue", tags=["Catalogue"])
 app.include_router(organizations.router, prefix="/organizations", tags=["Organizations"])
+app.include_router(invitations.router, prefix="/organizations", tags=["Staff invitations"])
+app.include_router(invitations.public_router, prefix="/invitations", tags=["Staff invitations"])
 app.include_router(inventory.router, prefix="/organizations", tags=["Inventory"])
 app.include_router(search.supplier_router, prefix="/supplier-offers", tags=["Supplier discovery"])
 app.include_router(orders.router, prefix="/purchase-orders", tags=["Purchase orders"])

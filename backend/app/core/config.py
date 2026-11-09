@@ -29,7 +29,16 @@ class Settings(BaseSettings):
     # Validated by _strong_jwt_secret: at least 32 characters, not a placeholder.
     jwt_secret_key: str
     jwt_algorithm: str = "HS256"
+    # Access tokens are short-lived and renewed by real user activity
+    # (POST /auth/session/activity). Each one names a server-side session
+    # (auth_session) that is checked on every request, so a token stops working
+    # as soon as its session is signed out, idle too long or past its maximum age.
     access_token_expire_minutes: int = Field(default=30, gt=0)
+    # Signed out after this long without user activity (clicks, typing,
+    # navigation; background requests do not count). Default 30 minutes.
+    session_idle_timeout_minutes: int = Field(default=30, ge=1, le=24 * 60)
+    # Absolute limit: sign in again after this long, however active.
+    session_max_age_hours: int = Field(default=12, ge=1, le=24 * 30)
 
     # Comma-separated list in the environment, e.g.
     # CORS_ORIGINS=http://localhost:5501,http://127.0.0.1:5501
@@ -93,6 +102,12 @@ class Settings(BaseSettings):
     # Provider API keys: server-side only, never sent to the browser or logged.
     resend_api_key: SecretStr | None = None
     brevo_api_key: SecretStr | None = None
+    # Gmail API (EMAIL_PROVIDER=gmail): an OAuth client and a refresh token for
+    # the sending Gmail account with only the gmail.send scope (see README,
+    # "Email delivery with the Gmail API"). Never the account's password.
+    gmail_client_id: str | None = None
+    gmail_client_secret: SecretStr | None = None
+    gmail_refresh_token: SecretStr | None = None
     email_timeout_seconds: int = Field(default=15, gt=0, le=120)
     # Where the frontend is served; verification links open
     # <FRONTEND_BASE_URL>/verify-email.html. HTTPS in production.
@@ -101,6 +116,17 @@ class Settings(BaseSettings):
     email_verification_resend_cooldown_seconds: int = Field(default=60, ge=0, le=3600)
     email_verification_max_sends_per_user_per_hour: int = Field(default=5, ge=1)
     email_verification_max_sends_per_ip_per_hour: int = Field(default=20, ge=1)
+
+    # Staff invitations (app/services/invitations.py).
+    invitation_ttl_hours: int = Field(default=72, ge=1, le=24 * 30)
+    invitation_resend_cooldown_seconds: int = Field(default=60, ge=0, le=3600)
+    invitation_max_per_organization_per_hour: int = Field(default=30, ge=1)
+
+    # Password reset (app/services/password_reset.py).
+    password_reset_ttl_minutes: int = Field(default=60, ge=5, le=24 * 60)
+    password_reset_cooldown_seconds: int = Field(default=60, ge=0, le=3600)
+    password_reset_max_per_user_per_hour: int = Field(default=3, ge=1)
+    password_reset_max_per_ip_per_hour: int = Field(default=10, ge=1)
 
     # Phone numbers (business contact, future Mobile Money; not used to verify
     # anyone): parsed with this default region, and only numbers from these
@@ -146,7 +172,7 @@ class Settings(BaseSettings):
             return value.strip().lower() or None
         return value
 
-    @field_validator("email_from_address", mode="before")
+    @field_validator("email_from_address", "gmail_client_id", mode="before")
     @classmethod
     def _blank_is_none(cls, value: object) -> object:
         if isinstance(value, str):

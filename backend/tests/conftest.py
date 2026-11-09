@@ -50,7 +50,7 @@ from app.core.database import engine  # noqa: E402
 from app.main import app  # noqa: E402
 
 TABLES = (
-    "email_verification, phone_verification, search_event, purchase_order_status_history, purchase_order_item, purchase_order, "
+    "auth_session, organization_invitation, password_reset, email_verification, phone_verification, search_event, purchase_order_status_history, purchase_order_item, purchase_order, "
     "stock_adjustment, product_offer, stock, product, drug, organization_document, "
     "location, membership, organization, app_user"
 )
@@ -71,11 +71,12 @@ def _clean():
     from app.core.rate_limit import login_limiter
     from app.services.email import set_email_provider
     from app.services.email.mock import mock_provider
+    from app.services.password_reset import limiter as reset_limiter
 
-    for reset in (login_limiter.reset, mock_provider.reset):
+    for reset in (login_limiter.reset, mock_provider.reset, reset_limiter.reset):
         reset()
     yield
-    for reset in (login_limiter.reset, mock_provider.reset):
+    for reset in (login_limiter.reset, mock_provider.reset, reset_limiter.reset):
         reset()
     set_email_provider(None)
     with engine.begin() as conn:

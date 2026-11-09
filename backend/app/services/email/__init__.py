@@ -6,6 +6,9 @@ Business logic (app/services/email_verification.py) only calls
 through ``PROVIDERS``.
 
 Providers (HTTPS APIs: Render's free plan blocks outbound SMTP ports):
+  * "gmail":  the ApexRX Gmail account through the Gmail API (OAuth, gmail.send
+              scope only): GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET,
+              GMAIL_REFRESH_TOKEN, EMAIL_FROM_ADDRESS. The configured default.
   * "resend": RESEND_API_KEY, EMAIL_FROM_ADDRESS (on a domain verified in Resend)
   * "brevo":  BREVO_API_KEY,  EMAIL_FROM_ADDRESS (a verified Brevo sender)
   * "mock":   development and tests only. Sends nothing; refused in production.
@@ -66,6 +69,12 @@ def _mock_factory() -> EmailProvider:
     return mock_provider
 
 
+def _gmail_factory() -> EmailProvider:
+    from app.services.email.gmail import GmailProvider
+
+    return GmailProvider.from_settings()
+
+
 def _resend_factory() -> EmailProvider:
     from app.services.email.http_providers import ResendProvider
 
@@ -80,6 +89,7 @@ def _brevo_factory() -> EmailProvider:
 
 PROVIDERS: dict[str, Callable[[], EmailProvider]] = {
     "mock": _mock_factory,
+    "gmail": _gmail_factory,
     "resend": _resend_factory,
     "brevo": _brevo_factory,
 }

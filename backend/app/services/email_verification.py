@@ -36,7 +36,6 @@ import re
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from html import escape
 
 from fastapi import status
 from sqlalchemy import func, select, text, update
@@ -46,7 +45,13 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.errors import AppError, Conflict, TooManyRequests
 from app.models import EmailVerification, User
-from app.services.email import EmailDeliveryError, EmailMessage, EmailNotConfigured, get_email_provider
+from app.services.email import (
+    EmailDeliveryError,
+    EmailMessage,
+    EmailNotConfigured,
+    get_email_provider,
+    templates,
+)
 
 logger = logging.getLogger("apexrx.email_verification")
 
@@ -112,37 +117,9 @@ def verification_link(token: str, next_page: str | None) -> str:
     return f"{settings.frontend_base_url}/verify-email.html{query}#token={token}"
 
 
-def _ttl_text() -> str:
-    minutes = settings.email_verification_ttl_minutes
-    if minutes % 60 == 0:
-        hours = minutes // 60
-        return f"{hours} hour{'s' if hours != 1 else ''}"
-    return f"{minutes} minutes"
-
-
 def build_message(user: User, link: str) -> EmailMessage:
-    name = (user.name or "").strip() or "there"
-    expiry = _ttl_text()
-    text_body = (
-        f"Hello {name},\n\n"
-        "Confirm this email address to continue registering on ApexRX Smart:\n\n"
-        f"{link}\n\n"
-        f"The link works once and expires in {expiry}.\n"
-        "If you did not create an ApexRX Smart account, you can ignore this email.\n"
-    )
-    safe_link = escape(link, quote=True)
-    html_body = (
-        '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#0f1a3d;line-height:1.5">'
-        f"<p>Hello {escape(name)},</p>"
-        "<p>Confirm this email address to continue registering on ApexRX Smart.</p>"
-        f'<p><a href="{safe_link}" style="display:inline-block;background:#1f8f55;color:#ffffff;'
-        'padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:bold">Verify my email</a></p>'
-        f'<p style="font-size:13px;color:#555">Or open this link: <a href="{safe_link}">{escape(link)}</a></p>'
-        f'<p style="font-size:13px;color:#555">The link works once and expires in {expiry}. '
-        "If you did not create an ApexRX Smart account, you can ignore this email.</p></div>"
-    )
-    return EmailMessage(
-        to=user.email, subject="Verify your email for ApexRX Smart", text=text_body, html=html_body
+    return templates.verification(
+        to=user.email, name=user.name, url=link, expires_minutes=settings.email_verification_ttl_minutes
     )
 
 

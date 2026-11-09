@@ -18,13 +18,14 @@ from app.services.email.mock import MockEmailProvider
 
 router = APIRouter()
 
-_LINK = re.compile(r"https?://\S+/verify-email\.html\S*#token=([A-Za-z0-9_-]+)")
+_LINK = re.compile(r"https?://\S+?\.html\S*?#token=([A-Za-z0-9_-]+)")
 
 
 @router.get("/email/latest")
 def latest_test_email(user: CurrentUser):
     """The latest mock email sent to the signed-in user's address, including
-    the verification link. Only with the mock provider, never in production."""
+    its link (verification, invitation or password reset). Only with the mock
+    provider, never in production."""
     if settings.is_production:
         raise NotFound("Not found.")
     try:
@@ -33,9 +34,28 @@ def latest_test_email(user: CurrentUser):
         raise NotFound("No test email available.") from None
     if not isinstance(provider, MockEmailProvider):
         raise NotFound("No test email available (not using the mock provider).")
-    item = provider.latest(user.email)
+    return _describe(provider.latest(user.email))
+
+
+@router.get("/email/latest-to")
+def latest_test_email_to(to: str):
+    """The latest mock email to any address: for local tests of flows where
+    the recipient has no account or session yet (invitations, password reset).
+    Development/test only, mock provider only."""
+    if settings.is_production:
+        raise NotFound("Not found.")
+    try:
+        provider = get_email_provider()
+    except EmailNotConfigured:
+        raise NotFound("No test email available.") from None
+    if not isinstance(provider, MockEmailProvider):
+        raise NotFound("No test email available (not using the mock provider).")
+    return _describe(provider.latest(to))
+
+
+def _describe(item):
     if item is None:
-        raise NotFound("No test email has been sent to your address yet.")
+        raise NotFound("No test email has been sent to this address yet.")
     found = _LINK.search(item.message.text)
     return {
         "to": item.message.to,

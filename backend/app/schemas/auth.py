@@ -31,6 +31,17 @@ class TokenResponse(BaseModel):
     expires_in: int
     # Keep on this browser and send with later sign-ins for this account.
     device_token: str | None = None
+    # The server-side session: signed out after this many seconds without
+    # user activity, and at session_expires_at at the latest.
+    idle_timeout_seconds: int | None = None
+    session_expires_at: datetime | None = None
+
+
+class SessionResponse(BaseModel):
+    idle_timeout_seconds: int
+    last_activity_at: datetime
+    idle_expires_at: datetime
+    expires_at: datetime
 
 
 class UserResponse(ORMModel):

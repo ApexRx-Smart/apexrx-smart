@@ -1,3 +1,4 @@
+from app.models.accounts import AuthSession, OrganizationInvitation, PasswordReset
 from app.models.base import Base
 from app.models.catalogue import Drug, Product
 from app.models.identity import (
@@ -17,6 +18,9 @@ from app.models.verification import EmailVerification
 from app.models.views import patient_availability, supplier_listing
 
 __all__ = [
+    "AuthSession",
+    "OrganizationInvitation",
+    "PasswordReset",
     "Base",
     "Drug",
     "EmailVerification",
