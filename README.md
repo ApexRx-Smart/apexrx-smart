@@ -94,7 +94,7 @@ Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
 - **Homepage search** calls `GET /search/pharmacies`. It shows availability, price, location and how fresh the data is, never exact quantities.
 - **Registration** (`pharmacies.html` and `suppliers.html`, both driven by `js/registration.js`): Account -> Verify email -> Details -> Documents -> Review.
   - **Account:** `POST /auth/register` then sign in (an existing email signs in instead), or "Already have an account? Sign in".
-  - **Verify email:** a single-use link is emailed to the account address (`/auth/email/*`, opened on `verify-email.html`). The backend refuses to create a pharmacy or supplier until the email is verified. See [Email verification](#email-verification).
+  - **Verify email:** skipped while email delivery is temporarily disabled (see [Email: temporarily disabled](#email-temporarily-disabled)); the details step says so. The verification code is kept for when email returns.
   - **Details:** business name and phone, branch or warehouse name, WhatsApp (optional), a structured Rwandan address (province, district, sector, cell, village from `frontend/data/rwanda-locations.json`, plus street or landmark) and optional coordinates ("Use my current location"). Stored on the organization and its first location.
   - **Documents:** pharmacy license, business license and owner ID for pharmacies; business license and owner ID for suppliers.
   - **Review:** the real status, ApexRX's review note, the stored details and documents, uploads, and "Resubmit for review" after a rejection. Pharmacies then open their workspace.
@@ -129,7 +129,7 @@ After making changes, check the following:
 1. Open the home page and verify the Kigali map, logos, audience images, and animations.
 2. Select English, French, and Kinyarwanda and verify that the language selection is applied.
 3. Search for a medicine on the home page and check that results come back from the backend. An empty database returns no results: see [Test data](#test-data).
-4. Open the pharmacy workflow and register with a new email and matching passwords (8 characters minimum). With the local backend in development mode (`APP_ENV=development`, `EMAIL_PROVIDER=mock`, `FRONTEND_BASE_URL=http://127.0.0.1:5501`), the verification email is kept in memory: open the `link` from `GET /dev/email/latest` (see [Email verification](#email-verification)). The registration tab continues by itself. Then fill in the details, upload the documents and check the review.
+4. Open the pharmacy workflow and register with a new email and matching passwords (8 characters minimum). With email disabled (the default), registration goes straight to the details; fill them in, upload the documents and check the review. To exercise the dormant email flows locally, run the backend with `APP_ENV=development EMAIL_PROVIDER=mock EMAIL_VERIFICATION_REQUIRED=true` and open links from `GET /dev/email/latest`.
 5. In the workspace, check the profile and document statuses. Sign in as an **approved** pharmacy to try supplier search.
 6. Check narrow and wide layouts, navigation, return navigation, and social links.
 
@@ -176,15 +176,12 @@ cp .env.example .env    # then edit DATABASE_URL and JWT_SECRET_KEY
 | `MAX_UPLOAD_SIZE_BYTES` | no | Default 10 MB |
 | `DEFAULT_CURRENCY` | no | Default `RWF` |
 | `APP_ENV` | no | `production` (default), `development` or `test`. Only non-production allows the mock email provider and the `/dev` endpoints. On Render, any value other than `production` stops the service from starting |
-| `EMAIL_VERIFICATION_REQUIRED` | no | Default `true`: registering a pharmacy or supplier needs a verified account email |
-| `EMAIL_PROVIDER` | for email | `gmail` (the ApexRX Gmail account through the Gmail API; see [Email delivery with the Gmail API](#email-delivery-with-the-gmail-api)), or optionally `resend` / `brevo`. `mock` works only outside production. If it is unset, sending email returns 503 |
-| `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` / `GMAIL_REFRESH_TOKEN` | for `gmail` | The Google OAuth client and the refresh token from `python -m app.scripts.gmail_authorize`. Server-side only, never committed |
-| `RESEND_API_KEY` / `BREVO_API_KEY` | for that provider | Optional alternatives; each needs a domain you control |
+| `EMAIL_VERIFICATION_REQUIRED` | no | Default `false` while email is disabled. Do not set it to `true` without an email provider: new organizations could not register |
+| `EMAIL_PROVIDER` | no | Leave unset in deployments (email is disabled). `mock` exists for development and tests only and is refused in production |
 | `SESSION_IDLE_TIMEOUT_MINUTES` / `SESSION_MAX_AGE_HOURS` | no | Defaults 30 / 12. See [Sessions](#sessions) |
 | `INVITATION_TTL_HOURS` | no | Default 72. Staff invitation links |
 | `PASSWORD_RESET_TTL_MINUTES` / `PASSWORD_RESET_MAX_PER_USER_PER_HOUR` / `..._PER_IP_PER_HOUR` | no | Defaults 60 / 3 / 10 |
-| `EMAIL_FROM_ADDRESS` / `EMAIL_FROM_NAME` | address: for email | Sender, e.g. `no-reply@your-domain`; it must be allowed by the provider (usually a verified domain). Name default `ApexRX Smart` |
-| `FRONTEND_BASE_URL` | for email | Where the frontend is served (the link opens `<FRONTEND_BASE_URL>/verify-email.html`). Must be `https://` in production. Default `http://127.0.0.1:5501` |
+| `FRONTEND_BASE_URL` | no | Only used for links inside emails (development/tests while email is disabled). Not needed in deployments |
 | `EMAIL_VERIFICATION_TTL_MINUTES` / `EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS` | no | Defaults 1440 (24 hours) / 60 |
 | `EMAIL_VERIFICATION_MAX_SENDS_PER_USER_PER_HOUR` / `..._PER_IP_PER_HOUR` | no | Defaults 5 / 20. The IP limit applies only when the client IP is trustworthy |
 | `PHONE_DEFAULT_REGION` / `PHONE_ALLOWED_REGIONS` | no | Defaults `RW` / `RW`. Business phone numbers are normalized with these (contact only, not verification) |
@@ -261,16 +258,32 @@ ruff check app tests alembic
 
 The document tests use an in-memory fake of the Supabase Storage client, and the suite forces `DOCUMENT_STORAGE=local`, so tests never touch a real bucket. `tests/test_supabase_live.py` is an optional round trip against the real bucket (a dummy PDF under a random `test-.../` prefix, deleted afterwards). It runs only with `SUPABASE_LIVE_TESTS=1` and the `SUPABASE_*` variables set.
 
-## Email verification
+## Email: temporarily disabled
 
-**Flow:** a pharmacy or supplier owner creates an account and signs in, ApexRX emails a link to that address, and opening the link verifies it. Only then can the organization be registered. All decisions are made on the backend.
+ApexRX has **no email provider** at the moment: the Gmail API integration (and the optional Resend and Brevo adapters) were removed so the service can be deployed without one. The application runs without any email configuration. What that means:
+
+| Feature | While email is disabled |
+|---|---|
+| Email verification | Not required (`EMAIL_VERIFICATION_REQUIRED` defaults to `false`). Registration goes from the account to the details, and the page says why. `POST /auth/email/send` answers **503**. ApexRX approval of every pharmacy and supplier (documents, review) is unchanged |
+| Forgot password / reset | Unavailable. `POST /auth/password/forgot` answers **503** (`reason: email_unavailable`) for every address, before looking the address up, so it reveals nothing. `reset-password.html` says so. A user who forgets their password must contact ApexRX support (no in-app recovery exists yet) |
+| Staff invitations | Still available. Nothing is emailed: the owner or manager who creates (or renews) an invitation gets its link once, on screen, with **Copy link**, and gives it to the employee themselves. The list shows "Link given by you (no email)"; **New link** replaces it. Accepting such a link does **not** mark the employee's email as verified |
+| Password-changed notice | Not sent (a notification only; the password change itself works) |
+| `GET /auth/capabilities` | Public: `{email_delivery, email_verification_required, password_reset, invitation_emails}`, all `false` |
+
+Nothing reports an email as sent unless a provider accepted it. Sessions, sign-out, inactivity, roles, memberships, approval and password hashing do not depend on email.
+
+**Re-enabling email later:** add an adapter implementing `EmailProvider` in `backend/app/services/email/`, register it in `PROVIDERS`, set `EMAIL_PROVIDER` (and `FRONTEND_BASE_URL`, used in the email links) on the server, send a real test message, then set `EMAIL_VERIFICATION_REQUIRED=true` if wanted. The verification, reset and invitation-email code below is kept and tested with the in-memory mock.
+
+### Email verification (dormant)
+
+**Flow (when email is enabled):** a pharmacy or supplier owner creates an account and signs in, ApexRX emails a link to that address, and opening the link verifies it. With `EMAIL_VERIFICATION_REQUIRED=true`, only then can the organization be registered.
 
 | Endpoint | What it does |
 |---|---|
-| `GET /auth/email/status` (signed in) | `{email, verified, verified_at, required, delivery_available, pending, expires_at, resend_after}`. The registration page uses it to show the step and to resume |
-| `POST /auth/email/send` `{next}` (signed in) | Applies the limits, stores a hashed token and emails a link to the **account's** address. `next` (`pharmacy` or `supplier`) only chooses where the link leads afterwards. Returns the masked address, `expires_in` and `resend_after`, **never the token**. 409 if already verified |
-| `POST /auth/email/verify` `{token}` (no session) | Opened from the link by `verify-email.html`. Single use. Sets `app_user.email_verified_at`. Errors are 400 with a `reason`: `invalid`, `expired`, `used` or `superseded` (a newer email was sent). Reopening a link after verification answers 200 with `already_verified: true` and changes nothing |
-| `POST /organizations` | **403** (`reason: email_unverified`) until the caller's email is verified, for pharmacies and suppliers |
+| `GET /auth/email/status` (signed in) | `{email, verified, verified_at, required, delivery_available, pending, expires_at, resend_after}`. The registration page uses it to show (or skip) the step and to resume |
+| `POST /auth/email/send` `{next}` (signed in) | Applies the limits, stores a hashed token and emails a link to the **account's** address. **503** while email is disabled |
+| `POST /auth/email/verify` `{token}` (no session) | Opened from the link by `verify-email.html`. Single use. Errors are 400 with a `reason`: `invalid`, `expired`, `used` or `superseded` |
+| `POST /organizations` | With verification required: **403** (`reason: email_unverified`) until the caller's email is verified |
 
 **Links and tokens:**
 - `<FRONTEND_BASE_URL>/verify-email.html?next=pharmacy#token=...`. The token (32 random bytes) is in the URL **fragment**, so it is never sent to a server in a request line or Referer. The page removes it from the address bar before calling the API, and the page sets `referrer: no-referrer`.
@@ -280,57 +293,25 @@ The document tests use an in-memory fake of the Supabase Storage client, and the
 
 **Limits** (as for the former SMS codes, in PostgreSQL so they hold across restarts and instances): a 60-second resend cooldown, at most 5 emails per user per hour and 20 per trustworthy client IP per hour. The user's row and an advisory lock for the IP are locked while checking and recording, so the check is atomic. The limits fail closed: if the database cannot check them, no email is sent (generic 503). The link is stored before the email is sent; a provider failure answers 502, marks the row failed and lets the user retry immediately. Tokens and full addresses never appear in responses or logs (logs show `a***a@example.com`).
 
-**Providers** (`backend/app/services/email/`, one interface for every workflow: verification, invitations, password reset and notifications). Render's free plan blocks outbound SMTP (ports 25, 465 and 587), so email goes through an HTTPS API:
-- **Gmail API** (`EMAIL_PROVIDER=gmail`, the configured choice): the dedicated ApexRX Gmail account, OAuth 2.0 with only the `gmail.send` permission, no password and no domain needed. Setup below.
-- Optional alternatives kept behind the same interface (not needed, each requires a domain you control): Resend (`resend`, `RESEND_API_KEY`) and Brevo (`brevo`, `BREVO_API_KEY`).
-- `GET /auth/email/status` reports `"delivery_available": true` once the provider is configured; the startup log warns while it is not. Templates live in `app/services/email/templates.py`; every link uses `FRONTEND_BASE_URL`.
-
 **Modes:**
-- **Development and tests:** `APP_ENV=development` (or `test`) with `EMAIL_PROVIDER=mock`. The mock sends nothing and keeps messages in memory; `GET /dev/email/latest`, signed in, returns **your own** latest message with its link. The `/dev` routes are not mounted in production and also answer 404 there.
-- **Production** (`APP_ENV=production`, the default, and the only value Render accepts): the mock is refused. With no provider configured, sending answers **503** and new organizations cannot register (unless `EMAIL_VERIFICATION_REQUIRED=false`, which skips the requirement; there is never a fake verification).
+- **Deployment** (`APP_ENV=production`): no provider; the features above are unavailable as described. The mock is refused.
+- **Development and tests:** `APP_ENV=development` (or `test`) with `EMAIL_PROVIDER=mock` keeps messages in memory; `GET /dev/email/latest` (signed in) and `GET /dev/email/latest-to?to=` return the latest message with its link. The `/dev` routes are not mounted in production.
 
 **Phone numbers** are business contact details (and later Mobile Money). They are normalized to E.164 with [`phonenumbers`](https://pypi.org/project/phonenumbers/) (`0788 123 456` -> `+250788123456`, numbers from `PHONE_ALLOWED_REGIONS` only), and are never used to verify anyone. The former SMS verification was removed; its old table `phone_verification` and the columns `app_user.verified_phone` / `phone_verified_at` are left in the database untouched (nothing writes them any more) and can be dropped by a later migration.
 
 **Testing locally:**
 ```bash
 cd backend
-python -m pytest tests/test_email_verification.py tests/test_registration_profile.py tests/test_sessions.py \
-    tests/test_invitations.py tests/test_password_reset.py tests/test_gmail_provider.py
-# Browser tests: run the backend with APP_ENV=development EMAIL_PROVIDER=mock FRONTEND_BASE_URL=http://127.0.0.1:5501
-# (port 8000), and for e2e_accounts.py a second one with SESSION_IDLE_TIMEOUT_MINUTES=1 on port 8001
+python -m pytest tests/test_without_email.py tests/test_email_verification.py tests/test_registration_profile.py \
+    tests/test_sessions.py tests/test_invitations.py tests/test_password_reset.py
+# Browser tests (local backends on the same throwaway database, APP_ENV=development):
+#   port 8000: EMAIL_PROVIDER=mock EMAIL_VERIFICATION_REQUIRED=true   (dormant email flows)
+#   port 8001: no email, SESSION_IDLE_TIMEOUT_MINUTES=1                (e2e_accounts inactivity part)
+#   port 8002: no email, defaults                                      (the deployed configuration)
+python ../frontend/tests/e2e_no_email.py
 python ../frontend/tests/e2e_registration.py
 python ../frontend/tests/e2e_accounts.py
 ```
-
-## Email delivery with the Gmail API
-
-Emails are sent from the dedicated ApexRX Gmail account by the Gmail API over HTTPS (`POST https://gmail.googleapis.com/gmail/v1/users/me/messages/send`), so Render's SMTP block does not matter and no paid service or domain is needed. The backend holds an OAuth refresh token with only the `https://www.googleapis.com/auth/gmail.send` scope (it can send, but cannot read the mailbox), exchanges it for short-lived access tokens, and never uses the account's password.
-
-**One-time setup (signed in to Google as the ApexRX Gmail account):**
-1. **Google Cloud project:** open <https://console.cloud.google.com/>, create a project (for example "ApexRX email"). No billing account is needed for the Gmail API.
-2. **Enable the API:** APIs & Services → Library → "Gmail API" → Enable.
-3. **OAuth consent screen** (Google Auth Platform → Branding / Audience): user type **External**, app name "ApexRX Smart", support and developer email = the ApexRX Gmail address. Under Data access, add the scope `https://www.googleapis.com/auth/gmail.send`.
-4. **Publishing status: "In production".** Leave it in "Testing" and Google expires the refresh token after **7 days**, and email stops. For an unverified app Google shows a "Google hasn't verified this app" warning during step 6; as the owner of the account, choose *Advanced → Go to ApexRX Smart (unsafe)*. Only the ApexRX account ever authorizes it.
-5. **OAuth client:** Clients → Create client → type **Desktop app**. Copy the client ID and client secret (keep them private).
-6. **Refresh token**, on your own computer (not on Render):
-   ```bash
-   cd backend
-   python -m app.scripts.gmail_authorize --client-id YOUR_CLIENT_ID --client-secret YOUR_CLIENT_SECRET
-   ```
-   A browser opens: sign in as the ApexRX Gmail account and allow "Send email on your behalf". The script prints the refresh token once, on your terminal only.
-7. **Render → Environment** (never in Git, never in the frontend):
-   `EMAIL_PROVIDER=gmail`, `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `EMAIL_FROM_ADDRESS=<the ApexRX Gmail address>` (it must be that account; Gmail rewrites other senders), `EMAIL_FROM_NAME=ApexRX Smart` (optional), `FRONTEND_BASE_URL=https://<your Netlify site>`.
-8. **Prove delivery** with a real message before calling email operational. Locally (with the same variables in `backend/.env`) or from a Render shell:
-   ```bash
-   python -m app.scripts.send_test_email --to someone@example.com
-   ```
-   It prints the Gmail message id when Google accepted the email; then check that inbox (and spam).
-
-**Failure handling:** an expired or revoked authorization (`invalid_grant`, typically the consent screen left in Testing) or any Gmail error raises a delivery error: verification answers 502 and lets the user retry; an invitation stays saved as "Email not sent" with a Resend button; a password reset link is invalidated (the user requests another). Nothing is ever reported as sent unless Gmail accepted it. Logs contain the HTTP status and Google's error code only, never tokens. A 401 from Gmail refreshes the access token once and retries.
-
-**Limits to know:** a consumer Gmail account can send roughly 500 messages a day; Gmail does not report bounces through this API (they arrive in the account's inbox). To revoke access at any time: <https://myaccount.google.com/permissions> → ApexRX Smart → Remove access (then create a new refresh token).
-
-**Status of this repository:** the adapter is tested against Google's documented request and response formats (`tests/test_gmail_provider.py`), but **no real email has been sent from the ApexRX account yet**, because that needs the credentials above. Do not consider email delivery operational until step 8 succeeds.
 
 ## Sessions
 
@@ -355,17 +336,16 @@ Every sign-in creates a server-side session (`auth_session`), and every access t
 ApexRX keeps one account per person: **user → membership (role) → organization**. A pharmacy is an organization, never a shared login.
 
 - **Staff sign-in:** `pharmacies.html` has two paths, *Register a pharmacy* and *Staff sign-in* (also `pharmacies.html#staff`). Staff sign in with their own email and password; the backend returns their memberships (`GET /auth/me`) and the workspace opens on one of them. Someone in several pharmacies chooses one first, and can switch later from the workspace's organization selector. Every request is authorized on the backend from the membership (`get_org_access`), so changing an organization id in the browser opens nothing.
-- **Inviting** (owners and managers, Employees → *Invite an employee*): email + role. Managers may invite staff only; owners any role (same rules as before). The employee does **not** need an ApexRX account. `POST /organizations/{id}/invitations` stores the invitation and emails a single-use link to `accept-invitation.html`. No membership exists until it is accepted. Owners and managers see every invitation with its status (pending, accepted with a new or existing account, expired, revoked) and email delivery (sent, not sent), and can **Resend** (new link, the old one stops working, new validity period) or **Revoke**. If the email cannot be sent, the invitation stays saved as "Email not sent" and can be resent; nothing is activated.
-- **Accepting** (`accept-invitation.html`): a new person sets up their own name and password (the owner never sees or chooses it), which creates the account, marks the email verified (opening the link proved the address), joins and signs them in. An existing account signs in instead (no second account) and joins; its other memberships and roles are kept. An account with a different email address is refused (`email_mismatch`).
+- **Inviting** (owners and managers, Employees → *Invite an employee*): email + role. Managers may invite staff only; owners any role (same rules as before). The employee does **not** need an ApexRX account. `POST /organizations/{id}/invitations` stores the invitation; no membership exists until it is accepted. **While email is disabled** the response carries the link's token once (`share_token`, never stored) and the workspace shows the link with **Copy link** for the inviter to give to the employee; with email enabled it is emailed instead. Owners and managers see every invitation with its status (pending, accepted with a new or existing account, expired, revoked) and how its link was delivered, and can renew it (**New link** / **Resend**: the old link stops working) or **Revoke** it.
+- **Accepting** (`accept-invitation.html`): a new person sets up their own name and password (the owner never sees or chooses it), which creates the account, joins and signs them in. Only an *emailed* link marks the email verified; a link given by the inviter does not. An existing account signs in instead (no second account) and joins; its other memberships and roles are kept. An account with a different email address is refused (`email_mismatch`).
 - **Invitation links:** 32 random bytes in the URL fragment; only a SHA-256 hash is stored; bound to the organization and the invited address; single use; expire after `INVITATION_TTL_HOURS` (72); revoked, expired, replaced and used links are refused by the backend with a clear reason. At most one open invitation per organization and address (database-enforced); at most 30 invitations per organization per hour.
 - Direct adding of an existing account (`POST /organizations/{id}/members`) still exists in the API; the workspace uses invitations.
 
 ## Password reset
 
-- **Forgot password?** on the staff sign-in, the supplier sign-in, the admin sign-in and the invitation page leads to `reset-password.html`. `POST /auth/password/forgot` always answers the same ("If an ApexRX account uses this email address, we have sent it a link…"), and the email is sent after the response, so neither the answer nor its timing reveals whether an account exists.
-- The link (`reset-password.html#token=…`) is single-use, expires after 60 minutes, and a new request replaces earlier links. Only a SHA-256 hash is stored. Requests are limited per address (3 an hour, counted for every address, registered or not) and per trustworthy IP (10 an hour).
-- `POST /auth/password/reset` sets the new password (same Argon2id hashing), signs out every session, and emails a "your password was changed" confirmation. Memberships and roles are not touched. A failed email invalidates the link.
-- Invitations, email verification and password reset are separate flows with separate tokens; a reset link is never used to invite anyone.
+**Unavailable while email is disabled.** "Forgot password?" (staff, supplier, admin and invitation sign-ins) leads to `reset-password.html`, which says the feature is temporarily unavailable and to contact ApexRX support; `POST /auth/password/forgot` answers 503 for every address. Signed-in users can still change their password (`POST /auth/me/password`, which signs out their other sessions). There is no admin tool to reset another user's password yet.
+
+When email is re-enabled, the dormant flow works as follows: the same public answer for every address (the email is sent after the response), a single-use link valid 60 minutes stored only as a hash, limits per address (3/hour) and per IP (10/hour), and a successful reset signs out every session and sends a confirmation. Memberships and roles are never touched.
 
 ## Password hashing
 
@@ -554,7 +534,7 @@ These are three separate actions:
 |---|---|---|
 | **Apply a migration** | The database structure only | `alembic upgrade head`, run from your machine against the database |
 | **Deploy application code** | What Render runs | Merging to `main` (Render deploys automatically) |
-| **Turn mandatory email verification on or off** | Whether registering an organization needs a verified email | The `EMAIL_VERIFICATION_REQUIRED` environment variable on Render. It changes behaviour, not the schema, and needs no migration |
+| **Turn mandatory email verification on or off** | Whether registering an organization needs a verified email | `EMAIL_VERIFICATION_REQUIRED` on Render. Leave it unset (false) while email is disabled |
 
 **Safe order for the testing environment** (for example, PR #24 and migration `c4d1e8f2a9b7`):
 1. **Back up.** In Neon, open **Branches → Create branch** from the testing branch (for example `pre-c4d1e8f2a9b7`). That gives you an instant copy you can restore.
@@ -578,7 +558,7 @@ These are three separate actions:
    SELECT to_regclass('phone_verification');                -- phone_verification
    ```
    Re-run the counts from step 2. They must be identical.
-5. **Configure email** on Render *before* deploying code that requires it (`EMAIL_PROVIDER`, the provider key, `EMAIL_FROM_ADDRESS`, `FRONTEND_BASE_URL`; see [Email verification](#email-verification)). Until a provider is configured, new pharmacies and suppliers cannot register, or set `EMAIL_VERIFICATION_REQUIRED=false` deliberately.
+5. **Email:** nothing to configure. Leave `EMAIL_PROVIDER` and `EMAIL_VERIFICATION_REQUIRED` unset (see [Email: temporarily disabled](#email-temporarily-disabled)), and remove any old `SMS_*`, `OTP_*`, `PHONE_VERIFICATION_REQUIRED`, `GMAIL_*`, `RESEND_API_KEY`, `BREVO_API_KEY` or `EMAIL_FROM_*` variables.
 6. **Deploy the code** by merging the PR. Then `GET /health` must return 200 with `"schema": "up to date"`. Check that sign-in and patient search work.
 
 **Rolling back:**
@@ -604,7 +584,7 @@ Create a web service with root directory `backend`.
 |---|---|
 | Build command | `pip install -r requirements.txt` |
 | Start command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
-| Environment | `DATABASE_URL` (Neon), `JWT_SECRET_KEY` (**at least 32 random characters**, or the service will not start), `APP_ENV=production` (also the default), `EMAIL_PROVIDER=gmail`, `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `EMAIL_FROM_ADDRESS` and `FRONTEND_BASE_URL` (the Netlify URL; see [Email delivery with the Gmail API](#email-delivery-with-the-gmail-api)), `CORS_ORIGINS` (must include the Netlify URL, for example `https://your-site.netlify.app`), `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_BUCKET_NAME=organization-documents`. Leave `TRUSTED_CLIENT_IP_HEADER` unset unless `tools/render-ip-check` has verified a header |
+| Environment | `DATABASE_URL` (Neon), `JWT_SECRET_KEY` (**at least 32 random characters**, or the service will not start), `APP_ENV=production` (also the default), no email variables (email is disabled; see [Email: temporarily disabled](#email-temporarily-disabled)), `CORS_ORIGINS` (must include the Netlify URL, for example `https://your-site.netlify.app`), `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_BUCKET_NAME=organization-documents`. Leave `TRUSTED_CLIENT_IP_HEADER` unset unless `tools/render-ip-check` has verified a header |
 
 Limits of the free plan:
 
@@ -633,7 +613,7 @@ Patient search shows only **approved** pharmacies, **active** locations and **li
 
 - Supplier workspace screens (stock, prices and incoming orders). The pharmacy workspace exists; suppliers still use the API.
 - A catalogue import script for loading real medicine data.
-- Configure the Gmail API credentials and send a real test email (see [Email delivery with the Gmail API](#email-delivery-with-the-gmail-api)).
+- Re-enable email with a provider (verification, password reset, invitation emails), and an admin tool to help users who forget their password.
 - Subscription plans and Mobile Money payments (not part of registration today).
 - PostGIS for distance search at scale (bounding-box and haversine search is used today).
 - Notifications (email/WhatsApp) for order status changes.

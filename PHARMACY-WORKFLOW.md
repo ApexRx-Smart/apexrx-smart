@@ -2,12 +2,12 @@
 
 Open frontend/index.html, then choose “For Pharmacies”. You can also open frontend/pharmacies.html directly. Keep all files and the assets folder together.
 
-Journey: email + matching passwords (8 characters minimum) → email verified by an emailed link (in development, open the link from `GET /dev/email/latest`) → pharmacy details with a structured Rwandan address → licensing documents → registration review → workspace. There is no plan or payment step. “Preview the workspace” skips onboarding. Suppliers follow the same steps on suppliers.html (js/registration.js serves both). The workspace includes supplier search, local demo conversations and a profile summary.
+Journey: email + matching passwords (8 characters minimum) → (email verification is skipped while email is temporarily disabled) → pharmacy details with a structured Rwandan address → licensing documents → registration review → workspace. There is no plan or payment step. “Preview the workspace” skips onboarding. Suppliers follow the same steps on suppliers.html (js/registration.js serves both). The workspace includes supplier search, local demo conversations and a profile summary.
 
 The workflow is connected to the backend API (see [frontend/README.md](frontend/README.md) for the endpoint of each step):
 
 - **Account:** creates a real account, or signs in if the email is already registered.
-- **Verify email:** the backend refuses to register an organization until the account's email is verified.
+- **Verify email:** skipped while email delivery is temporarily disabled; the details step says so.
 - **Details and documents:** create the pharmacy organization and its main branch (province, district, sector, cell, village, street, optional coordinates), and upload the verification documents for ApexRX to review.
 - **Review:** the real status, ApexRX's note after a rejection, resubmission, and more uploads. Signing in again resumes an incomplete registration.
 - **Workspace:** shows the live profile and document review status, suppliers from the pharmacy's purchase orders, and supplier stock search. Search works only once ApexRX has approved the pharmacy.
@@ -17,7 +17,7 @@ The access token is kept in `sessionStorage`, so a refresh resumes the session a
 
 Still simulated: in-app chat messages, which stay in the browser. Coordinates come from the device's location or are entered manually, with a link to check them on OpenStreetMap. Premium is a feature preview.
 
-Before production: configure a real email provider and domain (see the root README, "Email verification"), check the list of Rwandan places against official data, and have the Kinyarwanda strings reviewed. Subscriptions and payments are not part of registration. The workflow supports English, French and Kinyarwanda. It inherits apexrx_lang from the home page; language query parameters also preserve the choice when local storage is unavailable. A selector changes the workflow language without losing form progress. Browser-native file picker and validation wording follow the browser language.
+Before production: email is temporarily disabled (see the root README, "Email: temporarily disabled"); check the list of Rwandan places against official data, and have the Kinyarwanda strings reviewed. Subscriptions and payments are not part of registration. The workflow supports English, French and Kinyarwanda. It inherits apexrx_lang from the home page; language query parameters also preserve the choice when local storage is unavailable. A selector changes the workflow language without losing form progress. Browser-native file picker and validation wording follow the browser language.
 
 Files added: pharmacies.html, pharmacies.css, pharmacies.js, pharmacies-i18n.js. The home page pharmacy links now open pharmacies.html. Existing home-page CSS, JavaScript, Kigali map and wave animations are preserved.
 
