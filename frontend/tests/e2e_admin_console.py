@@ -7,7 +7,7 @@ status and admin rights, and adds catalogue entries.
 
 Setup (as for e2e_admin.py):
   1. Backend on http://127.0.0.1:8000 with a disposable database, APP_ENV=development
-     and SMS_PROVIDER=mock, and an admin account:
+     and EMAIL_PROVIDER=mock, and an admin account:
        APEXRX_ADMIN_PASSWORD=... python -m app.scripts.create_admin --email e2e-admin@example.com --yes
   2. Frontend on http://127.0.0.1:5501 (python -m http.server 5501 --directory frontend)
   3. E2E_ADMIN_EMAIL=e2e-admin@example.com E2E_ADMIN_PASSWORD=... python frontend/tests/e2e_admin_console.py
@@ -100,11 +100,12 @@ def admin_token():
 
 def seed():
     owner = account(f"console-owner-{RUN}@example.com", f"Console Owner {RUN}")
-    ok("POST", "/auth/phone/send-code", {"phone": PHONE}, owner)
-    req = urllib.request.Request(API + "/dev/sms/latest", headers={"Authorization": f"Bearer {owner}"})
+    # The real email verification flow with the mock provider (development only).
+    ok("POST", "/auth/email/send", {"next": "pharmacy"}, owner)
+    req = urllib.request.Request(API + "/dev/email/latest", headers={"Authorization": f"Bearer {owner}"})
     with urllib.request.urlopen(req) as res:
-        code = json.loads(res.read())["code"]
-    ok("POST", "/auth/phone/verify", {"phone": PHONE, "code": code}, owner)
+        link_token = json.loads(res.read())["token"]
+    ok("POST", "/auth/email/verify", {"token": link_token})
     org = ok("POST", "/organizations", {"name": f"Console Pharmacy {RUN}", "type": "pharmacy"}, owner)
     for doc_type, fname in [("pharmacy_license", f"license-{RUN}.pdf"), ("owner_id", f"id-{RUN}.pdf")]:
         ok("POST", f"/organizations/{org['organization_id']}/documents", token=owner,

@@ -4,7 +4,7 @@ purchase orders, organization switching and joining an existing pharmacy.
 LOCAL backend and throwaway database only - never a shared environment.
 
   1. Backend on http://127.0.0.1:8000 with APP_ENV=development and
-     SMS_PROVIDER=mock (pharmacies need an SMS-verified phone), and an admin
+     EMAIL_PROVIDER=mock (organizations need a verified email), and an admin
      (see e2e_admin.py).
   2. Frontend on http://127.0.0.1:5501 (python -m http.server 5501 --directory frontend).
   3. E2E_ADMIN_EMAIL=... E2E_ADMIN_PASSWORD=... python frontend/tests/e2e_workspace.py
@@ -15,7 +15,6 @@ Each run creates its own accounts, organizations and catalogue entries
 
 import json
 import os
-import random
 import sys
 import urllib.error
 import urllib.request
@@ -60,14 +59,15 @@ def account(email, name):
     return call("POST", "/auth/login", {"email": email, "password": PW})["access_token"]
 
 
-def verify_phone(token):
-    if not call("GET", "/auth/phone/status", token=token)["required"]:
+def verify_email(token):
+    """The real email flow with the mock provider: send a link, read it, open it."""
+    status = call("GET", "/auth/email/status", token=token)
+    if status["verified"] or not status["required"]:
         return
-    phone = f"+250788{random.randint(0, 999999):06d}"
-    call("POST", "/auth/phone/send-code", {"phone": phone}, token)
-    req = urllib.request.Request(API + "/dev/sms/latest", headers={"Authorization": f"Bearer {token}"})
-    code = json.loads(urllib.request.urlopen(req).read())["code"]
-    call("POST", "/auth/phone/verify", {"phone": phone, "code": code}, token)
+    call("POST", "/auth/email/send", {"next": "pharmacy"}, token)
+    req = urllib.request.Request(API + "/dev/email/latest", headers={"Authorization": f"Bearer {token}"})
+    link_token = json.loads(urllib.request.urlopen(req).read())["token"]
+    call("POST", "/auth/email/verify", {"token": link_token})
 
 
 def seed():
@@ -75,7 +75,7 @@ def seed():
     approve = lambda org: call("POST", f"/admin/organizations/{org}/review", {"decision": "approved"}, admin)  # noqa: E731
     w = {"admin": admin}
     w["owner"] = account(f"ws-owner-{RUN}@example.com", "Workspace Owner")
-    verify_phone(w["owner"])
+    verify_email(w["owner"])
     w["org"] = call("POST", "/organizations", {"name": f"Kigali Care {RUN}", "type": "pharmacy"}, w["owner"])["organization_id"]
     w["kim"] = call("POST", f"/organizations/{w['org']}/locations", {"name": "Kimihurura Branch", "city": "Kigali", "latitude": -1.9536, "longitude": 30.089}, w["owner"])["location_id"]
     w["rem"] = call("POST", f"/organizations/{w['org']}/locations", {"name": "Remera Branch", "city": "Kigali"}, w["owner"])["location_id"]
@@ -86,7 +86,7 @@ def seed():
         w[role] = account(w[role + "_email"], f"Workspace {role.title()}")
     # A second pharmacy (other owner), to test organization switching.
     w["owner2"] = account(f"ws-owner2-{RUN}@example.com", "Second Owner")
-    verify_phone(w["owner2"])
+    verify_email(w["owner2"])
     w["org2"] = call("POST", "/organizations", {"name": f"Second Pharmacy {RUN}", "type": "pharmacy"}, w["owner2"])["organization_id"]
     call("POST", f"/organizations/{w['org2']}/locations", {"name": f"Nyamirambo {RUN}"}, w["owner2"])
     approve(w["org2"])
@@ -96,6 +96,7 @@ def seed():
     w["prod"] = call("POST", "/catalogue/products", {"drug_id": drug, "product_name": f"Wstestamol {RUN} 500mg"}, admin)["product_id"]
     w["prod_name"] = f"Wstestamol {RUN} 500mg"
     sup_owner = account(f"ws-supplier-{RUN}@example.com", "Supplier Owner")
+    verify_email(sup_owner)
     w["sup_owner"] = sup_owner
     w["sup"] = call("POST", "/organizations", {"name": f"Rwanda Distributors {RUN}", "type": "supplier"}, sup_owner)["organization_id"]
     wh = call("POST", f"/organizations/{w['sup']}/locations", {"name": "Gikondo Warehouse"}, sup_owner)["location_id"]
@@ -132,8 +133,9 @@ def sign_in(page, email):
     for field, value in (("email", email), ("password", PW), ("confirm", PW)):
         page.fill(f"#account [name={field}]", value)
     page.click("#account button.primary")
-    page.wait_for_function("!document.querySelector('#dashboard').hidden || !document.querySelector('#verify').hidden"
-                           " || !document.querySelector('#profile').hidden", timeout=20000)
+    page.wait_for_function("!document.querySelector('#dashboard').hidden || !document.querySelector('#verify-email').hidden"
+                           " || !document.querySelector('#details').hidden || !document.querySelector('#review').hidden",
+                           timeout=20000)
 
 
 def open_view(page, name):

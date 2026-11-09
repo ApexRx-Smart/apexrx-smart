@@ -5,7 +5,7 @@ Never point this at production: it registers accounts and changes statuses.
 
 Setup (see the root README, "Admin dashboard"):
   1. Backend on http://127.0.0.1:8000 with a disposable database, APP_ENV=development
-     and SMS_PROVIDER=mock (pharmacies need an SMS-verified phone), and an admin:
+     and EMAIL_PROVIDER=mock (organizations need a verified email), and an admin:
        APEXRX_ADMIN_PASSWORD=... python -m app.scripts.create_admin --email e2e-admin@example.com --yes
   2. Frontend served on http://127.0.0.1:5501 (python -m http.server 5501 --directory frontend)
   3. pip install playwright && playwright install chromium
@@ -32,7 +32,7 @@ ADMIN_EMAIL = os.environ["E2E_ADMIN_EMAIL"]
 ADMIN_PASSWORD = os.environ["E2E_ADMIN_PASSWORD"]
 PASSWORD = "E2e-User-Pass-2026"
 RUN = uuid.uuid4().hex[:6]
-# Random Rwandan mobile numbers per run (the per-number SMS limit is hourly).
+# Random Rwandan contact numbers per run.
 OWNER_PHONE = f"+250788{random.randint(0, 999999):06d}"
 SELLER_PHONE = f"+250789{random.randint(0, 999999):06d}"
 PDF = b"%PDF-1.4\n% ApexRx e2e dummy document, not a real license\n%%EOF\n"
@@ -83,20 +83,22 @@ def account(email, name):
     return call("POST", "/auth/login", {"email": email, "password": PASSWORD})["access_token"]
 
 
-def verify_phone(token, phone):
-    """The real SMS flow with the mock provider: send, read the code, verify."""
-    call("POST", "/auth/phone/send-code", {"phone": phone}, token)
-    req = urllib.request.Request(API + "/dev/sms/latest", headers={"Authorization": f"Bearer {token}"})
-    with urllib.request.urlopen(req) as res:
-        code = json.loads(res.read())["code"]
-    call("POST", "/auth/phone/verify", {"phone": phone, "code": code}, token)
+def verify_email(token):
+    """The real email flow with the mock provider: send a link, read it, open it."""
+    status = call("GET", "/auth/email/status", token=token)
+    if status["verified"] or not status["required"]:
+        return
+    call("POST", "/auth/email/send", {"next": "pharmacy"}, token)
+    req = urllib.request.Request(API + "/dev/email/latest", headers={"Authorization": f"Bearer {token}"})
+    link_token = json.loads(urllib.request.urlopen(req).read())["token"]
+    call("POST", "/auth/email/verify", {"token": link_token})
 
 
 def seed():
     admin = call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})["access_token"]
 
     owner = account(f"owner-{RUN}@example.com", "Pending Owner")
-    verify_phone(owner, OWNER_PHONE)
+    verify_email(owner)
     pending = call("POST", "/organizations", {"name": f"Pending Pharmacy {RUN}", "type": "pharmacy",
                                                "email": f"contact-{RUN}@example.com", "phone": OWNER_PHONE}, owner)
     call("POST", f"/organizations/{pending['organization_id']}/locations",
@@ -106,11 +108,12 @@ def seed():
              multipart=({"document_type": doc_type}, (fname, PDF, "application/pdf")))
 
     supplier_owner = account(f"supplier-{RUN}@example.com", "Supplier Owner")
+    verify_email(supplier_owner)
     supplier = call("POST", "/organizations", {"name": XSS_NAME, "type": "supplier"}, supplier_owner)
 
     # An approved pharmacy with a listed offer, for the patient search check.
     seller = account(f"seller-{RUN}@example.com", "Seller")
-    verify_phone(seller, SELLER_PHONE)
+    verify_email(seller)
     shop = call("POST", "/organizations", {"name": f"Search Pharmacy {RUN}", "type": "pharmacy"}, seller)
     call("POST", f"/admin/organizations/{shop['organization_id']}/review", {"decision": "approved"}, admin)
     loc = call("POST", f"/organizations/{shop['organization_id']}/locations",

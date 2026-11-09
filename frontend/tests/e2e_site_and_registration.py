@@ -4,23 +4,21 @@ LOCAL backend and a throwaway database:
   * landing page navigation (no "For Patients"), medicine search still works;
   * How it works, About and Legal pages, and every footer link, from the
     landing page and from other pages, on desktop and mobile;
-  * pharmacy registration through the UI (account, SMS code with the mock
-    provider, profile) and its "Already have an account? Sign in" switch;
-  * supplier registration through the UI, and that the organization is stored
-    with type "supplier" (and not as a pharmacy);
-  * sign-in for existing accounts and the show/hide password control.
+  * the registration entry points (For Pharmacies, For Suppliers, the header's
+    Sign in), the "Already have an account? Sign in" switch and the show/hide
+    password control. The registration journeys themselves are tested in
+    e2e_registration.py.
 
 Never point this at production: it registers accounts and organizations.
 
 Setup (as for e2e_admin.py): backend on http://127.0.0.1:8000 with APP_ENV=development
-and SMS_PROVIDER=mock, frontend on http://127.0.0.1:5501, an admin account, then
+and EMAIL_PROVIDER=mock, frontend on http://127.0.0.1:5501, an admin account, then
   E2E_ADMIN_EMAIL=... E2E_ADMIN_PASSWORD=... python frontend/tests/e2e_site_and_registration.py
 (E2E_BROWSER_CHANNEL=chrome uses the installed Chrome.)
 """
 
 import json
 import os
-import random
 import sys
 import urllib.error
 import urllib.parse
@@ -34,8 +32,6 @@ API = os.environ.get("E2E_API", "http://127.0.0.1:8000")
 ADMIN_EMAIL, ADMIN_PASSWORD = os.environ["E2E_ADMIN_EMAIL"], os.environ["E2E_ADMIN_PASSWORD"]
 RUN = uuid.uuid4().hex[:6]
 PASSWORD = "Site-Flow-Pass-2026"
-PHARMACY_PHONE = f"0788{random.randint(0, 999999):06d}"
-PDF = b"%PDF-1.4\n% ApexRx e2e dummy document, not a real license\n%%EOF\n"
 
 failures = []
 
@@ -229,7 +225,8 @@ def main():
         check("mobile: no horizontal scroll on any page", not wide, wide)
         ctx.close()
 
-        # ---------------------------------------------------- pharmacy registration
+        # ------------------------------------- registration entry points
+        # (The full journeys are in e2e_registration.py.)
         ctx = new_context(browser, {"width": 1366, "height": 900})
         page = ctx.new_page()
         watch(page, errors)
@@ -243,45 +240,17 @@ def main():
         confirm_eye.click()
         check("pharmacy: the confirm field has its own toggle", page.get_attribute("#account [name=confirm]", "type") == "text")
         confirm_eye.click()
-
         page.click("#auth-switch")
         check("pharmacy: 'Already have an account? Sign in' switches to sign in",
               page.is_hidden("#confirm-field") and page.inner_text("#step-title") == "Sign in to ApexRX"
               and page.evaluate("location.hash") == "#signin")
         page.click("#auth-switch")
         check("pharmacy: ...and back to create account", page.is_visible("#confirm-field"))
-
-        email = f"site-pharmacy-{RUN}@example.com"
-        page.fill("#account [name=email]", email)
-        page.fill("#account [name=password]", PASSWORD)
-        page.fill("#account [name=confirm]", PASSWORD)
-        page.click("#account .pw-wrap:has(input[name=password]) .pw-eye")  # visible when submitting
-        page.click("#account-submit")
-        page.wait_for_selector("#verify:not([hidden])")
-        check("pharmacy: submitting hides the password again", page.get_attribute("#account [name=password]", "type") == "password")
-        page.fill("#verify [name=phone]", PHARMACY_PHONE)
-        page.click("#send-code")
-        page.wait_for_selector("#code-area:not([hidden])")
-        token = page.evaluate("JSON.parse(sessionStorage.getItem('apexrx_session')).token")
-        code = call("GET", "/dev/sms/latest", token=token)[1]["code"]
-        page.fill("#verify [name=code]", code)
-        page.click("#verify-code")
-        page.wait_for_selector("#profile:not([hidden])")
-        check("pharmacy: profile fields still present",
-              all(page.locator(f"#profile [name={n}]").count() == 1 for n in ("name", "license", "phone", "address", "latitude", "longitude"))
-              and page.locator("#profile input[data-document-type=pharmacy_license]").count() == 1)
-        pharmacy_name = f"Site Pharmacy {RUN}"
-        page.fill("#profile [name=name]", pharmacy_name)
-        page.fill("#profile [name=license]", "PH-SITE")
-        page.fill("#profile [name=address]", "KG 2 Ave, Kigali")
-        page.click("#profile button.primary")
-        page.wait_for_selector("#payment:not([hidden])")
-        orgs = find_org(pharmacy_name)
-        check("pharmacy: registered through the existing API as a pharmacy",
-              len(orgs) == 1 and orgs[0]["type"] == "pharmacy" and orgs[0]["status"] == "pending", orgs)
+        steps = [s.strip() for s in page.locator(".steps li").all_inner_texts()]
+        check("pharmacy: steps are Account, Verify email, Details, Documents, Review (no plan or payment)",
+              steps == ["Account", "Verify email", "Details", "Documents", "Review"], steps)
         ctx.close()
 
-        # Existing pharmacy user signs in from the header's Sign in button (sign-in mode).
         ctx = new_context(browser, {"width": 1366, "height": 900})
         page = ctx.new_page()
         watch(page, errors)
@@ -289,21 +258,6 @@ def main():
         page.click("#signInBtn")
         page.wait_for_url("**/pharmacies.html*#signin")
         check("sign in: header button opens sign-in mode", page.is_hidden("#confirm-field") and page.inner_text("#account-submit").startswith("Sign in"))
-        page.fill("#account [name=email]", email)
-        page.fill("#account [name=password]", "wrong-password")
-        page.click("#account-submit")
-        wait_text(page, "#form-error", "Incorrect email or password")
-        check("sign in: wrong password is refused", page.is_visible("#account"))
-        page.fill("#account [name=password]", PASSWORD)
-        page.click("#account-submit")
-        page.wait_for_selector("#dashboard:not([hidden])")
-        check("sign in: an existing pharmacy user reaches the workspace", pharmacy_name in page.inner_text("#pharmacy-name"))
-        ctx.close()
-
-        # ---------------------------------------------------- supplier registration
-        ctx = new_context(browser, {"width": 1366, "height": 900})
-        page = ctx.new_page()
-        watch(page, errors)
         page.goto(SITE + "/index.html")
         page.click("nav.main-nav a:has-text('For Suppliers')")
         page.wait_for_url("**/suppliers.html*")
@@ -313,84 +267,6 @@ def main():
         password_toggle_checks(page, "#account", "supplier create")
         page.click("#auth-switch")
         check("supplier: 'Already have an account? Sign in' switches to sign in", page.is_hidden("#confirm-field"))
-        page.click("#auth-switch")
-        supplier_email = f"site-supplier-{RUN}@example.com"
-        page.fill("#account [name=email]", supplier_email)
-        page.fill("#account [name=password]", PASSWORD)
-        page.fill("#account [name=confirm]", PASSWORD + "x")
-        page.click("#account-submit")
-        wait_text(page, "#form-error", "do not match")
-        page.fill("#account [name=confirm]", PASSWORD)
-        page.click("#account-submit")
-        page.wait_for_selector("#business:not([hidden])")
-        check("supplier: no SMS step (the backend only requires it for pharmacies)", page.locator("#verify").count() == 0)
-        types = page.eval_on_selector_all("#business input[type=file]", "els => els.map(e => e.dataset.documentType)")
-        check("supplier: supplier documents (no pharmacy license)", types == ["business_license", "owner_id"], types)
-        page.click("#business-submit")
-        wait_text(page, "#form-error", "business name")
-        check("supplier: validation before anything is sent", True)
-        supplier_name = f"Site Supplies {RUN}"
-        page.fill("#business [name=name]", supplier_name)
-        page.fill("#business [name=phone]", "+250 788 111 222")
-        page.fill("#business [name=warehouse]", "Gikondo Warehouse")
-        page.fill("#business [name=address]", "KK 15 Rd, Gikondo")
-        page.set_input_files("#business input[data-document-type=business_license]",
-                             files=[{"name": f"license-{RUN}.pdf", "mimeType": "application/pdf", "buffer": PDF}])
-        page.click("#business-submit")
-        page.wait_for_selector("#review:not([hidden])")
-        wait_text(page, "#review-name", supplier_name)
-        check("supplier: review shows the pending registration and the uploaded document",
-              page.inner_text("#review-status").lower() == "pending" and f"license-{RUN}.pdf" in page.inner_text("#review-documents"))
-        orgs = find_org(supplier_name)
-        check("supplier: stored with organization type 'supplier'", len(orgs) == 1 and orgs[0]["type"] == "supplier", orgs)
-        status, as_pharmacy = call("GET", "/admin/organizations?" + urllib.parse.urlencode({"q": supplier_name, "type": "pharmacy"}), token=admin_token())
-        check("supplier: not registered as a pharmacy", as_pharmacy["total"] == 0)
-        detail = call("GET", f"/admin/organizations/{orgs[0]['organization_id']}", token=admin_token())[1]
-        check("supplier: warehouse, owner and document saved",
-              detail["locations"][0]["name"] == "Gikondo Warehouse" and detail["members"][0]["email"] == supplier_email
-              and detail["members"][0]["role"] == "owner" and detail["documents"][0]["document_type"] == "business_license")
-        page.set_input_files("#upload-file", files=[{"name": f"id-{RUN}.pdf", "mimeType": "application/pdf", "buffer": PDF}])
-        page.select_option("#upload-type", "owner_id")
-        page.click("#upload-button")
-        wait_text(page, "#review-documents", f"id-{RUN}.pdf")
-        check("supplier: a missing document can be added later", True)
-
-        # Approval in the admin console is reflected on the supplier page.
-        call("POST", f"/admin/documents/{detail['documents'][0]['document_id']}/review", {"decision": "approved"}, admin_token())
-        docs = call("GET", f"/admin/organizations/{orgs[0]['organization_id']}", token=admin_token())[1]["documents"]
-        for d in docs:
-            if d["verification_status"] == "pending":
-                call("POST", f"/admin/documents/{d['document_id']}/review", {"decision": "approved"}, admin_token())
-        call("POST", f"/admin/organizations/{orgs[0]['organization_id']}/review", {"decision": "approved"}, admin_token())
-        page.click("#review-refresh")
-        page.wait_for_function("document.querySelector('#review-status').textContent === 'approved'")
-        check("supplier: the existing verification and approval process applies", True)
-        page.click("#review-signout")
-        page.wait_for_selector("#account:not([hidden])")
-        check("supplier: sign out returns to sign in (no false 'session expired')", page.inner_text("#form-error") == "")
-
-        # Existing supplier signs in on the supplier page.
-        page.fill("#account [name=email]", supplier_email)
-        page.fill("#account [name=password]", PASSWORD)
-        page.click("#account-submit")
-        page.wait_for_selector("#review:not([hidden])")
-        check("sign in: an existing supplier sees their registration", supplier_name in page.inner_text("#review-name"))
-        ctx.close()
-
-        # A supplier who signs in on the pharmacy page is pointed to the supplier page.
-        ctx = new_context(browser, {"width": 1366, "height": 900})
-        page = ctx.new_page()
-        watch(page, errors)
-        page.goto(SITE + "/pharmacies.html#signin")
-        page.fill("#account [name=email]", supplier_email)
-        page.fill("#account [name=password]", PASSWORD)
-        page.click("#account-submit")
-        page.wait_for_selector("#supplier-continue:not([hidden])")
-        check("sign in: a supplier on the pharmacy page is not asked to register a pharmacy",
-              page.is_visible("#account") and page.is_hidden("#verify"))
-        page.click("#supplier-continue a")
-        page.wait_for_selector("#review:not([hidden])")
-        check("sign in: ...and continues on the supplier page, still signed in", supplier_name in page.inner_text("#review-name"))
         ctx.close()
 
         # Admin sign-in has the toggle too, and still works.
