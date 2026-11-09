@@ -305,6 +305,22 @@ python -m pytest tests/test_phone_otp.py tests/test_pharmacy_phone_binding.py te
 python ../frontend/tests/e2e_phone_otp.py
 ```
 
+## Password hashing
+
+Passwords are hashed with Argon2id (`pwdlib`), using OWASP's recommended parameters: 19 MiB of memory, 2 passes, 1 lane (`backend/app/core/security.py`). These cost about a third of pwdlib's default (64 MiB, 3 passes, 4 lanes), which made sign-in and registration slow on small hosting instances. Hashes made with the old parameters still work. They are re-hashed with the current ones the next time that user signs in successfully, so no migration is needed.
+
+## Responsiveness
+
+- **Activity indicator:** `js/api.js` shows a thin progress bar at the top of the page while any request is in flight. After 4 seconds it adds a note that the server may be starting up: a free Render instance sleeps when idle, and its first request can take 30 seconds or more.
+- **Warm-up:** each page that loads `js/api.js` sends `GET /health` straight away, without waiting for it. A sleeping server and database start waking while the user reads or types.
+- **Timeout:** requests time out after 45 seconds, long enough for that wake-up.
+- **Fewer, parallel requests:**
+  - The admin overview uses one counts request instead of seven.
+  - The pharmacy workspace loads the organization, branches, documents and orders at the same time.
+  - Registration saves the location and uploads documents at the same time.
+- **No flashing:** a workspace section repainting after a save stays visible, dimmed, instead of flashing "Loading…".
+- **Busy buttons:** admin buttons show "Opening…", "Approving…" and similar while they wait.
+
 ## Login rate limiting
 
 Failed sign-ins (`POST /auth/login`) are limited with the [`limits`](https://pypi.org/project/limits/) library, using a moving window. The limits are checked **before** the password is verified. A blocked attempt gets **429** with `Retry-After` and "Too many failed sign-in attempts. Please wait about N minutes and try again". The right password is refused too.
@@ -351,7 +367,7 @@ Verification documents are files in a **private Supabase Storage bucket**. Their
 - **Sign in:** with the normal ApexRX login. Accounts that aren't platform admins are refused, and their token is cleared. The token is kept in `sessionStorage`, like the rest of the site. An expired or invalid token returns you to the sign-in screen. **Sign out** clears it.
 - **Overview:**
   - Seven counts: total, pharmacies, suppliers, pending, approved, rejected and suspended.
-  - They come from the `total` of `GET /admin/organizations` with each filter, so no summary endpoint is needed.
+  - They come from `GET /admin/organizations/counts`: one request and one grouped query for all seven numbers.
   - Clicking a count filters the list by it.
 - **Organizations:** a table of name, type, registration date, status and contact details. It has type and status filters, a name or email search, and pagination.
 - **Organization detail:**
@@ -379,7 +395,7 @@ Authenticated endpoints need `Authorization: Bearer <token>`. List endpoints ret
 | Inventory | `GET /organizations/{id}/inventory`; per location: `PUT/GET/DELETE .../locations/{loc}/stock/{product_id}`, `PUT/DELETE .../stock/{product_id}/offer`, `GET .../stock/{product_id}/adjustments`, `POST .../locations/{loc}/stock/confirm` |
 | Supplier discovery | `GET /supplier-offers?pharmacy_organization_id=&q=&lat=&lng=&min_quantity=&sort=price\|distance\|quantity\|freshness` |
 | Purchase orders | `POST/GET /purchase-orders`, `GET/PATCH/DELETE /purchase-orders/{id}`, items `POST/PATCH/DELETE .../items[/{item_id}]`, `POST .../reprice`, transitions `POST .../submit\|accept\|counter\|reject\|accept-counter\|start-processing\|dispatch\|mark-delivered\|cancel` |
-| Admin | `GET /admin/organizations`, `GET /admin/organizations/{id}`, `POST .../review`, `GET /admin/documents`, `GET .../download`, `POST .../review`, `GET/PATCH /admin/users`, `GET /admin/insights/searches` |
+| Admin | `GET /admin/organizations`, `GET /admin/organizations/counts`, `GET /admin/organizations/{id}`, `POST .../review`, `GET /admin/documents`, `GET .../download`, `POST .../review`, `GET/PATCH /admin/users`, `GET /admin/insights/searches` |
 | Legacy (deprecated) | `GET /medicines/availability`: no longer used by the frontend. Kept for older clients, without quantities |
 
 Each purchase order includes `allowed_actions`, the actions the current user may take next, so the UI can show only the valid buttons.

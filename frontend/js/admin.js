@@ -155,12 +155,14 @@
 
   /* ------------------------------------------------------------ overview */
   function refreshCounts() {
-    COUNTS.forEach(function (c) {
-      var node = document.querySelector('[data-count="' + c[0] + '"]');
-      API.admin.organizations(Object.assign({ limit: 1 }, c[1]))
-        .then(function (page) { node.textContent = page.total; })
-        .catch(function () { node.textContent = '?'; });
-    });
+    // One request for all seven numbers.
+    API.admin.organizationCounts()
+      .then(function (counts) {
+        COUNTS.forEach(function (c) { document.querySelector('[data-count="' + c[0] + '"]').textContent = counts[c[0]]; });
+      })
+      .catch(function () {
+        COUNTS.forEach(function (c) { document.querySelector('[data-count="' + c[0] + '"]').textContent = '?'; });
+      });
   }
 
   function markActiveStat() {
@@ -227,7 +229,11 @@
       el('td', {}, [el('button', {
         type: 'button', class: 'secondary small', text: 'Open',
         'aria-label': 'Open ' + o.name,
-        on: { click: function () { openOrganization(o.organization_id); } }
+        on: { click: function (e) {
+          var b = e.currentTarget;
+          b.disabled = true; b.textContent = 'Opening…';
+          openOrganization(o.organization_id).then(function () { b.disabled = false; b.textContent = 'Open'; });
+        } }
       })])
     ]);
   }
@@ -323,6 +329,11 @@
       var verb = { approved: 'Approve', rejected: 'Reject', suspended: 'Suspend' }[decision];
       if (!window.confirm(verb + ' ' + org.name + '?')) return;
       state.busy = true;
+      var reviewButtons = Array.prototype.slice.call(document.querySelectorAll('#review-box [data-decision]'));
+      var wasDisabled = reviewButtons.map(function (x) { return x.disabled; });
+      var label = b.textContent;
+      reviewButtons.forEach(function (x) { x.disabled = true; });
+      b.textContent = { approved: 'Approving…', rejected: 'Rejecting…', suspended: 'Suspending…' }[decision];
       API.admin.reviewOrganization(org.organization_id, decision, notes)
         .then(function (updated) {
           state.current = updated;
@@ -330,8 +341,12 @@
           detailMessage(org.name + ' is now ' + updated.status + '.');
           refreshCounts();
         })
-        .catch(function (err) { if (err.status !== 401) detailMessage(errorText(err), true); })
-        .then(function () { state.busy = false; });
+        .catch(function (err) {
+          // Nothing changed: restore the buttons (renderDetail sets them on success).
+          reviewButtons.forEach(function (x, i) { x.disabled = wasDisabled[i]; });
+          if (err.status !== 401) detailMessage(errorText(err), true);
+        })
+        .then(function () { b.textContent = label; state.busy = false; });
     });
   });
 
@@ -342,11 +357,12 @@
       var reasonInput = el('input', { type: 'text', maxlength: '2000', placeholder: 'Reason (required to reject)', 'aria-label': 'Rejection reason for ' + d.file_name });
       var review = d.verification_status === 'pending' ? el('div', { class: 'doc-review' }, [
         reasonInput,
-        el('button', { type: 'button', class: 'primary small', text: 'Approve document', on: { click: function () { reviewDocument(d, 'approved'); } } }),
-        el('button', { type: 'button', class: 'danger small', text: 'Reject document', on: { click: function () {
+        el('button', { type: 'button', class: 'primary small', text: 'Approve document', on: { click: function (e) { reviewDocument(d, 'approved', null, e.currentTarget); } } }),
+        el('button', { type: 'button', class: 'danger small', text: 'Reject document', on: { click: function (e) {
+          var button = e.currentTarget;
           var reason = reasonInput.value.trim();
           if (!reason) { detailMessage('Enter a reason before rejecting ' + d.file_name + '.', true); reasonInput.focus(); return; }
-          reviewDocument(d, 'rejected', reason);
+          reviewDocument(d, 'rejected', reason, button);
         } } })
       ]) : null;
       return el('div', { class: 'item' }, [
@@ -383,15 +399,24 @@
     });
   }
 
-  function reviewDocument(d, decision, reason) {
+  function reviewDocument(d, decision, reason, button) {
     if (state.busy) return;
     state.busy = true;
+    var item = button && button.closest('.item');
+    var buttons = item ? Array.prototype.slice.call(item.querySelectorAll('.doc-review button')) : [];
+    buttons.forEach(function (x) { x.disabled = true; });
+    if (button) button.textContent = decision === 'approved' ? 'Approving…' : 'Rejecting…';
     API.admin.reviewDocument(d.document_id, decision, reason)
       .then(function () {
         return openOrganization(state.current.organization_id, true);
       })
       .then(function () { detailMessage(d.file_name + ' ' + decision + '.'); })
-      .catch(function (err) { if (err.status !== 401) detailMessage(errorText(err), true); })
+      .catch(function (err) {
+        // The document list is re-rendered on success; on failure re-enable it.
+        buttons.forEach(function (x) { x.disabled = false; });
+        if (button) button.textContent = decision === 'approved' ? 'Approve document' : 'Reject document';
+        if (err.status !== 401) detailMessage(errorText(err), true);
+      })
       .then(function () { state.busy = false; });
   }
 

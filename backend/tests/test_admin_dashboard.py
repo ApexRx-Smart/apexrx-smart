@@ -16,6 +16,7 @@ PDF = b"%PDF-1.4\n% dummy test document\n%%EOF\n"
 
 ADMIN_GETS = [
     "/admin/organizations",
+    "/admin/organizations/counts",
     "/admin/documents",
     "/admin/users",
     "/admin/insights/searches",
@@ -149,6 +150,25 @@ def test_list_and_counts_by_filter(client, orgs):
     assert page["total"] == 4 and len(page["items"]) == 2
 
     assert client.get("/admin/organizations", params={"status": "bogus"}, headers=h).status_code == 422
+
+
+def test_overview_counts_in_one_request(client, orgs):
+    r = client.get("/admin/organizations/counts", headers=orgs["admin"])
+    assert r.status_code == 200, r.text
+    # The same numbers as the per-filter totals above.
+    assert r.json() == {
+        "total": 4, "pharmacy": 3, "supplier": 1,
+        "pending": 1, "approved": 1, "rejected": 1, "suspended": 1,
+    }
+    # "counts" is not mistaken for an organization id.
+    assert client.get("/admin/organizations/999999", headers=orgs["admin"]).status_code == 404
+
+
+def test_overview_counts_when_empty(client):
+    r = client.get("/admin/organizations/counts", headers=admin(client))
+    assert r.json() == dict.fromkeys(
+        ("total", "pharmacy", "supplier", "pending", "approved", "rejected", "suspended"), 0
+    )
 
 
 def test_organization_detail(client, orgs, fake_bucket):

@@ -82,15 +82,23 @@
   function render(name) {
     const container = box();
     const my = ++token;
+    const settle = () => { container.classList.remove('ws-refreshing'); container.removeAttribute('aria-busy'); };
     if (!live || !live.organization) {
+      settle(); delete container.dataset.section;
       container.replaceChildren(msg('Sign in with your pharmacy account to use this section. The preview has no live data.'));
       return;
     }
     const renderers = { overview: renderOverview, branches: renderBranches, employees: renderEmployees, inventory: renderInventory, orders: renderOrders };
-    container.replaceChildren(msg('Loading…'));
+    // Repainting the section that is already on screen (after a save, say):
+    // keep it visible, dimmed, until the new content is ready, instead of
+    // flashing "Loading…". A different section starts from "Loading…".
+    const refreshing = container.dataset.section === name && container.childElementCount > 0;
+    container.dataset.section = name;
+    if (refreshing) { container.classList.add('ws-refreshing'); container.setAttribute('aria-busy', 'true'); }
+    else { settle(); container.replaceChildren(msg('Loading…')); }
     Promise.resolve(renderers[name](container, () => my === token)).catch(err => {
       if (my === token && err.status !== 401) container.replaceChildren(msg(errorText(err), 'error'));
-    });
+    }).finally(() => { if (my === token) settle(); });
   }
 
   /* ----------------------------------------------------------- overview */

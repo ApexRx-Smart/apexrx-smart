@@ -67,3 +67,4 @@ header{background:#ffffffcc;backdrop-filter:blur(20px)}.onboarding{padding:24px;
 .org-switch{display:flex;gap:8px;align-items:center;margin:6px 0 0;font-size:11px}
 #join-wait{display:grid;gap:8px}
 @media(max-width:720px){.ws-facts{grid-template-columns:1fr}.ws-inline{flex-wrap:wrap}}
+.ws-refreshing{opacity:.55;pointer-events:none;transition:opacity .15s}

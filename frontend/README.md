@@ -63,7 +63,7 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 | Control | Endpoint |
 |---|---|
 | Sign in | `POST /auth/login`, then `GET /auth/me`. Refused unless `is_platform_admin` |
-| Overview counts | `GET /admin/organizations?limit=1` with each `type` / `status` filter, using its `total` |
+| Overview counts | `GET /admin/organizations/counts` (all seven numbers in one request) |
 | Organization table, filters, search, pages | `GET /admin/organizations?type=&status=&q=&limit=&offset=` |
 | **Open** | `GET /admin/organizations/{id}`: profile, locations, members and documents |
 | **Approve** / **Reject** / **Suspend** | `POST /admin/organizations/{id}/review` (notes required to reject or suspend) |
