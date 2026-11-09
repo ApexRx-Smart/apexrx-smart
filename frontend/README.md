@@ -28,6 +28,8 @@ The backend address is set in `js/config.js` (`window.APEX_CONFIG.API_BASE_URL`)
 | `pharmacies.html` | Pharmacy registration and sign-in (`js/registration.js`), then the pharmacy workspace (`js/pharmacies.js`, `js/workspace.js`) |
 | `suppliers.html` | Supplier registration and sign-in (`js/registration.js`, the same journey with `<body data-role="supplier">`) |
 | `verify-email.html` | Opened from the verification email; sends the link's token to `POST /auth/email/verify` (`js/verify-email.js`) |
+| `accept-invitation.html` | Opened from a staff invitation: set up your own account, or sign in, and join (`js/accept-invitation.js`) |
+| `reset-password.html` | "Forgot password?" and the password-reset link (`js/reset-password.js`) |
 | `admin.html` | Admin console (staff only) |
 
 - **Shared header and footer:** `js/site-layout.js` provides them for `index.html`, `how-it-works.html`, `about.html` and `legal.html`, so the navigation is defined once.
@@ -56,6 +58,10 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 |---|---|
 | Homepage medicine search | `GET /search/pharmacies?q=`: availability status, price, location and freshness. Never exact quantities. |
 | Homepage **Sign in** / **Get started** | Open `pharmacies.html#signin` / `pharmacies.html` |
+| Pharmacy page: *Register a pharmacy* / *Staff sign-in* tabs (`#staff`, `#signin`) | Staff sign-in is `POST /auth/login` with the person's own account, then `GET /auth/me`. Several pharmacies: a chooser, then the workspace. **Forgot password?** opens `reset-password.html` |
+| Workspace **Sign out** (top bar and sidebar), public header **Sign out** | `POST /auth/logout`: ends this session only |
+| Session activity, inactivity warning, other tabs | `js/api.js`: `POST /auth/session/activity` on real user activity; see the root README, "Sessions" |
+| Employees → Invite an employee, invitation list (Resend, Revoke) | `POST/GET /organizations/{id}/invitations`, `.../{inv}/resend`, `.../{inv}/revoke` (owners and managers) |
 | Registration step 1, Account (both pages) | **Create account:** `POST /auth/register`, then `POST /auth/login` (an email that already has an account signs in). **Sign in:** `POST /auth/login` only. Then everything below is decided from `GET /auth/me`, `GET /auth/email/status` and the organization's records, so an incomplete registration resumes where it stopped |
 | Step 2, Verify email | `GET /auth/email/status`; `POST /auth/email/send {next}` sends the link (automatically the first time). **I've verified my email** re-checks the status; the page also re-checks when it regains focus and when `verify-email.html` reports success in the same browser. **Resend** counts down `resend_after` |
 | `verify-email.html` | `POST /auth/email/verify {token}` (no session). Messages for verified, already verified, invalid, expired, used and superseded links |
@@ -85,7 +91,8 @@ The supplier page uses the same steps and endpoints, with `type: "supplier"`, a 
 | Branches: list | `GET /organizations/{id}/locations?include_inactive=true` | Everyone |
 | Branches: add, edit, deactivate/reactivate | `POST` / `PATCH /organizations/{id}/locations[/{loc}]` (`is_active`) | Owners, managers |
 | Employees: list | `GET /organizations/{id}/members` | Everyone |
-| Employees: add (existing account), change role, deactivate, remove | `POST` / `PATCH` / `DELETE /organizations/{id}/members[/{m}]` | Owners (everyone); managers (staff only) |
+| Employees: invite (email + role, no account needed), resend, revoke | `POST /organizations/{id}/invitations`, `.../{inv}/resend`, `.../{inv}/revoke`, `GET .../invitations` | Owners (any role); managers (staff only) |
+| Employees: change role, deactivate, remove | `PATCH` / `DELETE /organizations/{id}/members[/{m}]` | Owners (everyone); managers (staff only) |
 | Inventory: branch selector, list | `GET /organizations/{id}/inventory?location_id=` | Everyone |
 | Inventory: set quantity, add a catalogue medicine | `PUT .../locations/{loc}/stock/{product}`, `GET /catalogue/products` | Everyone (approved pharmacies) |
 | Inventory: price and listing | `PUT .../stock/{product}/offer` | Owners, managers |

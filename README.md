@@ -103,13 +103,13 @@ Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
 - **The pharmacy workspace** (`js/workspace.js`) runs the pharmacy day to day. All of it uses real backend data:
   - **Overview:** organization, status, branches, members and purchase-order counts.
   - **Branches:** list, add, edit, deactivate and reactivate.
-  - **Employees:** add an existing account by email, change roles, deactivate, remove.
+  - **Employees:** invite by email and role (no account needed; see [Staff accounts and invitations](#staff-accounts-and-invitations)), resend or revoke invitations, change roles, deactivate, remove.
   - **Inventory:** per branch, set quantities, prices and listing.
   - **Purchase orders:** create a draft with a receiving branch, edit lines, submit, cancel with a reason, view history.
   - **Organization selector:** for users who belong to several pharmacies.
   - It also lists suppliers from the pharmacy's purchase orders and searches supplier stock with `GET /supplier-offers`, which works only for approved pharmacies. **Open chat** opens the supplier's WhatsApp or phone.
   - Buttons follow the user's role, but the backend enforces every rule.
-- **Joining an existing pharmacy:** someone who registers to work at an existing pharmacy chooses "Joining an existing pharmacy instead?". They wait for the owner or a manager to add their email, instead of registering a new pharmacy.
+- **Joining an existing pharmacy:** someone who registers to work at an existing pharmacy chooses "Joining an existing pharmacy instead?". They wait for the owner or a manager to invite their email, instead of registering a new pharmacy. Staff normally just accept the invitation email and then use *Staff sign-in*.
 - **Supplier registration (`suppliers.html`):** the same journey with `type: "supplier"` and a warehouse; same API and admin review as pharmacies.
 - **Public pages:**
   - `how-it-works.html`, `about.html` (placeholder content to replace) and `legal.html` (placeholder privacy, terms and cookie pages, not approved policies).
@@ -177,8 +177,12 @@ cp .env.example .env    # then edit DATABASE_URL and JWT_SECRET_KEY
 | `DEFAULT_CURRENCY` | no | Default `RWF` |
 | `APP_ENV` | no | `production` (default), `development` or `test`. Only non-production allows the mock email provider and the `/dev` endpoints. On Render, any value other than `production` stops the service from starting |
 | `EMAIL_VERIFICATION_REQUIRED` | no | Default `true`: registering a pharmacy or supplier needs a verified account email |
-| `EMAIL_PROVIDER` | for email | `resend` or `brevo` (HTTPS APIs). `mock` works only outside production. If it is unset, sending a verification email returns 503. See [Email verification](#email-verification) |
-| `RESEND_API_KEY` / `BREVO_API_KEY` | for that provider | The provider's API key. Server-side only |
+| `EMAIL_PROVIDER` | for email | `gmail` (the ApexRX Gmail account through the Gmail API; see [Email delivery with the Gmail API](#email-delivery-with-the-gmail-api)), or optionally `resend` / `brevo`. `mock` works only outside production. If it is unset, sending email returns 503 |
+| `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` / `GMAIL_REFRESH_TOKEN` | for `gmail` | The Google OAuth client and the refresh token from `python -m app.scripts.gmail_authorize`. Server-side only, never committed |
+| `RESEND_API_KEY` / `BREVO_API_KEY` | for that provider | Optional alternatives; each needs a domain you control |
+| `SESSION_IDLE_TIMEOUT_MINUTES` / `SESSION_MAX_AGE_HOURS` | no | Defaults 30 / 12. See [Sessions](#sessions) |
+| `INVITATION_TTL_HOURS` | no | Default 72. Staff invitation links |
+| `PASSWORD_RESET_TTL_MINUTES` / `PASSWORD_RESET_MAX_PER_USER_PER_HOUR` / `..._PER_IP_PER_HOUR` | no | Defaults 60 / 3 / 10 |
 | `EMAIL_FROM_ADDRESS` / `EMAIL_FROM_NAME` | address: for email | Sender, e.g. `no-reply@your-domain`; it must be allowed by the provider (usually a verified domain). Name default `ApexRX Smart` |
 | `FRONTEND_BASE_URL` | for email | Where the frontend is served (the link opens `<FRONTEND_BASE_URL>/verify-email.html`). Must be `https://` in production. Default `http://127.0.0.1:5501` |
 | `EMAIL_VERIFICATION_TTL_MINUTES` / `EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS` | no | Defaults 1440 (24 hours) / 60 |
@@ -276,11 +280,10 @@ The document tests use an in-memory fake of the Supabase Storage client, and the
 
 **Limits** (as for the former SMS codes, in PostgreSQL so they hold across restarts and instances): a 60-second resend cooldown, at most 5 emails per user per hour and 20 per trustworthy client IP per hour. The user's row and an advisory lock for the IP are locked while checking and recording, so the check is atomic. The limits fail closed: if the database cannot check them, no email is sent (generic 503). The link is stored before the email is sent; a provider failure answers 502, marks the row failed and lets the user retry immediately. Tokens and full addresses never appear in responses or logs (logs show `a***a@example.com`).
 
-**Providers** (`backend/app/services/email/`): Render's free plan blocks outbound SMTP (ports 25, 465 and 587), so email goes through an HTTPS API:
-- **Resend** (`EMAIL_PROVIDER=resend`): create an API key, verify a domain you control under Domains (DNS records), and use a sender on it (`EMAIL_FROM_ADDRESS=no-reply@your-domain`). Without a verified domain, Resend only delivers to your own account address.
-- **Brevo** (`EMAIL_PROVIDER=brevo`): create an API key under SMTP & API, and authenticate your domain (or at least verify a sender). Free addresses such as Gmail cannot be authenticated and may be rewritten or filtered.
-- Set the key (`RESEND_API_KEY` or `BREVO_API_KEY`), `EMAIL_FROM_ADDRESS` and `FRONTEND_BASE_URL` (the Netlify URL) on Render, never in the repository or the frontend. `GET /auth/email/status` then reports `"delivery_available": true`; the startup log warns while email is not configured.
-- Real delivery has not been tested from this repository (no provider account or domain was available); the adapters are tested against the providers' documented request formats.
+**Providers** (`backend/app/services/email/`, one interface for every workflow: verification, invitations, password reset and notifications). Render's free plan blocks outbound SMTP (ports 25, 465 and 587), so email goes through an HTTPS API:
+- **Gmail API** (`EMAIL_PROVIDER=gmail`, the configured choice): the dedicated ApexRX Gmail account, OAuth 2.0 with only the `gmail.send` permission, no password and no domain needed. Setup below.
+- Optional alternatives kept behind the same interface (not needed, each requires a domain you control): Resend (`resend`, `RESEND_API_KEY`) and Brevo (`brevo`, `BREVO_API_KEY`).
+- `GET /auth/email/status` reports `"delivery_available": true` once the provider is configured; the startup log warns while it is not. Templates live in `app/services/email/templates.py`; every link uses `FRONTEND_BASE_URL`.
 
 **Modes:**
 - **Development and tests:** `APP_ENV=development` (or `test`) with `EMAIL_PROVIDER=mock`. The mock sends nothing and keeps messages in memory; `GET /dev/email/latest`, signed in, returns **your own** latest message with its link. The `/dev` routes are not mounted in production and also answer 404 there.
@@ -291,10 +294,78 @@ The document tests use an in-memory fake of the Supabase Storage client, and the
 **Testing locally:**
 ```bash
 cd backend
-python -m pytest tests/test_email_verification.py tests/test_registration_profile.py
-# Browser test: run the backend with APP_ENV=development EMAIL_PROVIDER=mock FRONTEND_BASE_URL=http://127.0.0.1:5501
+python -m pytest tests/test_email_verification.py tests/test_registration_profile.py tests/test_sessions.py \
+    tests/test_invitations.py tests/test_password_reset.py tests/test_gmail_provider.py
+# Browser tests: run the backend with APP_ENV=development EMAIL_PROVIDER=mock FRONTEND_BASE_URL=http://127.0.0.1:5501
+# (port 8000), and for e2e_accounts.py a second one with SESSION_IDLE_TIMEOUT_MINUTES=1 on port 8001
 python ../frontend/tests/e2e_registration.py
+python ../frontend/tests/e2e_accounts.py
 ```
+
+## Email delivery with the Gmail API
+
+Emails are sent from the dedicated ApexRX Gmail account by the Gmail API over HTTPS (`POST https://gmail.googleapis.com/gmail/v1/users/me/messages/send`), so Render's SMTP block does not matter and no paid service or domain is needed. The backend holds an OAuth refresh token with only the `https://www.googleapis.com/auth/gmail.send` scope (it can send, but cannot read the mailbox), exchanges it for short-lived access tokens, and never uses the account's password.
+
+**One-time setup (signed in to Google as the ApexRX Gmail account):**
+1. **Google Cloud project:** open <https://console.cloud.google.com/>, create a project (for example "ApexRX email"). No billing account is needed for the Gmail API.
+2. **Enable the API:** APIs & Services → Library → "Gmail API" → Enable.
+3. **OAuth consent screen** (Google Auth Platform → Branding / Audience): user type **External**, app name "ApexRX Smart", support and developer email = the ApexRX Gmail address. Under Data access, add the scope `https://www.googleapis.com/auth/gmail.send`.
+4. **Publishing status: "In production".** Leave it in "Testing" and Google expires the refresh token after **7 days**, and email stops. For an unverified app Google shows a "Google hasn't verified this app" warning during step 6; as the owner of the account, choose *Advanced → Go to ApexRX Smart (unsafe)*. Only the ApexRX account ever authorizes it.
+5. **OAuth client:** Clients → Create client → type **Desktop app**. Copy the client ID and client secret (keep them private).
+6. **Refresh token**, on your own computer (not on Render):
+   ```bash
+   cd backend
+   python -m app.scripts.gmail_authorize --client-id YOUR_CLIENT_ID --client-secret YOUR_CLIENT_SECRET
+   ```
+   A browser opens: sign in as the ApexRX Gmail account and allow "Send email on your behalf". The script prints the refresh token once, on your terminal only.
+7. **Render → Environment** (never in Git, never in the frontend):
+   `EMAIL_PROVIDER=gmail`, `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `EMAIL_FROM_ADDRESS=<the ApexRX Gmail address>` (it must be that account; Gmail rewrites other senders), `EMAIL_FROM_NAME=ApexRX Smart` (optional), `FRONTEND_BASE_URL=https://<your Netlify site>`.
+8. **Prove delivery** with a real message before calling email operational. Locally (with the same variables in `backend/.env`) or from a Render shell:
+   ```bash
+   python -m app.scripts.send_test_email --to someone@example.com
+   ```
+   It prints the Gmail message id when Google accepted the email; then check that inbox (and spam).
+
+**Failure handling:** an expired or revoked authorization (`invalid_grant`, typically the consent screen left in Testing) or any Gmail error raises a delivery error: verification answers 502 and lets the user retry; an invitation stays saved as "Email not sent" with a Resend button; a password reset link is invalidated (the user requests another). Nothing is ever reported as sent unless Gmail accepted it. Logs contain the HTTP status and Google's error code only, never tokens. A 401 from Gmail refreshes the access token once and retries.
+
+**Limits to know:** a consumer Gmail account can send roughly 500 messages a day; Gmail does not report bounces through this API (they arrive in the account's inbox). To revoke access at any time: <https://myaccount.google.com/permissions> → ApexRX Smart → Remove access (then create a new refresh token).
+
+**Status of this repository:** the adapter is tested against Google's documented request and response formats (`tests/test_gmail_provider.py`), but **no real email has been sent from the ApexRX account yet**, because that needs the credentials above. Do not consider email delivery operational until step 8 succeeds.
+
+## Sessions
+
+Every sign-in creates a server-side session (`auth_session`), and every access token names it (`sid`). The backend accepts a token only while its session is usable, so a frontend timer is never the only protection:
+
+| Limit | Default | What happens |
+|---|---|---|
+| Access token | 30 min (`ACCESS_TOKEN_EXPIRE_MINUTES`) | Short-lived. While the user is active, the page gets a fresh one from `POST /auth/session/activity` |
+| Inactivity | 30 min (`SESSION_IDLE_TIMEOUT_MINUTES`) | No user activity for that long: the session ends on the server (`401`, reason `session_idle`) |
+| Maximum age | 12 h (`SESSION_MAX_AGE_HOURS`) | Sign in again after that, however active (`session_expired`) |
+
+- **What counts as activity:** only real user input (pointer, keyboard, wheel, touch) and opening or reloading a page. `js/api.js` reports it at most once a minute; ordinary API calls (refreshes, searches as you type, `GET /auth/me`, `GET /auth/session`) never move the inactivity clock, so background requests cannot keep a session alive.
+- **Warning:** two minutes before the limit, a banner ("You will be signed out soon because of inactivity" with a countdown) offers **Stay signed in**. At the limit the page signs out (server and browser) and shows "You were signed out after 30 minutes of inactivity".
+- **Sign-out** (`POST /auth/logout`, the workspace's **Sign out**, the public header's **Sign out**, the registration page's "Sign out"): ends this session only. The token stops working at once. Other people, the same person's other sign-ins, memberships, roles and the organization are untouched.
+- **Several tabs:** tabs that share a session (opened from one another) stay in step through a BroadcastChannel: activity in one keeps all alive, a renewed token is shared, and signing out or timing out in one signs out all of them ("You signed out in another tab"). A tab only adopts a token for the session it already has, so nothing can sign a tab in again after a sign-out. A tab opened separately is its own session.
+- **No cached private data:** signed-in API responses are sent with `Cache-Control: no-store`, the token lives in `sessionStorage` (cleared when the tab closes), and a page restored by the browser's Back button after a sign-out reloads instead of showing the workspace again.
+- **Password changes:** changing the password signs out every other session; a password reset signs out all of them. Deactivated accounts are refused on every request.
+- Tokens issued before migration `f3a9c1d7b2e5` have no session, so everyone signs in once more after the deployment.
+
+## Staff accounts and invitations
+
+ApexRX keeps one account per person: **user → membership (role) → organization**. A pharmacy is an organization, never a shared login.
+
+- **Staff sign-in:** `pharmacies.html` has two paths, *Register a pharmacy* and *Staff sign-in* (also `pharmacies.html#staff`). Staff sign in with their own email and password; the backend returns their memberships (`GET /auth/me`) and the workspace opens on one of them. Someone in several pharmacies chooses one first, and can switch later from the workspace's organization selector. Every request is authorized on the backend from the membership (`get_org_access`), so changing an organization id in the browser opens nothing.
+- **Inviting** (owners and managers, Employees → *Invite an employee*): email + role. Managers may invite staff only; owners any role (same rules as before). The employee does **not** need an ApexRX account. `POST /organizations/{id}/invitations` stores the invitation and emails a single-use link to `accept-invitation.html`. No membership exists until it is accepted. Owners and managers see every invitation with its status (pending, accepted with a new or existing account, expired, revoked) and email delivery (sent, not sent), and can **Resend** (new link, the old one stops working, new validity period) or **Revoke**. If the email cannot be sent, the invitation stays saved as "Email not sent" and can be resent; nothing is activated.
+- **Accepting** (`accept-invitation.html`): a new person sets up their own name and password (the owner never sees or chooses it), which creates the account, marks the email verified (opening the link proved the address), joins and signs them in. An existing account signs in instead (no second account) and joins; its other memberships and roles are kept. An account with a different email address is refused (`email_mismatch`).
+- **Invitation links:** 32 random bytes in the URL fragment; only a SHA-256 hash is stored; bound to the organization and the invited address; single use; expire after `INVITATION_TTL_HOURS` (72); revoked, expired, replaced and used links are refused by the backend with a clear reason. At most one open invitation per organization and address (database-enforced); at most 30 invitations per organization per hour.
+- Direct adding of an existing account (`POST /organizations/{id}/members`) still exists in the API; the workspace uses invitations.
+
+## Password reset
+
+- **Forgot password?** on the staff sign-in, the supplier sign-in, the admin sign-in and the invitation page leads to `reset-password.html`. `POST /auth/password/forgot` always answers the same ("If an ApexRX account uses this email address, we have sent it a link…"), and the email is sent after the response, so neither the answer nor its timing reveals whether an account exists.
+- The link (`reset-password.html#token=…`) is single-use, expires after 60 minutes, and a new request replaces earlier links. Only a SHA-256 hash is stored. Requests are limited per address (3 an hour, counted for every address, registered or not) and per trustworthy IP (10 an hour).
+- `POST /auth/password/reset` sets the new password (same Argon2id hashing), signs out every session, and emails a "your password was changed" confirmation. Memberships and roles are not touched. A failed email invalidates the link.
+- Invitations, email verification and password reset are separate flows with separate tokens; a reset link is never used to invite anyone.
 
 ## Password hashing
 
@@ -533,7 +604,7 @@ Create a web service with root directory `backend`.
 |---|---|
 | Build command | `pip install -r requirements.txt` |
 | Start command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
-| Environment | `DATABASE_URL` (Neon), `JWT_SECRET_KEY` (**at least 32 random characters**, or the service will not start), `APP_ENV=production` (also the default), `EMAIL_PROVIDER`, `RESEND_API_KEY` or `BREVO_API_KEY`, `EMAIL_FROM_ADDRESS` and `FRONTEND_BASE_URL` (the Netlify URL; see [Email verification](#email-verification)), `CORS_ORIGINS` (must include the Netlify URL, for example `https://your-site.netlify.app`), `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_BUCKET_NAME=organization-documents`. Leave `TRUSTED_CLIENT_IP_HEADER` unset unless `tools/render-ip-check` has verified a header |
+| Environment | `DATABASE_URL` (Neon), `JWT_SECRET_KEY` (**at least 32 random characters**, or the service will not start), `APP_ENV=production` (also the default), `EMAIL_PROVIDER=gmail`, `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `EMAIL_FROM_ADDRESS` and `FRONTEND_BASE_URL` (the Netlify URL; see [Email delivery with the Gmail API](#email-delivery-with-the-gmail-api)), `CORS_ORIGINS` (must include the Netlify URL, for example `https://your-site.netlify.app`), `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_BUCKET_NAME=organization-documents`. Leave `TRUSTED_CLIENT_IP_HEADER` unset unless `tools/render-ip-check` has verified a header |
 
 Limits of the free plan:
 
@@ -562,8 +633,7 @@ Patient search shows only **approved** pharmacies, **active** locations and **li
 
 - Supplier workspace screens (stock, prices and incoming orders). The pharmacy workspace exists; suppliers still use the API.
 - A catalogue import script for loading real medicine data.
-- Configure a real email provider and domain for verification emails (see [Email verification](#email-verification)).
-- Password reset (by emailed link, reusing the email provider).
+- Configure the Gmail API credentials and send a real test email (see [Email delivery with the Gmail API](#email-delivery-with-the-gmail-api)).
 - Subscription plans and Mobile Money payments (not part of registration today).
 - PostGIS for distance search at scale (bounding-box and haversine search is used today).
 - Notifications (email/WhatsApp) for order status changes.
