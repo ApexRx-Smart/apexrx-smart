@@ -85,9 +85,14 @@
   const STEPS_HTML = STEP_NAMES.map(n => `<li>${n}</li>`).join('');
   const FORMS_HTML = `
 <form id="account" class="step-form" novalidate>
+  ${ROLE === 'pharmacy' ? `<div class="auth-tabs" role="tablist" aria-label="Pharmacy access">
+    <button type="button" role="tab" id="tab-create" data-auth-tab="create">Register a pharmacy</button>
+    <button type="button" role="tab" id="tab-signin" data-auth-tab="signin">Staff sign-in</button>
+  </div>` : ''}
   <label>Email address<input name="email" type="email" autocomplete="email" placeholder="${T.emailPh}" required></label>
   <div class="fields"><label>Password<input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required></label><label id="confirm-field">Confirm password<input name="confirm" type="password" autocomplete="new-password" minlength="8" placeholder="Re-enter your password" required></label></div>
   <p class="note" id="account-note">Your account is created on ApexRX Smart.</p>
+  <p class="forgot-row" id="forgot-row" hidden><a href="reset-password.html?next=${ROLE}" id="forgot-link">Forgot password?</a></p>
   <button class="primary" id="account-submit">Create account <span>→</span></button>
   <p class="auth-switch"><span id="auth-switch-text">Already have an account?</span> <button type="button" class="text-button" id="auth-switch">Sign in</button></p>
   <p class="role-hint" id="other-hint">${T.otherHint} <a href="${T.otherHref}">${T.otherLink}</a></p>
@@ -155,6 +160,11 @@
   </div>
 </div>
 
+<div id="org-choice" class="step-form" hidden>
+  <ul class="org-choice-list" id="org-choice-list"></ul>
+  <p class="note">You can switch pharmacy at any time from your workspace.</p>
+</div>
+
 <div id="account-panel" class="step-form" hidden>
   <p id="account-panel-text"></p>
   <p><a id="account-panel-link" class="panel-link" href="#"></a></p>
@@ -162,7 +172,7 @@
 
 ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
   <p>Your ApexRX account <strong id="join-email"></strong> is ready.</p>
-  <p class="note">To work in an existing pharmacy, ask its owner or a manager to add this email in their workspace (Employees → Add employee). Then choose “Check again”. You do not need to register a pharmacy yourself.</p>
+  <p class="note">To work in an existing pharmacy, ask its owner or a manager to invite this email address (Employees → Invite an employee). You will receive an email with a link to join; open it, then choose “Check again”. You do not need to register a pharmacy yourself.</p>
   <p id="join-status" role="status" class="note"></p>
   <div class="actions"><button type="button" class="primary" id="join-check">Check again</button><button type="button" class="secondary" id="join-register">Register a new pharmacy instead</button></div>
 </div>
@@ -171,7 +181,7 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
   $('.steps').innerHTML = STEPS_HTML;
   $('#registration').innerHTML = FORMS_HTML;
   const PANELS = ['#account', '#verify-email', '#details', '#documents', '#review'].map(s => $(s));
-  const EXTRA_PANELS = ['#account-panel', '#join-wait'].map(s => $(s)).filter(Boolean);
+  const EXTRA_PANELS = ['#account-panel', '#join-wait', '#org-choice'].map(s => $(s)).filter(Boolean);
 
   /* ------------------------------------------------------------ utilities */
   let noticeTimer;
@@ -290,6 +300,14 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     if (message) formError(message);
   }
   function sessionExpired() { reset('Your session has expired. Please sign in again.'); }
+  function signedOutText(detail) {
+    const reason = detail && detail.reason;
+    if (reason === 'idle') return `You were signed out after ${(detail && detail.idleMinutes) || 30} minutes of inactivity. Sign in again to continue.`;
+    if (reason === 'other_tab') return 'You signed out in another tab.';
+    if (reason === 'signed_out') return '';
+    if (reason === 'revoked') return 'Your session has ended. Please sign in again.';
+    return 'Your session has expired. Please sign in again.';
+  }
 
   // Decide where the signed-in user continues, from the backend's state.
   async function route(opts = {}) {
@@ -304,12 +322,37 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
       if (status && status.required && !status.verified) return showVerify();
       return showDetails();
     }
+    // Several pharmacies: the user chooses (after signing in, or when this tab
+    // has no choice yet). Only memberships the backend returned are offered.
+    const mine = myMemberships(reg.me);
+    if (ROLE === 'pharmacy' && mine.length > 1 && !opts.review && (opts.choose || !savedChoice())) return showOrgChoice(mine);
     if (canManage() && !reg.location) return showDetails();
     if (ROLE === 'pharmacy' && !opts.review) {
       const needsDocuments = canManage() && !reg.documents.length && ['pending', 'rejected'].includes(reg.org.status);
       if (!needsDocuments) return openWorkspace();
     }
     return showReview();
+  }
+
+  function savedChoice() {
+    try { return sessionStorage.getItem(ORG_KEY); } catch (e) { return null; }
+  }
+  function showOrgChoice(list) {
+    showPanel($('#org-choice'), 'Choose a pharmacy', 'Your account belongs to several pharmacies. Which one do you want to work in?');
+    $('#org-choice-list').replaceChildren(...list.map(m => {
+      const button = el('button', { type: 'button', class: 'org-choice', 'data-org': String(m.organization_id) }, [
+        el('strong', { text: m.organization_name }),
+        el('span', { class: 'org-choice-meta' }, [
+          el('span', { text: ROLE_LABELS[m.role] || m.role }), document.createTextNode(' · '),
+          el('span', { text: STATUS_LABELS[m.organization_status] || m.organization_status })
+        ])
+      ]);
+      button.addEventListener('click', reviewAction(button, async () => {
+        remember(m.organization_id);
+        await route();
+      }));
+      return el('li', {}, [button]);
+    }));
   }
 
   function accountPanel(text, linkText, href) {
@@ -324,10 +367,12 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
   }
 
   /* -------------------------------------------------------- step 0: account */
-  let authMode = location.hash === '#signin' ? 'signin' : 'create';
+  let authMode = (location.hash === '#signin' || location.hash === '#staff') ? 'signin' : 'create';
   const AUTH_TEXT = {
     create: { title: T.createTitle, description: T.createDesc, submit: 'Create account', note: 'Your account is created on ApexRX Smart.', switchText: 'Already have an account?', switchButton: 'Sign in' },
-    signin: { title: 'Sign in to ApexRX', description: 'Welcome back. Use the email and password of your ApexRX account.', submit: 'Sign in', note: T.signinNote, switchText: 'New to ApexRX?', switchButton: T.toCreate }
+    signin: ROLE === 'pharmacy'
+      ? { title: 'Staff sign-in', description: 'Already working at a pharmacy registered on ApexRX? Sign in with your personal account to open your pharmacy workspace.', submit: 'Sign in', note: 'Owners, managers and staff each sign in with their own account. Never share passwords.', switchText: 'New to ApexRX?', switchButton: T.toCreate }
+      : { title: 'Sign in to ApexRX', description: 'Welcome back. Use the email and password of your ApexRX account.', submit: 'Sign in', note: T.signinNote, switchText: 'New to ApexRX?', switchButton: T.toCreate }
   };
   function setAuthMode(mode, focus) {
     authMode = mode;
@@ -343,11 +388,29 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     $('#account-note').textContent = text.note;
     $('#auth-switch-text').textContent = text.switchText;
     $('#auth-switch').textContent = text.switchButton;
+    $('#forgot-row').hidden = !signin;
+    // A link to #signin / #staff on this page switches to sign-in (no reload).
+  window.addEventListener('hashchange', () => {
+    const wanted = (location.hash === '#signin' || location.hash === '#staff') ? 'signin' : null;
+    if (wanted && authMode !== wanted && !$('#account').hidden) setAuthMode(wanted, true);
+  });
+  document.querySelectorAll('[data-auth-tab]').forEach(tab => {
+      const on = tab.dataset.authTab === mode;
+      tab.classList.toggle('active', on); tab.setAttribute('aria-selected', String(on)); tab.tabIndex = on ? 0 : -1;
+    });
     if (!$('#account').hidden) { $('#step-title').textContent = text.title; $('#step-description').textContent = text.description; formError(''); }
     try { history.replaceState(null, '', location.pathname + location.search + (signin ? '#signin' : '')); } catch (e) { /* ignore */ }
     if (focus) (f.email.value ? f.password : f.email).focus();
   }
   $('#auth-switch').addEventListener('click', () => setAuthMode(authMode === 'signin' ? 'create' : 'signin', true));
+  document.querySelectorAll('[data-auth-tab]').forEach(tab => {
+    tab.addEventListener('click', () => { if (authMode !== tab.dataset.authTab) setAuthMode(tab.dataset.authTab, true); });
+    tab.addEventListener('keydown', e => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      const other = document.querySelector(`[data-auth-tab="${tab.dataset.authTab === 'create' ? 'signin' : 'create'}"]`);
+      other.click(); other.focus();
+    });
+  });
 
   $('#account').addEventListener('submit', e => {
     e.preventDefault();
@@ -382,7 +445,7 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
           }
         }
         f.password.value = ''; f.confirm.value = '';
-        await route();
+        await route({ choose: authMode === 'signin' });
         if (existing) notice('You already had an ApexRX account with this email. You are signed in.');
         else if (authMode === 'signin') notice('Welcome back. You are signed in.');
       } catch (err) {
@@ -897,17 +960,20 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
       $('#join-status').textContent = 'Checking…';
       await load();
       if (reg.membership) { $('#join-status').textContent = ''; await route(); notice(`Welcome to ${reg.org.name}.`); return; }
-      $('#join-status').textContent = 'You have not been added to a pharmacy yet. Ask the owner or a manager to add ' + reg.me.email + '.';
+      $('#join-status').textContent = 'You have not joined a pharmacy yet. Ask the owner or a manager to invite ' + reg.me.email + ', then open the link in their email.';
     }));
     $('#join-register').addEventListener('click', reviewAction($('#join-register'), () => route()));
   }
 
   /* ---------------------------------------------------------------- shared */
   $('#sign-out').addEventListener('click', signOut);
-  window.addEventListener('apexrx:signed-out', () => {
-    // Any 401 from the API (an expired session) signs out everywhere.
-    if (signingOut || !reg) return;
-    sessionExpired();
+  window.addEventListener('apexrx:signed-out', e => {
+    // Sign-out from this page (handled by signOut), another tab, inactivity,
+    // or any 401 from the API (an ended session).
+    if (signingOut) return;
+    const detail = e.detail || {};
+    if (!reg && !['idle', 'other_tab'].includes(detail.reason)) return;
+    reset(signedOutText(detail));
   });
 
   window.ApexRegistration = {

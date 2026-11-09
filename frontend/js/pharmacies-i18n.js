@@ -788,6 +788,89 @@ Object.assign(workflowTranslations, {
  "Email verified — ApexRX Smart": {"fr": "E-mail vérifié — ApexRX Smart", "rw": "Imeli yemejwe — ApexRX Smart"},
  "Verification link problem — ApexRX Smart": {"fr": "Problème de lien de vérification — ApexRX Smart", "rw": "Ikibazo cy’umurongo wo kwemeza — ApexRX Smart"}
 });
+
+// Staff sign-in, invitations, sessions and password reset. Kinyarwanda needs review by a native speaker.
+Object.assign(workflowTranslations, {
+ "Register a pharmacy": {"fr": "Inscrire une pharmacie", "rw": "Iyandikishe farumasi"},
+ "Staff sign-in": {"fr": "Connexion du personnel", "rw": "Kwinjira kw’abakozi"},
+ "Already working at a pharmacy registered on ApexRX? Sign in with your personal account to open your pharmacy workspace.": {"fr": "Vous travaillez déjà dans une pharmacie inscrite sur ApexRX ? Connectez-vous avec votre compte personnel pour ouvrir votre espace pharmacie.", "rw": "Usanzwe ukora muri farumasi yanditse kuri ApexRX? Injira ukoresheje konti yawe bwite ufungure aho farumasi yawe ikorera."},
+ "Owners, managers and staff each sign in with their own account. Never share passwords.": {"fr": "Propriétaires, responsables et personnel se connectent chacun avec leur propre compte. Ne partagez jamais de mot de passe.", "rw": "Ba nyirayo, abayobozi n’abakozi buri wese yinjira akoresheje konti ye. Ntimugasangire amagambobanga."},
+ "Forgot password?": {"fr": "Mot de passe oublié ?", "rw": "Wibagiwe ijambobanga?"},
+ "Choose a pharmacy": {"fr": "Choisissez une pharmacie", "rw": "Hitamo farumasi"},
+ "Your account belongs to several pharmacies. Which one do you want to work in?": {"fr": "Votre compte appartient à plusieurs pharmacies. Dans laquelle voulez-vous travailler ?", "rw": "Konti yawe iri mu mafarumasi menshi. Ni iyihe ushaka gukoreramo?"},
+ "You can switch pharmacy at any time from your workspace.": {"fr": "Vous pouvez changer de pharmacie à tout moment depuis votre espace.", "rw": "Ushobora guhindura farumasi igihe icyo ari cyo cyose aho ukorera."},
+ "You signed out in another tab.": {"fr": "Vous vous êtes déconnecté dans un autre onglet.", "rw": "Wasohotse mu yindi paji."},
+ "Your session has ended. Please sign in again.": {"fr": "Votre session est terminée. Veuillez vous reconnecter.", "rw": "Igihe cyawe cyarangiye. Ongera winjire."},
+ "You have signed out.": {"fr": "Vous êtes déconnecté.", "rw": "Wasohotse."},
+ "Sign out": {"fr": "Se déconnecter", "rw": "Sohoka"},
+ "Exit preview": {"fr": "Quitter l’aperçu", "rw": "Va mu igerageza"},
+ "← Exit preview": {"fr": "← Quitter l’aperçu", "rw": "← Va mu igerageza"},
+ "Preview · sample data": {"fr": "Aperçu · données fictives", "rw": "Igerageza · amakuru y’icyitegererezo"},
+ "You will be signed out soon because of inactivity.": {"fr": "Vous allez bientôt être déconnecté pour inactivité.", "rw": "Uragiye gusohorwa kubera ko utari gukora."},
+ "Stay signed in": {"fr": "Rester connecté", "rw": "Guma winjiye"},
+ "Invite an employee": {"fr": "Inviter un employé", "rw": "Tumira umukozi"},
+ "Enter their email address and role. They receive an email to set up their own account (or sign in to an existing one) and join this pharmacy. Accounts are never shared.": {"fr": "Saisissez son adresse e-mail et son rôle. Il reçoit un e-mail pour créer son propre compte (ou se connecter à un compte existant) et rejoindre cette pharmacie. Les comptes ne sont jamais partagés.", "rw": "Andika imeli ye n’uruhare rwe. Azabona imeli imufasha gukora konti ye (cyangwa kwinjira muri konti asanganywe) no kwinjira muri iyi farumasi. Konti ntizisangirwa."},
+ "Email address *": {"fr": "Adresse e-mail *", "rw": "Aderesi ya imeli *"},
+ "Send invitation": {"fr": "Envoyer l’invitation", "rw": "Ohereza ubutumire"},
+ "Only owners and managers can invite or change employees.": {"fr": "Seuls les propriétaires et responsables peuvent inviter ou modifier des employés.", "rw": "Ba nyirayo n’abayobozi bonyine ni bo bashobora gutumira cyangwa guhindura abakozi."},
+ "Enter the employee’s email address.": {"fr": "Saisissez l’adresse e-mail de l’employé.", "rw": "Andika imeli y’umukozi."},
+ "No invitations yet.": {"fr": "Aucune invitation pour l’instant.", "rw": "Nta butumire buraboneka."},
+ "Pending": {"fr": "En attente", "rw": "Bitegereje"},
+ "Accepted": {"fr": "Acceptée", "rw": "Byemewe"},
+ "Expired": {"fr": "Expirée", "rw": "Byataye agaciro"},
+ "Revoked": {"fr": "Révoquée", "rw": "Byakuweho"},
+ "Email failed": {"fr": "E-mail non envoyé", "rw": "Imeli ntiyoherejwe"},
+ "Email not sent": {"fr": "E-mail non envoyé", "rw": "Imeli ntiyoherejwe"},
+ "Not sent yet": {"fr": "Pas encore envoyé", "rw": "Ntiraroherezwa"},
+ "Resend": {"fr": "Renvoyer", "rw": "Ongera wohereze"},
+ "Revoke": {"fr": "Révoquer", "rw": "Kuraho"},
+ "Email delivery": {"fr": "Envoi de l’e-mail", "rw": "Kohereza imeli"},
+ "The invitation is saved, but the email could not be sent. Try “Resend” in a moment.": {"fr": "L’invitation est enregistrée, mais l’e-mail n’a pas pu être envoyé. Réessayez « Renvoyer » dans un instant.", "rw": "Ubutumire bwabitswe, ariko imeli ntiyashoboye koherezwa. Ongera ugerageze “Ongera wohereze” mu kanya."},
+ "The invitation is saved, but email is not configured on the server, so it was not sent. Try “Resend” once email works.": {"fr": "L’invitation est enregistrée, mais l’e-mail n’est pas configuré sur le serveur : elle n’a pas été envoyée. Réessayez « Renvoyer » quand l’e-mail fonctionnera.", "rw": "Ubutumire bwabitswe, ariko imeli ntiriteguwe kuri seriveri, bityo ntibwoherejwe. Ongera ugerageze “Ongera wohereze” imeli imaze gukora."},
+ "Join your team — ApexRX Smart": {"fr": "Rejoignez votre équipe — ApexRX Smart", "rw": "Injira mu itsinda ryawe — ApexRX Smart"},
+ "Checking your invitation…": {"fr": "Vérification de votre invitation…", "rw": "Turimo kugenzura ubutumire bwawe…"},
+ "Organization": {"fr": "Organisation", "rw": "Ikigo"},
+ "Role": {"fr": "Rôle", "rw": "Uruhare"},
+ "Invited by": {"fr": "Invité par", "rw": "Yatumiwe na"},
+ "Set up your own ApexRX account. Your password is yours alone: nobody at the pharmacy sees or chooses it.": {"fr": "Créez votre propre compte ApexRX. Votre mot de passe n’appartient qu’à vous : personne à la pharmacie ne le voit ni ne le choisit.", "rw": "Kora konti yawe bwite ya ApexRX. Ijambobanga ryawe ni iryawe wenyine: nta muntu wo muri farumasi uribona cyangwa uritoranya."},
+ "Your full name": {"fr": "Votre nom complet", "rw": "Amazina yawe yose"},
+ "Create my account and join": {"fr": "Créer mon compte et rejoindre", "rw": "Kora konti yanjye ninjire"},
+ "An ApexRX account already uses this email address. Sign in with it to accept.": {"fr": "Un compte ApexRX utilise déjà cette adresse e-mail. Connectez-vous avec pour accepter.", "rw": "Konti ya ApexRX isanzwe ikoresha iyi imeli. Injira uyikoresheje kugira ngo wemere."},
+ "Sign in and join": {"fr": "Se connecter et rejoindre", "rw": "Injira winjire mu itsinda"},
+ "Accept the invitation": {"fr": "Accepter l’invitation", "rw": "Emera ubutumire"},
+ "Sign out and use another account": {"fr": "Se déconnecter et utiliser un autre compte", "rw": "Sohoka ukoreshe indi konti"},
+ "Open your pharmacy workspace": {"fr": "Ouvrir votre espace pharmacie", "rw": "Fungura aho farumasi yawe ikorera"},
+ "Go to sign in": {"fr": "Aller à la connexion", "rw": "Jya kwinjira"},
+ "This invitation link is not valid.": {"fr": "Ce lien d’invitation n’est pas valide.", "rw": "Uyu murongo w’ubutumire ntukora."},
+ "This invitation has already been accepted.": {"fr": "Cette invitation a déjà été acceptée.", "rw": "Ubu butumire bwamaze kwemerwa."},
+ "This invitation was withdrawn.": {"fr": "Cette invitation a été retirée.", "rw": "Ubu butumire bwakuweho."},
+ "This invitation has expired.": {"fr": "Cette invitation a expiré.", "rw": "Ubu butumire bwataye agaciro."},
+ "Sign in with your ApexRX account to accept.": {"fr": "Connectez-vous avec votre compte ApexRX pour accepter.", "rw": "Injira ukoresheje konti yawe ya ApexRX kugira ngo wemere."},
+ "Set up your own account to accept.": {"fr": "Créez votre propre compte pour accepter.", "rw": "Kora konti yawe bwite kugira ngo wemere."},
+ "Incorrect password.": {"fr": "Mot de passe incorrect.", "rw": "Ijambobanga si ryo."},
+ "Enter your password.": {"fr": "Saisissez votre mot de passe.", "rw": "Andika ijambobanga ryawe."},
+ "Enter your name.": {"fr": "Saisissez votre nom.", "rw": "Andika izina ryawe."},
+ "Reset your password — ApexRX Smart": {"fr": "Réinitialiser votre mot de passe — ApexRX Smart", "rw": "Hindura ijambobanga ryawe — ApexRX Smart"},
+ "Forgot your password?": {"fr": "Mot de passe oublié ?", "rw": "Wibagiwe ijambobanga?"},
+ "Enter the email address of your ApexRX account. We will email you a link to choose a new password.": {"fr": "Saisissez l’adresse e-mail de votre compte ApexRX. Nous vous enverrons un lien pour choisir un nouveau mot de passe.", "rw": "Andika imeli ya konti yawe ya ApexRX. Turakoherereza umurongo wo guhitamo ijambobanga rishya."},
+ "Email me a reset link": {"fr": "M’envoyer un lien de réinitialisation", "rw": "Nyoherereza umurongo wo guhindura"},
+ "New password for": {"fr": "Nouveau mot de passe pour", "rw": "Ijambobanga rishya rya"},
+ "New password": {"fr": "Nouveau mot de passe", "rw": "Ijambobanga rishya"},
+ "Confirm new password": {"fr": "Confirmez le nouveau mot de passe", "rw": "Emeza ijambobanga rishya"},
+ "Change my password": {"fr": "Changer mon mot de passe", "rw": "Hindura ijambobanga ryanjye"},
+ "← Back to sign in": {"fr": "← Retour à la connexion", "rw": "← Subira aho kwinjirira"},
+ "Sign in with your new password →": {"fr": "Connectez-vous avec votre nouveau mot de passe →", "rw": "Injira ukoresheje ijambobanga rishya →"},
+ "Check your email": {"fr": "Consultez vos e-mails", "rw": "Reba imeli yawe"},
+ "If an ApexRX account uses this email address, we have sent it a link to reset the password. Check your inbox and spam folder.": {"fr": "Si un compte ApexRX utilise cette adresse, nous lui avons envoyé un lien pour réinitialiser le mot de passe. Consultez votre boîte de réception et vos courriers indésirables.", "rw": "Niba hari konti ya ApexRX ikoresha iyi imeli, twayoherereje umurongo wo guhindura ijambobanga. Reba muri inbox no muri spam."},
+ "Choose a new password": {"fr": "Choisissez un nouveau mot de passe", "rw": "Hitamo ijambobanga rishya"},
+ "This link works once.": {"fr": "Ce lien ne fonctionne qu’une fois.", "rw": "Uyu murongo ukora inshuro imwe."},
+ "Your password has been changed.": {"fr": "Votre mot de passe a été changé.", "rw": "Ijambobanga ryawe ryahinduwe."},
+ "Your password has been changed. Sign in with your new password.": {"fr": "Votre mot de passe a été changé. Connectez-vous avec le nouveau.", "rw": "Ijambobanga ryawe ryahinduwe. Injira ukoresheje irishya."},
+ "This password reset link is not valid.": {"fr": "Ce lien de réinitialisation n’est pas valide.", "rw": "Uyu murongo wo guhindura ijambobanga ntukora."},
+ "This password reset link has already been used.": {"fr": "Ce lien de réinitialisation a déjà été utilisé.", "rw": "Uyu murongo wo guhindura ijambobanga wamaze gukoreshwa."},
+ "A newer password reset email was sent.": {"fr": "Un e-mail de réinitialisation plus récent a été envoyé.", "rw": "Hoherejwe indi imeli nshya yo guhindura ijambobanga."},
+ "This password reset link has expired.": {"fr": "Ce lien de réinitialisation a expiré.", "rw": "Uyu murongo wo guhindura ijambobanga wataye agaciro."}
+});
 let workflowLang='en';
 try { workflowLang=new URLSearchParams(location.search).get('lang') || localStorage.getItem('apexrx_lang') || 'en'; } catch(e) {}
 if(!['en','fr','rw'].includes(workflowLang)) workflowLang='en';
@@ -803,6 +886,11 @@ function workflowTranslate(source){
  if(!translated && /^Resend email in \d+s$/.test(text)){const n=text.match(/\d+/)[0];translated=workflowLang==='fr'?`Renvoyer l’e-mail dans ${n} s`:`Ongera wohereze imeli mu masegonda ${n}`;}
  if(!translated && text.startsWith('Selected: ')) translated=text.replace('Selected: ',workflowLang==='fr'?'Sélectionné : ':'Byatoranyijwe: ');
  if(!translated && /^Please wait \d+ seconds before requesting another email\.$/.test(text)){const n=text.match(/\d+/)[0];translated=workflowLang==='fr'?`Patientez ${n} secondes avant de demander un autre e-mail.`:`Tegereza amasegonda ${n} mbere yo gusaba indi imeli.`;}
+ if(!translated && /^You were signed out after \d+ minutes of inactivity\. Sign in again to continue\.$/.test(text)){const n=text.match(/\d+/)[0];translated=workflowLang==='fr'?`Vous avez été déconnecté après ${n} minutes d’inactivité. Reconnectez-vous pour continuer.`:`Wasohowe nyuma y’iminota ${n} utari gukora. Ongera winjire ukomeze.`;}
+ if(!translated && /^You have joined .+\.$/.test(text)){const o=text.slice(16,-1);translated=workflowLang==='fr'?`Vous avez rejoint ${o}.`:`Winjiye muri ${o}.`;}
+ if(!translated && /^Join .+ on ApexRX$/.test(text)){const o=text.slice(5,-10);translated=workflowLang==='fr'?`Rejoindre ${o} sur ApexRX`:`Injira muri ${o} kuri ApexRX`;}
+ if(!translated && /^Invitation emailed to \S+\.$/.test(text)){const e=text.slice(21,-1);translated=workflowLang==='fr'?`Invitation envoyée à ${e}.`:`Ubutumire bwoherejwe kuri ${e}.`;}
+ if(!translated && /^Invitations \(\d+ pending\)$/.test(text)){const n=text.match(/\d+/)[0];translated=workflowLang==='fr'?`Invitations (${n} en attente)`:`Ubutumire (${n} butegereje)`;}
  if(!translated && /^STEP 0\d \/ 0\d$/.test(text)) translated=text.replace('STEP',workflowLang==='fr'?'ÉTAPE':'INTAMBWE');
  if(!translated && text.endsWith(' · Sample supplier')) translated=text.replace('Sample supplier',workflowLang==='fr'?'Fournisseur fictif':'Utanga imiti w’igerageza');
  if(!translated && text.startsWith('Open demo chat with ')) translated=text.replace('Open demo chat with ',workflowLang==='fr'?'Ouvrir la discussion de démonstration avec ':'Fungura ikiganiro cy’igerageza na ');
@@ -818,7 +906,7 @@ function translateWorkflow(){
  const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
  let node;
  while(node=walker.nextNode()){
-  if(node.parentElement.closest('script,style,option,#pharmacy-name,#entered-email,#messages .own,#profile-summary dd,#review-facts dd,#review-name,#signed-in-email,#verify-address,#verify-email,#join-email,#address-text,#review-notes,.doc-file,#review-documents li>span:first-child'))continue;
+  if(node.parentElement.closest('script,style,option,#pharmacy-name,#entered-email,#messages .own,#profile-summary dd,#review-facts dd,#review-name,#signed-in-email,#verify-address,#verify-email,#join-email,#address-text,#review-notes,.doc-file,#review-documents li>span:first-child,#dash-user,#invite-org,#invite-email,#invite-by,#reset-email,#org-choice-list strong,[data-invite] td:first-child'))continue;
   const current=node.nodeValue;let saved=workflowTextSources.get(node);
   if(!saved || current!==saved.rendered)saved={source:current};
   const result=workflowTranslate(saved.source);saved.rendered=result;workflowTextSources.set(node,saved);if(current!==result)node.nodeValue=result;

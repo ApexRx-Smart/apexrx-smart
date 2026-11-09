@@ -189,8 +189,12 @@
   });
 
   // api.js fires this on any 401 (expired, invalid or revoked token).
-  function onSignedOut() {
-    if (!$('#dashboard-view').hidden) showLogin('Your session has expired. Please sign in again.');
+  function onSignedOut(e) {
+    if ($('#dashboard-view').hidden) return;
+    var d = (e && e.detail) || {};
+    showLogin(d.reason === 'idle' ? 'You were signed out after ' + (d.idleMinutes || 30) + ' minutes of inactivity. Please sign in again.'
+      : d.reason === 'other_tab' ? 'You signed out in another tab.'
+      : 'Your session has expired. Please sign in again.');
   }
   window.addEventListener('apexrx:signed-out', onSignedOut);
 

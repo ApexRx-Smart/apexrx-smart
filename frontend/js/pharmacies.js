@@ -154,6 +154,10 @@ function paintWorkspace() {
   setLiveText($('.panel-heading .demo'), isLive ? 'Live data' : null);
   setLiveText($('.dash-top .avatar'), isLive ? initials(live.organization.name) : null);
   setLiveText($('.dashboard-body > .note'), isLive ? LIVE_PANEL_NOTE : null);
+  const role = isLive ? ({ owner: 'Owner', manager: 'Manager', staff: 'Staff' })[live.role] || live.role : '';
+  setLiveText($('#dash-user'), isLive ? `${live.user.email} · ${role}` : null);
+  setLiveText($('#dash-signout'), isLive ? 'Sign out' : null);
+  setLiveText($('#restart'), isLive ? 'Sign out' : null);
   const status = $('#status-card');
   setLiveText(status && status.querySelector('small'), isLive ? (STATUS_LABELS_LIVE[live.organization.status] || live.organization.status) + ' · View details →' : null);
 }
@@ -174,12 +178,17 @@ window.ApexPharmacyWorkspace = {
   async open() { await loadLive(); openDashboard(); },
   preview() { resetLive(); openDashboard(); }
 };
-$('#restart').addEventListener('click', () => {
-  // Leaving the workspace signs out (or ends the preview).
-  if (live) API.auth.logout();
+// Sign out (or leave the preview). Ends only this user's session: nothing
+// about the pharmacy, its members or their roles changes.
+function leaveWorkspace() {
+  const wasLive = !!live;
+  if (wasLive) API.auth.logout();
   resetLive();
   window.ApexRegistration.reset();
-});
+  if (wasLive) notice('You have signed out.');
+}
+$('#restart').addEventListener('click', leaveWorkspace);
+$('#dash-signout').addEventListener('click', leaveWorkspace);
 window.addEventListener('apexrx:signed-out', () => {
   // js/registration.js shows the sign-in step (with "session expired" when it was not on purpose).
   if (live) resetLive();

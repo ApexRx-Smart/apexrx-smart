@@ -9,6 +9,24 @@
  * The access token is kept in sessionStorage, so it is cleared when the tab
  * closes. It is never written to localStorage.
  *
+ * Sessions (see the root README, "Sessions"): every token names a server-side
+ * session that the backend ends on sign-out, after SESSION_IDLE_TIMEOUT_MINUTES
+ * (default 30) without user activity, or at its maximum age. This file:
+ *   - reports real user activity (pointer, keyboard, wheel, touch, page
+ *     navigation) to POST /auth/session/activity at most once a minute, which
+ *     also renews the short-lived access token. Requests made by code
+ *     (refreshes, searches as you type, warm-up) are NOT activity;
+ *   - warns two minutes before the inactivity limit ("Stay signed in"), then
+ *     signs out (server and browser) with the reason "idle";
+ *   - keeps tabs of the same session in step (BroadcastChannel): activity in one
+ *     tab counts for all of them, a renewed token is shared, and signing out
+ *     (or expiry) in one signs them all out. A tab only ever adopts a token for
+ *     the session it already has, so nothing is signed in again after a sign-out;
+ *   - reloads a page restored from the back/forward cache after the session
+ *     ended, so private data is not shown again.
+ * Every sign-out fires window event "apexrx:signed-out" with detail.reason:
+ * "signed_out" (this tab), "other_tab", "idle", "expired" or "revoked".
+ *
  * "Known browser" device tokens (one per account, from successful sign-ins)
  * are kept in localStorage and sent with later sign-ins for that account, so
  * someone else's wrong passwords cannot lock the owner out on this browser.
@@ -67,8 +85,22 @@
     clearSession();
     return null;
   }
-  function saveSession(token, expiresInSeconds) {
-    var s = { token: token, expiresAt: Date.now() + Math.max(0, expiresInSeconds - 30) * 1000 };
+  // The session id is in the (signed) token; reading it needs no secret.
+  function sessionIdOf(token) {
+    try {
+      var part = String(token).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(atob(part + '==='.slice((part.length + 3) % 4))).sid || null;
+    } catch (e) { return null; }
+  }
+  // t: a TokenResponse. extra: fields kept from the current session (email, idle limit).
+  function saveSession(t, extra) {
+    var prev = memorySession || {};
+    var s = Object.assign({}, prev, extra || {}, {
+      token: t.access_token,
+      expiresAt: Date.now() + Math.max(0, (t.expires_in || 0) - 30) * 1000,
+      sid: sessionIdOf(t.access_token)
+    });
+    if (t.idle_timeout_seconds) s.idleMs = t.idle_timeout_seconds * 1000;
     try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(s)); } catch (e) { /* ignore */ }
     memorySession = s;
     return s;
@@ -187,7 +219,7 @@
   }
 
   /**
-   * request(method, path, {query, body, form, auth=true, signal})
+   * request(method, path, {query, body, form, auth=true, signal, quiet})
    * Resolves with parsed JSON (or null for 204). Rejects with ApiError.
    */
   function request(method, path, opts) {
@@ -212,7 +244,8 @@
       else opts.signal.addEventListener('abort', function () { controller.abort(); });
     }
 
-    return tracked(fetch(buildUrl(path, opts.query), {
+    // quiet: background calls (activity reports) show no progress bar.
+    return (opts.quiet ? function (p) { return p; } : tracked)(fetch(buildUrl(path, opts.query), {
       method: method,
       headers: headers,
       body: body,
@@ -225,9 +258,8 @@
         var data = null;
         if (text) { try { data = JSON.parse(text); } catch (e) { data = { detail: text }; } }
         if (!res.ok) {
-          if (res.status === 401 && opts.auth !== false) {
-            clearSession();
-            emit('apexrx:signed-out');
+          if (res.status === 401 && opts.auth !== false && headers.Authorization) {
+            endSession(reasonOf(data), false);
           }
           throw new ApiError(res.status, messageFrom(res.status, data), data);
         }
@@ -247,10 +279,7 @@
       .then(function (res) {
         if (res.ok) return res.blob();
         return res.json().catch(function () { return null; }).then(function (data) {
-          if (res.status === 401) {
-            clearSession();
-            emit('apexrx:signed-out');
-          }
+          if (res.status === 401 && token) endSession(reasonOf(data), false);
           throw new ApiError(res.status, messageFrom(res.status, data), data);
         });
       }, function (err) { throw new ApiError(0, messageFrom(0, null), { cause: String(err) }); }));
@@ -263,9 +292,134 @@
     try { fetch(BASE + '/health', { credentials: 'omit', cache: 'no-store' }).catch(function () {}); } catch (e) { /* ignore */ }
   })();
 
-  function emit(name) {
-    try { global.dispatchEvent(new CustomEvent(name)); } catch (e) { /* old browsers */ }
+  function emit(name, detail) {
+    try { global.dispatchEvent(new CustomEvent(name, { detail: detail || {} })); } catch (e) { /* old browsers */ }
   }
+
+  /* --------------------------------------------- session activity and expiry */
+  var ACTIVITY_REPORT_MS = 60000;   // at most one activity report a minute
+  var WARNING_MS = 120000;          // warn two minutes before the inactivity limit
+  var DEFAULT_IDLE_MS = 30 * 60000;
+  var channel = null;
+  try { channel = new BroadcastChannel('apexrx-session'); } catch (e) { /* not supported */ }
+  var lastActivity = Date.now();
+  var lastReport = 0, reporting = false, warningEl = null;
+  var signedInAtLoad = !!currentToken();
+
+  function reasonOf(data) {
+    var r = data && data.reason;
+    if (r === 'session_idle') return 'idle';
+    if (r === 'session_expired') return 'expired';
+    return 'revoked';
+  }
+  function current() { return currentToken() ? memorySession || readSession() : null; }
+  function idleMs() { var s = current(); return (s && s.idleMs) || DEFAULT_IDLE_MS; }
+  function post2(type, extra) { if (channel) { try { channel.postMessage(Object.assign({ type: type }, extra)); } catch (e) { /* ignore */ } } }
+
+  // End this tab's session: tell the server (unless it already ended it), the
+  // other tabs of the same session, and the page.
+  function endSession(reason, tellServer) {
+    var s = memorySession || readSession();
+    var token = s && s.token, sid = s && s.sid;
+    var idleMinutes = Math.round(((s && s.idleMs) || DEFAULT_IDLE_MS) / 60000);
+    clearSession();
+    hideWarning();
+    if (tellServer && token) {
+      try {
+        fetch(BASE + '/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token },
+          credentials: 'omit', keepalive: true }).catch(function () {});
+      } catch (e) { /* ignore */ }
+    }
+    if (sid && reason !== 'other_tab') post2('signed-out', { sid: sid, reason: reason, idleMinutes: idleMinutes });
+    emit('apexrx:signed-out', { reason: reason, idleMinutes: idleMinutes });
+  }
+
+  // Real user activity only. Called from input events, never from requests.
+  function markActivity() {
+    if (!currentToken()) return;
+    lastActivity = Date.now();
+    var s = current();
+    post2('activity', { sid: s && s.sid, at: lastActivity });
+    if (warningEl) hideWarning();
+    reportActivity(false);
+  }
+  var reportTimer = null;
+  // Reported at most every minute (a quarter of the limit if that is shorter).
+  // Activity inside that interval is reported when it ends, so the server
+  // never sees the user as idle earlier than this page does.
+  function reportInterval() { return Math.min(ACTIVITY_REPORT_MS, idleMs() / 4); }
+  function reportActivity(force) {
+    var s = current();
+    if (!s || reporting) return;
+    if (!force && lastActivity <= lastReport) return;
+    var wait = lastReport + reportInterval() - Date.now();
+    if (!force && wait > 0) {
+      if (!reportTimer) reportTimer = setTimeout(function () { reportTimer = null; reportActivity(false); }, wait);
+      return;
+    }
+    reporting = true;
+    lastReport = Date.now();
+    request('POST', '/auth/session/activity', { quiet: true }).then(function (t) {
+      var now = current();
+      if (!now || now.sid !== s.sid) return; // signed out (or another account) meanwhile
+      var saved = saveSession(t);
+      post2('token', { sid: saved.sid, token: t });
+    }, function () { /* a 401 already ended the session */ }).then(function () { reporting = false; });
+  }
+
+  function checkIdle() {
+    if (!currentToken()) { hideWarning(); return; }
+    var idle = Date.now() - lastActivity, limit = idleMs();
+    if (idle >= limit) { endSession('idle', true); return; }
+    var warnFrom = limit - Math.min(WARNING_MS, limit / 5);
+    if (idle >= warnFrom) showWarning(Math.ceil((limit - idle) / 1000)); else hideWarning();
+  }
+
+  function showWarning(secondsLeft) {
+    if (!document.body) return;
+    if (!warningEl) {
+      warningEl = document.createElement('div');
+      warningEl.id = 'apex-idle-warning';
+      warningEl.setAttribute('role', 'alertdialog');
+      warningEl.setAttribute('aria-live', 'assertive');
+      warningEl.setAttribute('aria-labelledby', 'apex-idle-text');
+      warningEl.innerHTML = '<p id="apex-idle-text"><span>You will be signed out soon because of inactivity.</span> ' +
+        '<strong id="apex-idle-left"></strong></p><button type="button" id="apex-idle-stay">Stay signed in</button>';
+      warningEl.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2147483647;' +
+        'max-width:calc(100% - 32px);width:440px;padding:16px 18px;border-radius:14px;background:#101f36;color:#fff;' +
+        'font:500 14px/1.5 Inter,Arial,sans-serif;box-shadow:0 10px 35px rgba(0,0,0,.25);display:flex;gap:14px;' +
+        'align-items:center;justify-content:space-between;flex-wrap:wrap';
+      var btn = warningEl.querySelector('button');
+      btn.style.cssText = 'border:0;border-radius:9px;padding:10px 14px;background:#008f64;color:#fff;font:700 13px Inter,Arial,sans-serif;cursor:pointer';
+      btn.addEventListener('click', function () { lastActivity = Date.now(); hideWarning(); reportActivity(true); });
+      document.body.appendChild(warningEl);
+      btn.focus();
+    }
+    var m = Math.floor(secondsLeft / 60), sec = secondsLeft % 60;
+    warningEl.querySelector('#apex-idle-left').textContent = m + ':' + (sec < 10 ? '0' : '') + sec;
+  }
+  function hideWarning() { if (warningEl) { warningEl.remove(); warningEl = null; } }
+
+  if (channel) {
+    channel.onmessage = function (ev) {
+      var d = ev.data || {}, s = current();
+      if (!s || !d.sid || d.sid !== s.sid) return; // only tabs of the same session
+      if (d.type === 'activity') { lastActivity = Math.max(lastActivity, d.at || 0); hideWarning(); }
+      else if (d.type === 'token' && d.token) saveSession(d.token);
+      else if (d.type === 'signed-out') endSession(d.reason === 'idle' ? 'idle' : 'other_tab', false);
+    };
+  }
+  ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(function (name) {
+    global.addEventListener(name, markActivity, { passive: true, capture: true });
+  });
+  setInterval(checkIdle, 5000);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') checkIdle(); });
+  // Opening or reloading a page is navigation, i.e. activity.
+  if (signedInAtLoad) setTimeout(function () { markActivity(); checkIdle(); }, 0);
+  // Back/forward cache: a page kept in memory from before a sign-out reloads.
+  global.addEventListener('pageshow', function (e) {
+    if (e.persisted && signedInAtLoad && !currentToken()) location.reload();
+  });
 
   var get = function (p, q, o) { return request('GET', p, Object.assign({ query: q }, o)); };
   var post = function (p, b, o) { return request('POST', p, Object.assign({ body: b }, o)); };
@@ -290,7 +444,23 @@
 
     session: {
       isSignedIn: function () { return !!currentToken(); },
+      // The signed-in email (kept from sign-in), or null.
+      email: function () { var s = current(); return (s && s.email) || null; },
       clear: clearSession
+    },
+
+    invitations: {
+      // Owners and managers of the organization.
+      list: function (orgId) { return get(org(orgId) + '/invitations'); },
+      create: function (orgId, email, role) { return post(org(orgId) + '/invitations', { email: email, role: role }); },
+      resend: function (orgId, invId) { return post(org(orgId) + '/invitations/' + enc(invId) + '/resend'); },
+      revoke: function (orgId, invId) { return post(org(orgId) + '/invitations/' + enc(invId) + '/revoke'); },
+      // The invitee, from the emailed link.
+      inspect: function (token) { return post('/invitations/inspect', { token: token }, { auth: false }); },
+      acceptNew: function (token, name, password) {
+        return post('/invitations/accept-new', { token: token, name: name, password: password }, { auth: false });
+      },
+      accept: function (token) { return post('/invitations/accept', { token: token }); }
     },
 
     auth: {
@@ -308,12 +478,30 @@
         if (known) body.device_token = known;
         return post('/auth/login', body, { auth: false })
           .then(function (t) {
-            saveSession(t.access_token, t.expires_in);
+            memorySession = null; // a new sign-in never inherits the previous session's fields
+            saveSession(t, { email: String(email).trim().toLowerCase() });
             saveDeviceToken(email, t.device_token);
+            lastActivity = Date.now(); lastReport = Date.now();
             return t;
           });
       },
-      logout: function () { clearSession(); emit('apexrx:signed-out'); },
+      // Sign out this session (server and every tab of it). Synchronous for the
+      // page: the session is cleared and "apexrx:signed-out" fires immediately.
+      logout: function () { endSession('signed_out', true); },
+      session: function () { return get('/auth/session'); },
+      // Adopt a TokenResponse obtained another way (accepting an invitation).
+      useToken: function (t, email) {
+        memorySession = null;
+        saveSession(t, { email: email ? String(email).trim().toLowerCase() : null });
+        lastActivity = Date.now(); lastReport = Date.now();
+      },
+      password: {
+        forgot: function (email) { return post('/auth/password/forgot', { email: email }, { auth: false }); },
+        check: function (token) { return post('/auth/password/reset/check', { token: token }, { auth: false }); },
+        reset: function (token, newPassword) {
+          return post('/auth/password/reset', { token: token, new_password: newPassword }, { auth: false });
+        }
+      },
       me: function () { return get('/auth/me'); },
       updateMe: function (data) { return patch('/auth/me', data); },
       changePassword: function (current, next) {
