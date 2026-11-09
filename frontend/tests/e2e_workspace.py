@@ -233,7 +233,10 @@ def main():
         row = owner.locator(f"tr[data-product='{w['prod_name']}']")
         row.locator("input[type=number]").first.fill("50")
         row.get_by_role("button", name="Save", exact=True).click()
-        owner.wait_for_function("p => document.querySelector(`tr[data-product='${p}'] input[type=number]`)?.value === '50'", arg=w["prod_name"])
+        # The section stays on screen (dimmed) while it saves, so the typed value is
+        # already there: wait for the save to finish instead.
+        wait_text(owner, "#notice", "Remera Branch: 50 in stock")
+        owner.wait_for_selector("#workspace-section:not(.ws-refreshing)")
         check("9. stock updated at Remera only",
               inventory_row(w["owner"], w["org"], w["rem"], w["prod"])["quantity"] == 50
               and inventory_row(w["owner"], w["org"], w["kim"], w["prod"])["quantity"] == 120)

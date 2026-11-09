@@ -99,6 +99,7 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 | Control | Endpoint |
 |---|---|
 | Sign in | `POST /auth/login`, then `GET /auth/me`. Refused unless `is_platform_admin` |
+| Overview counts | `GET /admin/organizations/counts` (all seven numbers in one request) |
 | Tabs | Overview, Organizations, Documents, Users, Catalogue, Search insights. The current tab is in the URL hash. `js/admin.js` (sign-in, tabs, organizations) and `js/admin-console.js` (the other sections) |
 | **Overview** cards | The `total` of `GET /admin/organizations`, `/admin/documents?status=pending`, `/admin/users` (and `?is_platform_admin=true`), `/catalogue/drugs`, `/catalogue/products` (and `?include_inactive=true`), each with `limit=1`. Plus `GET /admin/insights/searches?days=30&limit=5` (and `&only_unmet=true`) |
 | Organization counts | `GET /admin/organizations?limit=1` with each `type` / `status` filter, using its `total` |

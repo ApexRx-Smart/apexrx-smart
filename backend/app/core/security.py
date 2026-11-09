@@ -2,10 +2,16 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 from pwdlib import PasswordHash
+from pwdlib.hashers.argon2 import Argon2Hasher
 
 from app.core.config import settings
 
-password_hash = PasswordHash.recommended()
+# Argon2id with OWASP's recommended parameters (19 MiB, 2 passes, 1 lane).
+# pwdlib's default (64 MiB, 3 passes, 4 lanes) costs about three times as much
+# CPU per sign-in and is noticeably slow on small hosting instances. Hashes made
+# with the old parameters still verify, and are re-hashed with these on the
+# next successful sign-in (see verify_password_and_update).
+password_hash = PasswordHash((Argon2Hasher(time_cost=2, memory_cost=19456, parallelism=1),))
 
 # Verified against when the email is unknown, so failed logins take the same
 # time whether or not the account exists.
@@ -21,6 +27,15 @@ def verify_password(password: str, hashed_password: str | None) -> bool:
         password_hash.verify(password, _DUMMY_HASH)
         return False
     return password_hash.verify(password, hashed_password)
+
+
+def verify_password_and_update(password: str, hashed_password: str | None) -> tuple[bool, str | None]:
+    """Like verify_password, and also return a new hash when the stored one uses
+    outdated parameters (``None`` when it is current)."""
+    if not hashed_password:
+        password_hash.verify(password, _DUMMY_HASH)
+        return False, None
+    return password_hash.verify_and_update(password, hashed_password)
 
 
 def create_access_token(subject: str) -> tuple[str, int]:

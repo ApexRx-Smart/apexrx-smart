@@ -20,7 +20,9 @@
   var DEFAULT_BASE =
     window.APEX_CONFIG?.API_BASE_URL || 'http://127.0.0.1:8000';
   var SESSION_KEY = 'apexrx_session';
-  var TIMEOUT_MS = 15000;
+  // Generous, because a free hosting instance that has gone to sleep can take
+  // 30 seconds or more to answer its first request (see warmUp below).
+  var TIMEOUT_MS = 45000;
 
   function resolveBase() {
     var meta = document.querySelector('meta[name="apexrx-api-base"]');
@@ -123,6 +125,52 @@
     return s ? s.token : null;
   }
 
+  /* -------------------------------------------------------------- activity */
+  // While any request is in flight, <html> gets the class "apex-busy" (after a
+  // short delay, so fast requests don't flicker), which shows a thin progress
+  // bar at the top of the page. If the wait goes past a few seconds,
+  // "apex-slow" is added too, with a note that the server may be starting up.
+  var BUSY_DELAY_MS = 150;
+  var SLOW_DELAY_MS = 4000;
+  var inFlight = 0, busyTimer = null, slowTimer = null;
+  function setRootClass(name, on) {
+    var root = document.documentElement;
+    if (root) root.classList.toggle(name, on);
+  }
+  function activityStart() {
+    inFlight += 1;
+    if (inFlight > 1) return;
+    busyTimer = setTimeout(function () { setRootClass('apex-busy', true); }, BUSY_DELAY_MS);
+    slowTimer = setTimeout(function () { setRootClass('apex-slow', true); }, SLOW_DELAY_MS);
+  }
+  function activityEnd() {
+    inFlight = Math.max(0, inFlight - 1);
+    if (inFlight) return;
+    clearTimeout(busyTimer); clearTimeout(slowTimer);
+    setRootClass('apex-busy', false); setRootClass('apex-slow', false);
+  }
+  function tracked(promise) {
+    activityStart();
+    return promise.then(function (v) { activityEnd(); return v; }, function (e) { activityEnd(); throw e; });
+  }
+  (function injectActivityStyles() {
+    if (!document.head || document.getElementById('apex-activity-style')) return;
+    var style = document.createElement('style');
+    style.id = 'apex-activity-style';
+    style.textContent =
+      'html.apex-busy::before{content:"";position:fixed;top:0;left:0;right:0;height:3px;z-index:2147483647;' +
+      'background:linear-gradient(90deg,transparent,var(--green,#008f64),transparent);background-size:40% 100%;' +
+      'background-repeat:no-repeat;animation:apex-busy-bar 1.1s ease-in-out infinite;pointer-events:none}' +
+      'html.apex-busy,html.apex-busy button,html.apex-busy a{cursor:progress}' +
+      'html.apex-slow::after{content:"Still working\u2026 the server may be starting up, this can take up to a minute.";' +
+      'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:2147483647;max-width:calc(100% - 32px);' +
+      'padding:10px 16px;border-radius:999px;background:#101f36;color:#fff;font:500 13px/1.4 Inter,Arial,sans-serif;' +
+      'box-shadow:0 6px 24px rgba(0,0,0,.18);pointer-events:none;text-align:center}' +
+      '@keyframes apex-busy-bar{0%{background-position:-40% 0}100%{background-position:140% 0}}' +
+      '@media (prefers-reduced-motion:reduce){html.apex-busy::before{animation:none;background:var(--green,#008f64);opacity:.6}}';
+    document.head.appendChild(style);
+  })();
+
   /* --------------------------------------------------------------- request */
   function buildUrl(path, query) {
     var url = BASE + path;
@@ -164,7 +212,7 @@
       else opts.signal.addEventListener('abort', function () { controller.abort(); });
     }
 
-    return fetch(buildUrl(path, opts.query), {
+    return tracked(fetch(buildUrl(path, opts.query), {
       method: method,
       headers: headers,
       body: body,
@@ -189,13 +237,13 @@
       if (timer) clearTimeout(timer);
       if (opts.signal && opts.signal.aborted) throw err; // caller cancelled
       throw new ApiError(0, messageFrom(0, null), { cause: String(err) });
-    });
+    }));
   }
 
   // Authenticated file download. Resolves with a Blob (use URL.createObjectURL).
   function download(path) {
     var token = currentToken();
-    return fetch(BASE + path, { headers: token ? { Authorization: 'Bearer ' + token } : {}, credentials: 'omit' })
+    return tracked(fetch(BASE + path, { headers: token ? { Authorization: 'Bearer ' + token } : {}, credentials: 'omit' })
       .then(function (res) {
         if (res.ok) return res.blob();
         return res.json().catch(function () { return null; }).then(function (data) {
@@ -205,8 +253,15 @@
           }
           throw new ApiError(res.status, messageFrom(res.status, data), data);
         });
-      }, function (err) { throw new ApiError(0, messageFrom(0, null), { cause: String(err) }); });
+      }, function (err) { throw new ApiError(0, messageFrom(0, null), { cause: String(err) }); }));
   }
+
+  // Wake the backend (and its database) as soon as a page opens, so a server
+  // that went to sleep is already starting while the user reads or types.
+  // Fire and forget: not tracked, no timeout, errors ignored.
+  (function warmUp() {
+    try { fetch(BASE + '/health', { credentials: 'omit', cache: 'no-store' }).catch(function () {}); } catch (e) { /* ignore */ }
+  })();
 
   function emit(name) {
     try { global.dispatchEvent(new CustomEvent(name)); } catch (e) { /* old browsers */ }
@@ -357,6 +412,7 @@
 
     admin: {
       organizations: function (params) { return get('/admin/organizations', params); },
+      organizationCounts: function () { return get('/admin/organizations/counts'); },
       organization: function (id) { return get('/admin/organizations/' + enc(id)); },
       reviewOrganization: function (id, decision, notes) {
         return post('/admin/organizations/' + enc(id) + '/review', { decision: decision, notes: notes || null });

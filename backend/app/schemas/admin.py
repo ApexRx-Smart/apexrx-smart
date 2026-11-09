@@ -46,6 +46,18 @@ class DocumentReview(BaseModel):
         return self
 
 
+class AdminOrganizationCounts(BaseModel):
+    """Organization counts for the admin overview, from a single query."""
+
+    total: int
+    pharmacy: int
+    supplier: int
+    pending: int
+    approved: int
+    rejected: int
+    suspended: int
+
+
 class AdminOrganizationDetail(OrganizationResponse):
     reviewed_by: int | None
     members: list[MemberResponse]

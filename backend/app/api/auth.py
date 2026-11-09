@@ -7,7 +7,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.core import device_token
 from app.core.errors import AppError, Conflict, TooManyRequests, Unauthorized
 from app.core.rate_limit import account_subject, client_ip, device_subject, login_limiter
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import create_access_token, hash_password, verify_password, verify_password_and_update
 from app.models import Membership, Organization, User
 from app.schemas.auth import (
     ChangePasswordRequest,
@@ -82,10 +82,14 @@ def login(payload: LoginRequest, request: Request, db: DbSession):
             headers={"Retry-After": str(wait)},
         )
 
-    password_ok = verify_password(payload.password, user.password_hash if user else None)
+    password_ok, new_hash = verify_password_and_update(payload.password, user.password_hash if user else None)
     if user is None or not password_ok or not user.is_active:
         login_limiter.record_failure(ip, subject)
         raise Unauthorized("Invalid email or password.")
+    if new_hash:
+        # Stored with older, slower hashing parameters: upgrade it now.
+        user.password_hash = new_hash
+        db.commit()
 
     login_limiter.record_success(subject)
     token, expires_in = create_access_token(subject=str(user.user_id))

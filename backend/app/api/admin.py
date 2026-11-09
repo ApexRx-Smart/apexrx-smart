@@ -15,6 +15,7 @@ from app.models import Location, Organization, OrganizationDocument, SearchEvent
 from app.models.enums import DocumentStatus, OrganizationStatus, OrganizationType
 from app.schemas.admin import (
     AdminDocumentResponse,
+    AdminOrganizationCounts,
     AdminOrganizationDetail,
     AdminUserUpdate,
     DocumentReview,
@@ -48,6 +49,21 @@ def _now() -> datetime:
 # ---------------------------------------------------------------------------
 # Organizations
 # ---------------------------------------------------------------------------
+@router.get("/organizations/counts", response_model=AdminOrganizationCounts)
+def organization_counts(_: AdminUser, db: DbSession):
+    """Totals by type and by status for the overview (one query instead of a
+    request per number)."""
+    counts = {key: 0 for key in AdminOrganizationCounts.model_fields}
+    rows = db.execute(
+        select(Organization.type, Organization.status, func.count()).group_by(Organization.type, Organization.status)
+    ).all()
+    for org_type, status, n in rows:
+        counts["total"] += n
+        counts[OrganizationType(org_type).value] += n
+        counts[OrganizationStatus(status).value] += n
+    return counts
+
+
 @router.get("/organizations", response_model=Page[OrganizationResponse])
 def list_organizations(
     _: AdminUser,

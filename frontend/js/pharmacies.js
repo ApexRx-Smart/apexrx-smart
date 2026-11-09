@@ -133,29 +133,37 @@ async function loadLive() {
   // switch) ever sees a half-loaded organization.
   const next = { user: me, organization: null, location: null, locations: [], role: membership ? membership.role : null };
   if (membership) {
-    next.organization = await API.organizations.get(membership.organization_id);
-    // All branches (inactive ones too, for the Branches section).
-    next.locations = (await API.organizations.locations(membership.organization_id, { include_inactive: true })) || [];
+    // Everything the workspace needs, requested at once rather than one after
+    // another. Documents and orders are optional: a failure keeps the page usable.
+    const orgId = membership.organization_id;
+    const [organization, locations, extras] = await Promise.all([
+      API.organizations.get(orgId),
+      // All branches (inactive ones too, for the Branches section).
+      API.organizations.locations(orgId, { include_inactive: true }),
+      fetchWorkspaceData(orgId)
+    ]);
+    next.organization = organization;
+    next.locations = locations || [];
     next.location = next.locations.find(l => l.is_active) || next.locations[0] || null;
+    applyWorkspaceData(next, extras);
   }
   live = next;
-  if (live.organization) await refreshWorkspaceData();
   return live;
 }
 
 const DOCUMENT_LABELS = { business_license: 'Business license', pharmacy_license: 'Pharmacy license', owner_id: 'Owner ID' };
 
 // Documents and supplier contacts change while the user works, so they are
-// reloaded each time the workspace opens. A failed request keeps the last values.
-async function refreshWorkspaceData() {
-  if (!live || !live.organization) return;
-  const orgId = live.organization.organization_id;
-  const [documents, orders] = await Promise.allSettled([
+// reloaded with the rest of the workspace. A failed request keeps the last values.
+function fetchWorkspaceData(orgId) {
+  return Promise.allSettled([
     API.organizations.documents(orgId),
     API.purchaseOrders.list({ organization_id: orgId, limit: 100 })
   ]);
-  if (documents.status === 'fulfilled') live.documents = documents.value;
-  if (orders.status === 'fulfilled') live.contacts = supplierContacts(orders.value.items);
+}
+function applyWorkspaceData(target, [documents, orders]) {
+  if (documents.status === 'fulfilled') target.documents = documents.value;
+  if (orders.status === 'fulfilled') target.contacts = supplierContacts(orders.value.items);
 }
 
 // One entry per supplier the pharmacy has ordered from, newest order first.
@@ -416,10 +424,13 @@ function profilePayloads(values) {
 
 async function uploadSelectedDocuments(organizationId) {
   const inputs = [...document.querySelectorAll('#profile input[type=file][data-document-type]')].filter(i => i.files && i.files.length);
-  for (const input of inputs) {
-    await API.organizations.uploadDocument(organizationId, input.dataset.documentType, input.files[0]);
-    input.value = ''; // uploaded: do not send it again if the user comes back to this step
-  }
+  // Uploaded side by side. Each successful one is cleared, so it is not sent
+  // again if the user comes back to this step after another one failed.
+  const results = await Promise.allSettled(inputs.map(input =>
+    API.organizations.uploadDocument(organizationId, input.dataset.documentType, input.files[0])
+      .then(() => { input.value = ''; })));
+  const failed = results.find(r => r.status === 'rejected');
+  if (failed) throw failed.reason;
   return inputs.length;
 }
 
@@ -433,10 +444,17 @@ async function saveProfile(values) {
   }
   const orgId = live.organization.organization_id;
   if (live.role === 'owner' || live.role === 'manager') {
-    live.location = live.location
-      ? await API.organizations.updateLocation(orgId, live.location.location_id, location)
-      : await API.organizations.createLocation(orgId, location);
-    if (await uploadSelectedDocuments(orgId)) live.documents = await API.organizations.documents(orgId);
+    // The location and the documents don't depend on each other: send both at once.
+    const [savedLocation, uploaded] = await Promise.allSettled([
+      live.location
+        ? API.organizations.updateLocation(orgId, live.location.location_id, location)
+        : API.organizations.createLocation(orgId, location),
+      uploadSelectedDocuments(orgId)
+    ]);
+    if (savedLocation.status === 'fulfilled') live.location = savedLocation.value;
+    if (uploaded.status === 'fulfilled' && uploaded.value) live.documents = await API.organizations.documents(orgId);
+    if (savedLocation.status === 'rejected') throw savedLocation.reason;
+    if (uploaded.status === 'rejected') throw uploaded.reason;
   }
 }
 
