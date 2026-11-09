@@ -87,7 +87,7 @@ def login(payload: LoginRequest, request: Request, db: DbSession):
         login_limiter.record_failure(ip, subject)
         raise Unauthorized("Invalid email or password.")
     if new_hash:
-        # Stored with older, slower hashing parameters: upgrade it now.
+        # Stored with non-current hashing parameters: re-hash with the current ones.
         user.password_hash = new_hash
         db.commit()
 

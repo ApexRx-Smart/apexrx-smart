@@ -2,16 +2,14 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 from pwdlib import PasswordHash
-from pwdlib.hashers.argon2 import Argon2Hasher
 
 from app.core.config import settings
 
-# Argon2id with OWASP's recommended parameters (19 MiB, 2 passes, 1 lane).
-# pwdlib's default (64 MiB, 3 passes, 4 lanes) costs about three times as much
-# CPU per sign-in and is noticeably slow on small hosting instances. Hashes made
-# with the old parameters still verify, and are re-hashed with these on the
-# next successful sign-in (see verify_password_and_update).
-password_hash = PasswordHash((Argon2Hasher(time_cost=2, memory_cost=19456, parallelism=1),))
+# pwdlib's recommended configuration (Argon2id, argon2-cffi defaults:
+# 64 MiB, 3 passes, 4 lanes). A hash made with any other parameters (for
+# example the cheaper ones briefly used in November 2026) still verifies and is
+# re-hashed with these on the next successful sign-in (verify_password_and_update).
+password_hash = PasswordHash.recommended()
 
 # Verified against when the email is unknown, so failed logins take the same
 # time whether or not the account exists.
