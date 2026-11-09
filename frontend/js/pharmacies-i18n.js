@@ -1,4 +1,78 @@
 const workflowTranslations = {
+ "Your account is created on ApexRX Smart.": {"fr": "Votre compte est créé sur ApexRX Smart.", "rw": "Konti yawe ikorerwa kuri ApexRX Smart."},
+ "Already have an account?": {"fr": "Vous avez déjà un compte ?", "rw": "Usanzwe ufite konti?"},
+ "Sign in": {"fr": "Se connecter", "rw": "Injira"},
+ "New to ApexRX?": {"fr": "Nouveau sur ApexRX ?", "rw": "Uri mushya kuri ApexRX?"},
+ "Create a pharmacy account": {"fr": "Créer un compte pharmacie", "rw": "Kora konti ya farumasi"},
+ "Create a supplier account": {"fr": "Créer un compte fournisseur", "rw": "Kora konti y’utanga imiti"},
+ "Sign in to ApexRX": {"fr": "Connectez-vous à ApexRX", "rw": "Injira kuri ApexRX"},
+ "Welcome back. Use the email and password of your ApexRX account.": {"fr": "Bon retour. Utilisez l’e-mail et le mot de passe de votre compte ApexRX.", "rw": "Murakaza neza. Koresha imeli n’ijambobanga bya konti yawe ya ApexRX."},
+ "Signing in opens your pharmacy workspace.": {"fr": "La connexion ouvre votre espace pharmacie.", "rw": "Kwinjira bifungura ahakorerwa farumasi yawe."},
+ "Signing in shows your supplier registration.": {"fr": "La connexion affiche votre inscription fournisseur.", "rw": "Kwinjira bikwereka iyandikwa ryawe nk’utanga imiti."},
+ "Registering a medicine supplier?": {"fr": "Vous inscrivez un fournisseur de médicaments ?", "rw": "Urandikisha utanga imiti?"},
+ "Register as a supplier →": {"fr": "S’inscrire comme fournisseur →", "rw": "Iyandikishe nk’utanga imiti →"},
+ "Registering a pharmacy?": {"fr": "Vous inscrivez une pharmacie ?", "rw": "Urandikisha farumasi?"},
+ "Register as a pharmacy →": {"fr": "S’inscrire comme pharmacie →", "rw": "Iyandikishe nka farumasi →"},
+ "Continue on the supplier page →": {"fr": "Continuer sur la page fournisseur →", "rw": "Komereza ku rupapuro rw’abatanga imiti →"},
+ "This account belongs to a supplier, not a pharmacy.": {"fr": "Ce compte appartient à un fournisseur, pas à une pharmacie.", "rw": "Iyi konti ni iy’utanga imiti, si iya farumasi."},
+ "Your password": {"fr": "Votre mot de passe", "rw": "Ijambobanga ryawe"},
+ "Incorrect email or password.": {"fr": "E-mail ou mot de passe incorrect.", "rw": "Imeli cyangwa ijambobanga si byo."},
+ "Enter your email and password.": {"fr": "Saisissez votre e-mail et votre mot de passe.", "rw": "Andika imeli n’ijambobanga byawe."},
+ "Use at least 8 characters for your password.": {"fr": "Utilisez au moins 8 caractères pour votre mot de passe.", "rw": "Koresha nibura inyuguti 8 mu ijambobanga ryawe."},
+ "For Suppliers — ApexRX Smart": {"fr": "Fournisseurs — ApexRX Smart", "rw": "Abatanga imiti — ApexRX Smart"},
+ "FOR SUPPLIERS · KIGALI": {"fr": "POUR LES FOURNISSEURS · KIGALI", "rw": "KU BATANGA IMITI · KIGALI"},
+ "Your supply.": {"fr": "Votre offre.", "rw": "Ibicuruzwa byawe."},
+ "Closer to": {"fr": "Plus proche de", "rw": "Hafi ya"},
+ "every pharmacy.": {"fr": "chaque pharmacie.", "rw": "buri farumasi."},
+ "Make your products visible to verified pharmacies and receive their purchase orders.": {"fr": "Rendez vos produits visibles aux pharmacies vérifiées et recevez leurs bons de commande.", "rw": "Erekana ibicuruzwa byawe ku mafarumasi yemewe kandi wakire ibyo batumiza."},
+ "Built for medicine wholesalers and distributors": {"fr": "Conçu pour les grossistes et distributeurs de médicaments", "rw": "Byakorewe abacuruzi barangura n’abakwirakwiza imiti"},
+ "Business": {"fr": "Entreprise", "rw": "Ubucuruzi"},
+ "Review": {"fr": "Vérification", "rw": "Isuzuma"},
+ "Business name": {"fr": "Nom de l’entreprise", "rw": "Izina ry’ubucuruzi"},
+ "Business phone": {"fr": "Téléphone de l’entreprise", "rw": "Telefoni y’ubucuruzi"},
+ "Warehouse name": {"fr": "Nom de l’entrepôt", "rw": "Izina ry’ububiko"},
+ "Warehouse address": {"fr": "Adresse de l’entrepôt", "rw": "Aderesi y’ububiko"},
+ "Main warehouse": {"fr": "Entrepôt principal", "rw": "Ububiko bukuru"},
+ "Pin your warehouse": {"fr": "Placez votre entrepôt", "rw": "Erekana aho ububiko buri"},
+ "Choose approximate warehouse location on illustrative map": {"fr": "Choisir l’emplacement approximatif de l’entrepôt sur la carte illustrative", "rw": "Hitamo aho ububiko bugereranyije buri ku ikarita y’igishushanyo"},
+ "Verification documents": {"fr": "Documents de vérification", "rw": "Inyandiko zo kugenzura"},
+ "You can also add them later": {"fr": "Vous pouvez aussi les ajouter plus tard", "rw": "Ushobora no kuzongeraho nyuma"},
+ "Documents are uploaded securely to ApexRX for verification (PDF, PNG or JPG, up to 10 MB each). ApexRX reviews your business before it can work with pharmacies.": {"fr": "Les documents sont envoyés de façon sécurisée à ApexRX pour vérification (PDF, PNG ou JPG, 10 Mo maximum chacun). ApexRX vérifie votre entreprise avant qu’elle puisse travailler avec les pharmacies.", "rw": "Inyandiko zoherezwa kuri ApexRX mu buryo bwizewe kugira ngo zigenzurwe (PDF, PNG cyangwa JPG, buri imwe itarenze MB 10). ApexRX igenzura ubucuruzi bwawe mbere y’uko bukorana n’amafarumasi."},
+ "Submit for review →": {"fr": "Envoyer pour vérification →", "rw": "Ohereza kugira ngo bisuzumwe →"},
+ "Organization type": {"fr": "Type d’organisation", "rw": "Ubwoko bw’ikigo"},
+ "Supplier": {"fr": "Fournisseur", "rw": "Utanga imiti"},
+ "Your role": {"fr": "Votre rôle", "rw": "Inshingano zawe"},
+ "Warehouses": {"fr": "Entrepôts", "rw": "Ububiko"},
+ "Add a document": {"fr": "Ajouter un document", "rw": "Ongeraho inyandiko"},
+ "Document type": {"fr": "Type de document", "rw": "Ubwoko bw’inyandiko"},
+ "File": {"fr": "Fichier", "rw": "Dosiye"},
+ "Upload document": {"fr": "Envoyer le document", "rw": "Ohereza inyandiko"},
+ "Supplier screens for stock, prices and incoming orders are not on the website yet.": {"fr": "Les écrans fournisseur pour le stock, les prix et les commandes reçues ne sont pas encore sur le site.", "rw": "Ahakorerwa abatanga imiti (ububiko, ibiciro n’ibyo batumijwe) ntiharashyirwa ku rubuga."},
+ "Edit business details": {"fr": "Modifier les informations de l’entreprise", "rw": "Hindura amakuru y’ubucuruzi"},
+ "Check status": {"fr": "Vérifier le statut", "rw": "Reba aho bigeze"},
+ "Sign out": {"fr": "Se déconnecter", "rw": "Sohoka"},
+ "Reach every pharmacy from one place.": {"fr": "Atteignez chaque pharmacie depuis un seul endroit.", "rw": "Gera kuri buri farumasi uri ahantu hamwe."},
+ "Illustration of a supplier scanning a carton of medical supplies": {"fr": "Illustration d’un fournisseur scannant un carton de fournitures médicales", "rw": "Igishushanyo cy’utanga imiti usikana ikarito y’ibikoresho by’ubuvuzi"},
+ "Create your supplier account": {"fr": "Créez votre compte fournisseur", "rw": "Kora konti yawe y’utanga imiti"},
+ "Join a connected network of pharmacies and suppliers in Kigali.": {"fr": "Rejoignez un réseau connecté de pharmacies et de fournisseurs à Kigali.", "rw": "Injira mu muyoboro uhuza amafarumasi n’abatanga imiti i Kigali."},
+ "Tell us about your business.": {"fr": "Parlez-nous de votre entreprise.", "rw": "Tubwire ibijyanye n’ubucuruzi bwawe."},
+ "Add your business details, your warehouse and your verification documents.": {"fr": "Ajoutez les informations de votre entreprise, votre entrepôt et vos documents de vérification.", "rw": "Ongeraho amakuru y’ubucuruzi bwawe, ububiko n’inyandiko zo kugenzura."},
+ "Your registration": {"fr": "Votre inscription", "rw": "Iyandikwa ryawe"},
+ "ApexRX reviews every supplier before it can work with pharmacies.": {"fr": "ApexRX vérifie chaque fournisseur avant qu’il puisse travailler avec les pharmacies.", "rw": "ApexRX igenzura buri utanga imiti mbere y’uko akorana n’amafarumasi."},
+ "Your business is awaiting verification by ApexRX.": {"fr": "Votre entreprise attend la vérification d’ApexRX.", "rw": "Ubucuruzi bwawe butegereje kugenzurwa na ApexRX."},
+ "Your business is verified. It can publish stock and prices and receive orders from pharmacies.": {"fr": "Votre entreprise est vérifiée. Elle peut publier son stock et ses prix et recevoir des commandes des pharmacies.", "rw": "Ubucuruzi bwawe bwemejwe. Bushobora gutangaza ububiko n’ibiciro no kwakira ibyo amafarumasi atumiza."},
+ "Your business is suspended. Contact ApexRX for help.": {"fr": "Votre entreprise est suspendue. Contactez ApexRX pour obtenir de l’aide.", "rw": "Ubucuruzi bwawe bwahagaritswe. Vugana na ApexRX ngo bagufashe."},
+ "Enter your business name.": {"fr": "Saisissez le nom de votre entreprise.", "rw": "Andika izina ry’ubucuruzi bwawe."},
+ "Enter a name for your warehouse.": {"fr": "Saisissez un nom pour votre entrepôt.", "rw": "Andika izina ry’ububiko bwawe."},
+ "Enter the warehouse address.": {"fr": "Saisissez l’adresse de l’entrepôt.", "rw": "Andika aderesi y’ububiko."},
+ "Pin the warehouse on the map or enter its coordinates.": {"fr": "Placez l’entrepôt sur la carte ou saisissez ses coordonnées.", "rw": "Erekana ububiko ku ikarita cyangwa wandike aho buherereye."},
+ "Your supplier registration has been submitted to ApexRX for review.": {"fr": "Votre inscription fournisseur a été envoyée à ApexRX pour vérification.", "rw": "Iyandikwa ryawe nk’utanga imiti ryoherejwe kuri ApexRX ngo risuzumwe."},
+ "Status updated.": {"fr": "Statut mis à jour.", "rw": "Aho bigeze havuguruwe."},
+ "Document uploaded for review.": {"fr": "Document envoyé pour vérification.", "rw": "Inyandiko yoherejwe ngo isuzumwe."},
+ "Choose a file to upload.": {"fr": "Choisissez un fichier à envoyer.", "rw": "Hitamo dosiye yo kohereza."},
+ "No documents uploaded yet. ApexRX needs them to verify your business.": {"fr": "Aucun document envoyé pour l’instant. ApexRX en a besoin pour vérifier votre entreprise.", "rw": "Nta nyandiko iroherezwa. ApexRX izikeneye kugira ngo igenzure ubucuruzi bwawe."},
+ "No warehouse yet": {"fr": "Pas encore d’entrepôt", "rw": "Nta bubiko burashyirwaho"},
+ "Your supplier registration": {"fr": "Votre inscription fournisseur", "rw": "Iyandikwa ryawe nk’utanga imiti"},
  "Mobile phone number": {"fr": "Numéro de téléphone mobile", "rw": "Nimero ya telefoni igendanwa"},
  "Send code by SMS": {"fr": "Envoyer le code par SMS", "rw": "Ohereza kode kuri SMS"},
  "Resend code": {"fr": "Renvoyer le code", "rw": "Ongera wohereze kode"},
@@ -563,7 +637,7 @@ function workflowTranslate(source){
  if(!translated && /^Code sent to \S+\. It expires in \d+ minutes\.$/.test(text)){const m=text.match(/^Code sent to (\S+)\. It expires in (\d+) minutes\.$/);translated=workflowLang==='fr'?`Code envoyé au ${m[1]}. Il expire dans ${m[2]} minutes.`:`Kode yoherejwe kuri ${m[1]}. Irangira mu minota ${m[2]}.`;}
  if(!translated && /^Incorrect code\. \d+ attempts? left\.$/.test(text)){const n=text.match(/\d+/)[0];translated=workflowLang==='fr'?`Code incorrect. ${n} tentative${n==='1'?'':'s'} restante${n==='1'?'':'s'}.`:`Kode si yo. Usigaje amahirwe ${n}.`;}
  if(!translated && /^Please wait \d+ seconds before requesting another code\.$/.test(text)){const n=text.match(/\d+/)[0];translated=workflowLang==='fr'?`Patientez ${n} secondes avant de demander un autre code.`:`Tegereza amasegonda ${n} mbere yo gusaba indi kode.`;}
- if(!translated && /^STEP 0\d \/ 05$/.test(text)) translated=text.replace('STEP',workflowLang==='fr'?'ÉTAPE':'INTAMBWE');
+ if(!translated && /^STEP 0\d \/ 0\d$/.test(text)) translated=text.replace('STEP',workflowLang==='fr'?'ÉTAPE':'INTAMBWE');
  if(!translated && text.endsWith(' · Sample supplier')) translated=text.replace('Sample supplier',workflowLang==='fr'?'Fournisseur fictif':'Utanga imiti w’igerageza');
  if(!translated && text.startsWith('Open demo chat with ')) translated=text.replace('Open demo chat with ',workflowLang==='fr'?'Ouvrir la discussion de démonstration avec ':'Fungura ikiganiro cy’igerageza na ');
  if(!translated && text.startsWith('Sample conversation: ')){
@@ -573,6 +647,7 @@ function workflowTranslate(source){
  return translated?source.replace(text,translated):source;
 }
 const workflowTextSources=new WeakMap(),workflowAttributeSources=new WeakMap();
+const workflowTitle=document.title; // each page's own title (pharmacies.html, suppliers.html)
 function translateWorkflow(){
  const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
  let node;
@@ -586,9 +661,9 @@ function translateWorkflow(){
   let saved=workflowAttributeSources.get(el)||{};
   ['placeholder','aria-label','alt'].forEach(attr=>{if(!el.hasAttribute(attr))return;const current=el.getAttribute(attr);let entry=saved[attr];if(!entry||current!==entry.rendered)entry={source:current};entry.rendered=workflowTranslate(entry.source);saved[attr]=entry;if(current!==entry.rendered)el.setAttribute(attr,entry.rendered);});workflowAttributeSources.set(el,saved);
  });
- document.documentElement.lang=workflowLang;document.title=workflowTranslate('For Pharmacies — ApexRX Smart');
+ document.documentElement.lang=workflowLang;document.title=workflowTranslate(workflowTitle);
  const date=document.getElementById('today');if(date?.textContent)date.textContent=new Date().toLocaleDateString({en:'en-GB',fr:'fr-FR',rw:'rw-RW'}[workflowLang],{weekday:'long',day:'numeric',month:'long',year:'numeric'});
- document.querySelectorAll('a[href^="index.html"]').forEach(a=>a.href='index.html?lang='+workflowLang);
+ document.querySelectorAll('a[href^="index.html"]').forEach(a=>{const raw=a.getAttribute('href'),i=raw.indexOf('#');a.setAttribute('href','index.html?lang='+workflowLang+(i===-1?'':raw.slice(i)));});
 }
 const workflowObserver=new MutationObserver(()=>{workflowObserver.disconnect();translateWorkflow();observeWorkflow();});
 function observeWorkflow(){workflowObserver.observe(document.body,{childList:true,subtree:true,characterData:true});}

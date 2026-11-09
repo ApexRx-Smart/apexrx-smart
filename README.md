@@ -104,6 +104,15 @@ Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
   - It also lists suppliers from the pharmacy's purchase orders and searches supplier stock with `GET /supplier-offers`, which works only for approved pharmacies. **Open chat** opens the supplier's WhatsApp or phone.
   - Buttons follow the user's role, but the backend enforces every rule.
 - **Joining an existing pharmacy:** someone who registers to work at an existing pharmacy chooses "Joining an existing pharmacy instead?". They wait for the owner or a manager to add their email, instead of registering a new pharmacy.
+- **Supplier registration (`suppliers.html`):**
+  - A supplier creates an account (or signs in).
+  - It then registers the business, its warehouse and its documents with `POST /organizations` and `type: "supplier"`, and follows its verification status.
+  - Same API and admin review as pharmacies. No SMS step, because the backend requires it only for pharmacies.
+- **Public pages:**
+  - `how-it-works.html`, `about.html` (placeholder content to replace) and `legal.html` (placeholder privacy, terms and cookie pages, not approved policies).
+  - They share one header and footer, from `js/site-layout.js`.
+  - Both registration pages have an "Already have an account? Sign in" switch, and every password field has a show/hide button.
+  - See `frontend/README.md`.
 - **Just exploring?** still opens the workspace with sample data and no account.
 
 - **The admin dashboard** (`admin.html`) lets ApexRX staff review registrations. See [Admin dashboard](#admin-dashboard).

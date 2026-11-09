@@ -228,6 +228,12 @@
   } else { reveals.forEach(function(el){ el.classList.add('in'); }); }
 
 
+  /* The hero map exists only on the landing page; other public pages
+     (how-it-works.html, about.html, legal.html) share this script for the
+     header, footer, menu and translations. */
+  var labelHeroPins = function(){};
+  if(document.getElementById('mapLayer') && document.getElementById('mapFx')) initHeroMap();
+  function initHeroMap(){
   /* ================= ANIMATED KIGALI MAP =================
      Pins sit on the pharmacy icons drawn in the map image.
      The image uses object-fit:cover + object-position:center 38%,
@@ -378,18 +384,24 @@
   var bg = layer.querySelector('.map-bg-img');
   if(bg && !bg.complete) bg.addEventListener('load', layout);
   setTimeout(startCycle, 900);
+  labelHeroPins = labelPins;
+  }
 
   /* ================= LANGUAGE ================= */
   var h1Pre = document.getElementById('h1Pre'), h1Accent = document.getElementById('h1Accent');
   function applyLang(l){
     lang = STRINGS[l] ? l : 'en';
-    h1Pre.textContent = t('h1_pre'); h1Accent.textContent = t('h1_accent');
+    if(h1Pre && h1Accent){ h1Pre.textContent = t('h1_pre'); h1Accent.textContent = t('h1_accent'); }
     document.querySelectorAll('[data-i18n]').forEach(function(el){ el.textContent = t(el.getAttribute('data-i18n')); });
     document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el){ el.setAttribute('placeholder', t(el.getAttribute('data-i18n-placeholder'))); });
     document.documentElement.lang = lang === 'rw' ? 'rw' : lang;
-    labelPins();
+    labelHeroPins();
     try{ localStorage.setItem('apexrx_lang', lang); }catch(e){}
-    document.querySelectorAll('a[href^="pharmacies.html"]').forEach(function(a){ a.href = 'pharmacies.html?lang=' + lang; });
+    // Carry the language to the registration pages, keeping any #signin.
+    document.querySelectorAll('a[href^="pharmacies.html"], a[href^="suppliers.html"]').forEach(function(a){
+      var raw = a.getAttribute('href'), hash = raw.indexOf('#') === -1 ? '' : raw.slice(raw.indexOf('#'));
+      a.setAttribute('href', raw.split(/[?#]/)[0] + '?lang=' + encodeURIComponent(lang) + hash);
+    });
   }
   var langSelect = document.getElementById('langSelect');
   var saved = 'en';
