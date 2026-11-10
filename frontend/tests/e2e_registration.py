@@ -182,7 +182,7 @@ def main():
               and page.evaluate("sessionStorage.getItem('apexrx_session')") is None)
 
         # A session left in the tab by the admin portal is not used silently.
-        page.goto(SITE + "/admin.html")
+        page.goto(SITE + "/ops-console-7f3k9q.html")
         page.fill("#login-form [name=email]", ADMIN_EMAIL)
         page.fill("#login-form [name=password]", ADMIN_PASSWORD)
         page.click("#login-button")

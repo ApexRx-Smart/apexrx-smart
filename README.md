@@ -45,7 +45,7 @@ apexrx-smart/
 │   │   └── pharmacies-motion.js
 │   ├── tests/
 │   │   └── e2e_admin.py     # Playwright check of the admin dashboard (local only)
-│   ├── admin.html           # admin dashboard (ApexRX staff)
+│   ├── ops-console-7f3k9q.html           # admin dashboard (ApexRX staff)
 │   ├── index.html
 │   ├── pharmacies.html
 │   ├── pharmacy-dashboard.html
@@ -86,7 +86,7 @@ Open the following pages in your browser:
 
 - Home page: http://localhost:5501/
 - Pharmacy workflow: http://localhost:5501/pharmacies.html
-- Admin dashboard: http://localhost:5501/admin.html
+- Admin dashboard: http://localhost:5501/ops-console-7f3k9q.html
 
 Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
 
@@ -118,7 +118,7 @@ Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
   - See `frontend/README.md`.
 - **Just exploring?** opens the dashboard with sample data and no account (`?preview=1`), labelled as a preview.
 
-- **The admin dashboard** (`admin.html`) lets ApexRX staff review registrations. See [Admin dashboard](#admin-dashboard).
+- **The admin dashboard** (`ops-console-7f3k9q.html`) lets ApexRX staff review registrations. See [Admin dashboard](#admin-dashboard).
 
 Not connected yet, and shown as such on the dashboards: stock batch numbers and expiry dates (no API), patient orders, forecasting (example data), plans and payments, and in-app chat (conversations are built from orders; messages go through WhatsApp). There is no subscription or payment anywhere.
 
@@ -403,7 +403,7 @@ Verification documents are files in a **private Supabase Storage bucket**. Their
 
 ## Admin dashboard
 
-`frontend/admin.html` is for ApexRX staff. It is marked `noindex`; the only public link is the discreet "Admin Portal" link in the homepage footer, which sits on the left, next to the copyright, clear of the "Powered by Netlify" badge in the bottom-right corner. It uses only existing endpoints, and has one tab per area. The current tab is kept in the URL (`#users`, `#catalogue` and so on).
+`frontend/ops-console-7f3k9q.html` is for ApexRX staff. It is marked `noindex` and is **not linked from any public page** (there is no footer link); staff open the URL directly. The unlinked address only keeps the console out of sight: access is still decided by the backend, which refuses every `/admin` request from anyone who is not a platform admin. It uses only existing endpoints, and has one tab per area. The current tab is kept in the URL (`#users`, `#catalogue` and so on).
 
 - **Sign in:** with the normal ApexRX login. Accounts that aren't platform admins are refused, and their token is cleared. The token is kept in `sessionStorage`, like the rest of the site. An expired or invalid token returns you to the sign-in screen. **Sign out** clears it.
 - **Overview:**

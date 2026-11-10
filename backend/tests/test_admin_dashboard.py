@@ -1,4 +1,4 @@
-"""The admin endpoints the dashboard (frontend/admin.html) relies on: access
+"""The admin endpoints the dashboard (frontend/ops-console-7f3k9q.html) relies on: access
 control, listing and filters, detail, and organization review transitions."""
 
 import io

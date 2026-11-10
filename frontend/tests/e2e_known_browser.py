@@ -71,7 +71,7 @@ def main():
             ctx.route("**/js/config.js", lambda r: r.fulfill(
                 content_type="application/javascript", body=f'window.APEX_CONFIG = {{ API_BASE_URL: "{API}" }};'))
             page = ctx.new_page()
-            page.goto(SITE + "/admin.html")
+            page.goto(SITE + "/ops-console-7f3k9q.html")
             page.wait_for_function("!!window.ApexAPI")
             return page
 
