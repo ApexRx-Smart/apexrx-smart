@@ -25,8 +25,9 @@ The backend address is set in `js/config.js` (`window.APEX_CONFIG.API_BASE_URL`)
 | `how-it-works.html` | "Built for everyone in the medicine chain" and "How it works", moved from the landing page |
 | `about.html` | About ApexRX_Smart, Our Mission, Our Vision, Our Team and Our Organization. Placeholder copy (Lorem ipsum, "Team member name") to replace; see the comment at the top of the file |
 | `legal.html#privacy`, `#terms`, `#cookies` | One layout for the legal pages (`js/legal.js` shows the one in the address). Clearly marked placeholders, not approved policies |
-| `pharmacies.html` | Pharmacy registration and sign-in (`js/registration.js`), then the pharmacy workspace (`js/pharmacies.js`, `js/workspace.js`) |
-| `suppliers.html` | Supplier registration and sign-in (`js/registration.js`, the same journey with `<body data-role="supplier">`) |
+| `pharmacies.html` | Pharmacy registration and sign-in (`js/registration.js`), then `pharmacy-dashboard.html` |
+| `suppliers.html` | Supplier registration and sign-in (`js/registration.js`, the same journey with `<body data-role="supplier">`), then `supplier-dashboard.html` |
+| `pharmacy-dashboard.html`, `supplier-dashboard.html` | The dashboards (`js/dashboard.js`); see below. `?preview=1` shows sample data |
 | `verify-email.html` | Opened from the verification email; sends the link's token to `POST /auth/email/verify` (`js/verify-email.js`) |
 | `accept-invitation.html` | Opened from a staff invitation: set up your own account, or sign in, and join (`js/accept-invitation.js`) |
 | `reset-password.html` | "Forgot password?": says it is temporarily unavailable while email is disabled (`GET /auth/capabilities`); the reset form works again once email returns (`js/reset-password.js`) |
@@ -52,55 +53,55 @@ The backend address is set in `js/config.js` (`window.APEX_CONFIG.API_BASE_URL`)
 
 ## How the pages use the API
 
-All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend endpoint. The pharmacy workspace sections live in `js/workspace.js`. It turns error responses into `ApiError` objects with a readable `message`. It keeps the access token in `sessionStorage`, so the token is cleared when the tab closes.
+All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend endpoint. It turns error responses into `ApiError` objects with a readable `message`. It keeps the access token in `sessionStorage`, so the token is cleared when the tab closes.
 
 | Page / control | Endpoint |
 |---|---|
 | Homepage medicine search | `GET /search/pharmacies?q=`: availability status, price, location and freshness. Never exact quantities. |
 | Homepage **Sign in** / **Get started** | Open `pharmacies.html#signin` / `pharmacies.html` |
-| Pharmacy page: *Register a pharmacy* / *Staff sign-in* tabs (`#staff`, `#signin`) | Staff sign-in is `POST /auth/login` with the person's own account, then `GET /auth/me`. Several pharmacies: a chooser, then the workspace. **Forgot password?** opens `reset-password.html` |
-| Workspace **Sign out** (top bar and sidebar), public header **Sign out** | `POST /auth/logout`: ends this session only |
+| Pharmacy page: *Register a pharmacy* / *Staff sign-in* tabs (`#staff`, `#signin`) | Staff sign-in is `POST /auth/login` with the person's own account, then `GET /auth/me`. Several pharmacies: a chooser, then the dashboard. **Forgot password?** opens `reset-password.html` |
+| Dashboard **Sign out**, public header **Sign out** | `POST /auth/logout`: ends this session only |
 | Session activity, inactivity warning, other tabs | `js/api.js`: `POST /auth/session/activity` on real user activity; see the root README, "Sessions" |
-| Employees → Invite an employee (email disabled: **Create invitation link** shows the link once, with **Copy link**), invitation list (New link / Resend, Revoke) | `POST/GET /organizations/{id}/invitations`, `.../{inv}/resend`, `.../{inv}/revoke` (owners and managers) |
+| Branches and team → Invite a team member (email disabled: **Create invitation link** shows the link once, with **Copy link**), invitation list (New link / Resend, Revoke) | `POST/GET /organizations/{id}/invitations`, `.../{inv}/resend`, `.../{inv}/revoke` (owners and managers) |
 | Registration step 1, Account (both pages) | **Create account:** `POST /auth/register`, then `POST /auth/login` (an email that already has an account signs in). **Sign in:** `POST /auth/login` only. Then everything below is decided from `GET /auth/me`, `GET /auth/email/status` and the organization's records, so an incomplete registration resumes where it stopped |
 | Step 2, Verify email | `GET /auth/email/status`; `POST /auth/email/send {next}` sends the link (automatically the first time). **I've verified my email** re-checks the status; the page also re-checks when it regains focus and when `verify-email.html` reports success in the same browser. **Resend** counts down `resend_after` |
 | `verify-email.html` | `POST /auth/email/verify {token}` (no session). Messages for verified, already verified, invalid, expired, used and superseded links |
 | Step 3, Details | `POST /organizations` (`type` from the page's `data-role`; 403 `email_unverified` brings the user back to step 2), then `POST /organizations/{id}/locations` with `name`, `region` (province), `city` (district), `sector`, `cell`, `village`, `address` (street or landmark), `phone`, `whatsapp_phone`, `latitude`/`longitude` (optional; "Use my current location", checked against Rwanda's bounds). Coming back updates the same records with `PATCH`. Province to village come from `data/rwanda-locations.json` |
 | Step 4, Documents | `POST /organizations/{id}/documents` per selected file. Pharmacies: pharmacy license, business license, owner ID. Suppliers: business license, owner ID |
-| Step 5, Review | `GET /organizations/{id}`, `/locations`, `/documents`: status, review note, stored details, document statuses and reasons. Owners and managers can **Edit details** and **Add a document**; owners can **Resubmit for review** after a rejection (`POST /organizations/{id}/resubmit`). Pharmacies: **Open your workspace** |
-| Workspace name, avatar and profile | `GET /auth/me`, `GET /organizations/{id}`, `GET /organizations/{id}/locations` |
-| Workspace profile: documents | `GET /organizations/{id}/documents`: each document's review status |
-| Overview card count, **Overview** and **Supplier chat** lists | `GET /purchase-orders?organization_id=`: one row per supplier you have ordered from, with the latest order's number, status, total and item count. Typing filters by supplier name, then adds matching supplier stock. |
-| **Find a source** and supplier search | `GET /supplier-offers`: approved pharmacies only, with exact supplier stock. A medicine name is required. |
-| **Open chat** on any supplier row | Opens the supplier's WhatsApp with a prefilled message, or calls their phone |
-| "Sample data" badge and workspace note | Switch to "Live data" and a live note when signed in |
-| Page refresh | Resumes the signed-in session from `sessionStorage` (shown as "Signed in as …") |
-| **Restart demo** | Signs out |
-| Status card, **Registration and documents** (profile) | The organization's status; opens the registration review |
+| Step 5, Review | `GET /organizations/{id}`, `/locations`, `/documents`: status, review note, stored details, document statuses and reasons. Owners and managers can **Edit details** and **Add a document**; owners can **Resubmit for review** after a rejection (`POST /organizations/{id}/resubmit`). **Open your workspace** opens the dashboard; `pharmacies.html#review` (the dashboard's **Registration details and review →**) comes back here |
+| Dashboards | See [Pharmacy and supplier dashboards](#pharmacy-and-supplier-dashboards-pharmacy-dashboardhtml-supplier-dashboardhtml) |
 
-**Just exploring?** still opens the workspace with sample data and no account.
+The supplier page uses the same steps and endpoints, with `type: "supplier"` and a depot (warehouse) instead of a branch.
 
-The supplier page uses the same steps and endpoints, with `type: "supplier"`, a warehouse instead of a branch, and no workspace yet (suppliers stay on the review).
+### Pharmacy and supplier dashboards (`pharmacy-dashboard.html`, `supplier-dashboard.html`)
 
-### Pharmacy workspace sections (`js/workspace.js`)
+Both pages share `js/dashboard.js` (`<body data-role>` picks the role), `js/dashboard-data.js` (the data layer), `js/dashboard-i18n.js` (English, French, Kinyarwanda), `js/dashboard-forecast.js`, `js/theme.js` (light/dark) and `css/dashboard.css`. The design comes from the `feature/dashboards-and-registration` branch.
 
-| Section / control | Endpoint | Who |
-|---|---|---|
-| Organization selector (users in several pharmacies) | `GET /auth/me` memberships. The choice is kept for the tab | Everyone |
-| Overview | `GET /organizations/{id}`, `/locations`, `/members`, `GET /purchase-orders?organization_id=` | Everyone |
-| Branches: list | `GET /organizations/{id}/locations?include_inactive=true` | Everyone |
-| Branches: add, edit, deactivate/reactivate | `POST` / `PATCH /organizations/{id}/locations[/{loc}]` (`is_active`) | Owners, managers |
-| Employees: list | `GET /organizations/{id}/members` | Everyone |
-| Employees: invite (email + role, no account needed), resend, revoke | `POST /organizations/{id}/invitations`, `.../{inv}/resend`, `.../{inv}/revoke`, `GET .../invitations` | Owners (any role); managers (staff only) |
-| Employees: change role, deactivate, remove | `PATCH` / `DELETE /organizations/{id}/members[/{m}]` | Owners (everyone); managers (staff only) |
-| Inventory: branch selector, list | `GET /organizations/{id}/inventory?location_id=` | Everyone |
-| Inventory: set quantity, add a catalogue medicine | `PUT .../locations/{loc}/stock/{product}`, `GET /catalogue/products` | Everyone (approved pharmacies) |
-| Inventory: price and listing | `PUT .../stock/{product}/offer` | Owners, managers |
-| Orders: list, open, history | `GET /purchase-orders?organization_id=`, `GET /purchase-orders/{id}` | Everyone |
-| Orders: new draft (receiving branch, supplier stock search, lines, optional warehouse) | `GET /supplier-offers`, `POST /purchase-orders` | Everyone (approved pharmacies) |
-| Orders: edit draft lines, delete draft | `PATCH` / `DELETE /purchase-orders/{id}/items/{item}`, `DELETE /purchase-orders/{id}` | Everyone |
-| Orders: submit, cancel (with a reason), accept counteroffer, mark delivered | `POST /purchase-orders/{id}/{action}`. Buttons come from the order's `allowed_actions` | Submit, cancel and accept counteroffer: owners and managers only (enforced by the backend) |
-| Joining an existing pharmacy | `GET /auth/me` ("Check again") | A registered user with no pharmacy |
+- **Who sees which:** after sign-in, registration (`js/registration.js`) opens `pharmacy-dashboard.html` for a pharmacy membership and `supplier-dashboard.html` for a supplier one. The dashboard loads the organization chosen for the tab (`sessionStorage`: `apexrx_selected_pharmacy` / `apexrx_selected_supplier`), otherwise the one the user owns, manages, or any. Only memberships returned by `GET /auth/me` are used, and every request is authorized by the backend, so changing a stored id opens nothing.
+- **Several organizations:** an **Organization** selector in the top bar lists all the user's memberships (pharmacies and suppliers). Choosing one remembers it for the tab and opens the matching dashboard.
+- **Not signed in:** the page goes to `pharmacies.html#signin` / `suppliers.html#signin`. Sign-out, inactivity and other-tab sign-out return there too, with the reason.
+- **Preview:** `?preview=1` (**Just exploring?** on both registration pages) shows sample data from `DashData.preview()`, held in the browser only. A strip says "Preview with sample data. Nothing you do here is saved or sent to anyone", and every confirmation adds "(Preview: nothing was saved or sent.)". The preview never creates invitation links.
+
+| Section | Pharmacy | Supplier | Endpoints |
+|---|---|---|---|
+| Top bar | Organization, branch selector, verification status, user and role, language, theme, Sign out | Same, with depots | `GET /auth/me`, `GET /organizations/{id}`, `GET /organizations/{id}/locations?include_inactive=true` |
+| Overview | Greeting, counts (offers waiting, running low, listed), what needs attention, stock health per branch, recent supplier conversations | Order pipeline (new, offers sent, to prepare, dispatched, delivered) and open order value, what needs attention, most requested medicines, recent pharmacy conversations | `GET /purchase-orders?organization_id=`, `GET /purchase-orders/{id}`, `GET /organizations/{id}/inventory?location_id=` |
+| Compare prices | Supplier offers by medicine or category, best price, distance from the branch, **Ask for quote**, **Message** | — | `GET /catalogue/drugs`, `GET /supplier-offers` (approved pharmacies only), `POST /purchase-orders`, `POST /purchase-orders/{id}/submit` |
+| Messages / Requests and chat | Each supplier's orders as a conversation; **Write an order list** (one line per item); **Send on WhatsApp** opens WhatsApp | Each pharmacy's requests as a conversation; offers and status changes | Orders as above; WhatsApp links (no in-app messaging) |
+| Supplier orders / Orders | Status, totals, items; the buttons the order's `allowed_actions` allow (send, accept offer, cancel with a reason, mark delivered, delete draft) | Accept as requested, **Write offer** (counter), decline, start preparing, dispatch, cancel | `POST /purchase-orders/{id}/{action}`, `DELETE /purchase-orders/{id}` |
+| My stock / My catalogue | Per branch: quantity (any member), price, low-stock alert and listing (owners, managers), add a medicine, CSV import, confirm all, remove | Same, per depot | `GET /organizations/{id}/inventory`, `PUT .../stock/{product}`, `PUT/DELETE .../stock/{product}/offer`, `DELETE .../stock/{product}`, `POST .../stock/confirm`, `GET /catalogue/products` |
+| Patient orders | "Patient ordering is coming soon" | — | None |
+| Forecasting / Demand forecast | Example charts, labelled "Example data" | Same | None |
+| Branches and team / Depots and team | Profile; branches (add, edit, deactivate, reactivate); team (role, deactivate, remove); invitations (create link, New link/Resend, Revoke); documents (list, upload); **Registration details and review →** | Same | `GET/POST/PATCH /organizations/{id}/locations`, `GET/PATCH/DELETE /organizations/{id}/members`, `GET/POST /organizations/{id}/invitations`, `.../resend`, `.../revoke`, `GET/POST /organizations/{id}/documents` |
+
+Owners manage everyone else; managers manage staff only; staff update quantities and prepare orders. A quote request made by staff is saved as a **draft** and the dashboard says it was not sent (the backend lets only owners and managers submit). Buttons follow the role, and the backend enforces every rule.
+
+**Not connected yet (no backend support), shown as such:**
+- **Batch numbers and expiry dates.** The API has no stock batches. Their fields stay in the layout but are disabled and labelled "Not connected yet"; CSV import ignores those columns; the shelf-life panel and supplier expiry counts say tracking is not connected instead of showing zero.
+- **Patient orders.** Patients can find listed stock but cannot order in the app.
+- **Forecasting.** Example data only.
+- **Plans and payments.** The card says "Not live yet. ApexRX takes no payments and has no paid plans yet."
+- **In-app chat.** Conversations are built from orders; messages go through WhatsApp.
 
 ### Admin dashboard (`admin.html`)
 
@@ -131,14 +132,14 @@ The supplier page uses the same steps and endpoints, with `type: "supplier"`, a 
 
 ## Not connected yet (no backend support in the v6 data model)
 
-- **No plan or payment:** registration has no subscription or payment step, and the workspace shows the real verification status instead of a plan.
+- **No plan or payment:** registration has no subscription or payment step. The dashboards' plan card says plans and payments are not live yet, with no price, and the top bar shows the real verification status.
 - **Licence numbers (pharmacy license, NPC, TIN, Rwanda FDA):** there are no columns for them and the requirements are not confirmed, so the form does not ask for them (the old "License number" field, which was never saved, was removed). The uploaded documents are what ApexRX reviews.
 - **Rwandan places:** `data/rwanda-locations.json` (5 provinces, 30 districts, 416 sectors, 2,149 cells, 14,837 villages) is from the MIT-licensed `rwanda-geo-data` package (see `data/README-rwanda-locations.txt`). Check it against official NISR/MINALOC data before a real launch. If it cannot load, the form falls back to typed names.
 - **Account holder's name:** the account form has no name field, so registration uses the part of the email before `@`. It can be changed later with `PATCH /auth/me`.
-- **Supplier chat:** messages in the sample chat dialog stay in the browser. Live suppliers are contacted on WhatsApp or by phone, as the roles document describes.
+- **Chat:** there is no in-app messaging. Dashboard conversations are built from purchase orders, and messages open WhatsApp (or the phone), as the roles document describes.
+- **Stock batches and expiry dates:** the API stores one quantity per product and branch. The dashboards' batch and expiry fields are disabled and labelled "Not connected yet".
 - **Homepage map pins and headline numbers:** illustrative content, unchanged. No public endpoint lists every pharmacy or returns platform totals.
-- **Supplier search by supplier name:** `/supplier-offers` searches by medicine. Supplier names are matched only among suppliers you have already ordered from.
-- **Supplier workspace:** suppliers can register and follow their verification on `suppliers.html`. There are no screens for stock, prices or incoming orders yet; suppliers use the API for those.
+- **Patient orders and forecasting:** not in the API. The pharmacy dashboard says patient ordering is coming soon; forecasting shows example data, labelled as such.
 - **Supplier documents:** suppliers are asked for a business license and an owner ID, the generic types the admin console already knows. The project's roles document says the exact supplier document requirements are still to be confirmed. The backend accepts any document type, so adding types later is a frontend change only.
 - **Translations:** the About and Legal page bodies are English only (their header and footer are translated). The Kinyarwanda strings on the registration pages (including the email verification ones) should be reviewed by a native speaker.
-- **Translations:** the new workspace sections are in English only (French and Kinyarwanda fall back to English).
+- **Translations:** the dashboards are in English, French and Kinyarwanda (`js/dashboard-i18n.js`); the Kinyarwanda strings should be reviewed by a native speaker.

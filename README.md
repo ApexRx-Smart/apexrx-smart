@@ -2,7 +2,7 @@
 
 ApexRx-Smart is a medicine availability platform designed to help patients, healthcare professionals, pharmacies, and suppliers access information about medicine availability.
 
-The project includes a static frontend, a FastAPI backend, and a PostgreSQL database schema. The backend implements the v6 data model and API for patients, pharmacies, suppliers and administrators. The frontend is connected to it: the homepage medicine search, pharmacy registration and sign-in, organization profile and document upload, supplier search and the pharmacy workspace all use the live API.
+The project includes a static frontend, a FastAPI backend, and a PostgreSQL database schema. The backend implements the v6 data model and API for patients, pharmacies, suppliers and administrators. The frontend is connected to it: the homepage medicine search, pharmacy and supplier registration and sign-in, organization profile and document upload, and the pharmacy and supplier dashboards all use the live API.
 
 | Part | Hosted on (test deployment) |
 |---|---|
@@ -39,7 +39,8 @@ apexrx-smart/
 │   │   ├── config.js        # backend address (API_BASE_URL)
 │   │   ├── api.js           # API client used by every page (window.ApexAPI)
 │   │   ├── script.js        # homepage, including medicine search
-│   │   ├── pharmacies.js    # pharmacy onboarding and workspace
+│   │   ├── registration.js  # pharmacy and supplier registration and sign-in
+│   │   ├── dashboard.js     # pharmacy and supplier dashboards (with dashboard-data.js, dashboard-i18n.js, dashboard-forecast.js)
 │   │   ├── pharmacies-i18n.js
 │   │   └── pharmacies-motion.js
 │   ├── tests/
@@ -47,6 +48,8 @@ apexrx-smart/
 │   ├── admin.html           # admin dashboard (ApexRX staff)
 │   ├── index.html
 │   ├── pharmacies.html
+│   ├── pharmacy-dashboard.html
+│   ├── supplier-dashboard.html
 │   └── README.md            # how each page and control maps to the API
 ├── apexrx_customer_bases_roles_and_functions.md   # business rules for the v6 model
 ├── PHARMACY-WORKFLOW.md
@@ -97,18 +100,15 @@ Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
   - **Verify email:** skipped while email delivery is temporarily disabled (see [Email: temporarily disabled](#email-temporarily-disabled)); the details step says so. The verification code is kept for when email returns.
   - **Details:** business name and phone, branch or warehouse name, WhatsApp (optional), a structured Rwandan address (province, district, sector, cell, village from `frontend/data/rwanda-locations.json`, plus street or landmark) and optional coordinates ("Use my current location"). Stored on the organization and its first location.
   - **Documents:** pharmacy license, business license and owner ID for pharmacies; business license and owner ID for suppliers.
-  - **Review:** the real status, ApexRX's review note, the stored details and documents, uploads, and "Resubmit for review" after a rejection. Pharmacies then open their workspace.
+  - **Review:** the real status, ApexRX's review note, the stored details and documents, uploads, and "Resubmit for review" after a rejection. Then the dashboard opens.
   - **Resuming:** progress is read back from the backend, so signing in again continues an incomplete registration where it stopped.
   - The page always shows which account is signed in ("Signed in as … · Sign out"). There is no payment or subscription step, and phone numbers are contact details only.
-- **The pharmacy workspace** (`js/workspace.js`) runs the pharmacy day to day. All of it uses real backend data:
-  - **Overview:** organization, status, branches, members and purchase-order counts.
-  - **Branches:** list, add, edit, deactivate and reactivate.
-  - **Employees:** invite by email and role (no account needed; see [Staff accounts and invitations](#staff-accounts-and-invitations)), resend or revoke invitations, change roles, deactivate, remove.
-  - **Inventory:** per branch, set quantities, prices and listing.
-  - **Purchase orders:** create a draft with a receiving branch, edit lines, submit, cancel with a reason, view history.
-  - **Organization selector:** for users who belong to several pharmacies.
-  - It also lists suppliers from the pharmacy's purchase orders and searches supplier stock with `GET /supplier-offers`, which works only for approved pharmacies. **Open chat** opens the supplier's WhatsApp or phone.
-  - Buttons follow the user's role, but the backend enforces every rule.
+- **The pharmacy and supplier dashboards** (`pharmacy-dashboard.html`, `supplier-dashboard.html`, `js/dashboard.js`) run the business day to day, on real backend data:
+  - **Pharmacy:** overview, compare supplier prices and ask for quotes, conversations per supplier (built from orders; messages go through WhatsApp), supplier orders, stock per branch, branches and team.
+  - **Supplier:** overview with the order pipeline, requests per pharmacy, orders (offer, accept, decline, prepare, dispatch), catalogue and stock per depot, depots and team.
+  - **Team:** invite by email and role (no account needed; see [Staff accounts and invitations](#staff-accounts-and-invitations)), renew or revoke invitations, change roles, deactivate, remove.
+  - **Organization selector:** for users who belong to several organizations; it opens the matching dashboard.
+  - Buttons follow the user's role, but the backend enforces every rule. See `frontend/README.md`.
 - **Joining an existing pharmacy:** someone who registers to work at an existing pharmacy chooses "Joining an existing pharmacy instead?". They wait for the owner or a manager to invite their email, instead of registering a new pharmacy. Staff normally just accept the invitation email and then use *Staff sign-in*.
 - **Supplier registration (`suppliers.html`):** the same journey with `type: "supplier"` and a warehouse; same API and admin review as pharmacies.
 - **Public pages:**
@@ -116,11 +116,11 @@ Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
   - They share one header and footer, from `js/site-layout.js`.
   - Both registration pages have an "Already have an account? Sign in" switch, and every password field has a show/hide button.
   - See `frontend/README.md`.
-- **Just exploring?** still opens the workspace with sample data and no account.
+- **Just exploring?** opens the dashboard with sample data and no account (`?preview=1`), labelled as a preview.
 
 - **The admin dashboard** (`admin.html`) lets ApexRX staff review registrations. See [Admin dashboard](#admin-dashboard).
 
-Still simulated in the browser: in-app supplier chat (the sample conversations in the preview). There is no subscription or payment anywhere in registration. Supplier organizations have no workspace screens yet; they use the API.
+Not connected yet, and shown as such on the dashboards: stock batch numbers and expiry dates (no API), patient orders, forecasting (example data), plans and payments, and in-app chat (conversations are built from orders; messages go through WhatsApp). There is no subscription or payment anywhere.
 
 ### Verify frontend changes
 
@@ -130,7 +130,7 @@ After making changes, check the following:
 2. Select English, French, and Kinyarwanda and verify that the language selection is applied.
 3. Search for a medicine on the home page and check that results come back from the backend. An empty database returns no results: see [Test data](#test-data).
 4. Open the pharmacy workflow and register with a new email and matching passwords (8 characters minimum). With email disabled (the default), registration goes straight to the details; fill them in, upload the documents and check the review. To exercise the dormant email flows locally, run the backend with `APP_ENV=development EMAIL_PROVIDER=mock EMAIL_VERIFICATION_REQUIRED=true` and open links from `GET /dev/email/latest`.
-5. In the workspace, check the profile and document statuses. Sign in as an **approved** pharmacy to try supplier search.
+5. On the dashboard, check the profile and document statuses (Branches and team). Sign in as an **approved** pharmacy to try Compare prices, and as an approved supplier to answer its request.
 6. Check narrow and wide layouts, navigation, return navigation, and social links.
 
 External Google Fonts and the YouTube background need network access and are subject to browser and provider restrictions.
@@ -325,9 +325,9 @@ Every sign-in creates a server-side session (`auth_session`), and every access t
 
 - **What counts as activity:** only real user input (pointer, keyboard, wheel, touch) and opening or reloading a page. `js/api.js` reports it at most once a minute; ordinary API calls (refreshes, searches as you type, `GET /auth/me`, `GET /auth/session`) never move the inactivity clock, so background requests cannot keep a session alive.
 - **Warning:** two minutes before the limit, a banner ("You will be signed out soon because of inactivity" with a countdown) offers **Stay signed in**. At the limit the page signs out (server and browser) and shows "You were signed out after 30 minutes of inactivity".
-- **Sign-out** (`POST /auth/logout`, the workspace's **Sign out**, the public header's **Sign out**, the registration page's "Sign out"): ends this session only. The token stops working at once. Other people, the same person's other sign-ins, memberships, roles and the organization are untouched.
+- **Sign-out** (`POST /auth/logout`, the dashboard's **Sign out**, the public header's **Sign out**, the registration page's "Sign out"): ends this session only. The token stops working at once. Other people, the same person's other sign-ins, memberships, roles and the organization are untouched.
 - **Several tabs:** tabs that share a session (opened from one another) stay in step through a BroadcastChannel: activity in one keeps all alive, a renewed token is shared, and signing out or timing out in one signs out all of them ("You signed out in another tab"). A tab only adopts a token for the session it already has, so nothing can sign a tab in again after a sign-out. A tab opened separately is its own session.
-- **No cached private data:** signed-in API responses are sent with `Cache-Control: no-store`, the token lives in `sessionStorage` (cleared when the tab closes), and a page restored by the browser's Back button after a sign-out reloads instead of showing the workspace again.
+- **No cached private data:** signed-in API responses are sent with `Cache-Control: no-store`, the token lives in `sessionStorage` (cleared when the tab closes), and a page restored by the browser's Back button after a sign-out reloads instead of showing the dashboard again.
 - **Password changes:** changing the password signs out every other session; a password reset signs out all of them. Deactivated accounts are refused on every request.
 - Tokens issued before migration `f3a9c1d7b2e5` have no session, so everyone signs in once more after the deployment.
 
@@ -335,11 +335,11 @@ Every sign-in creates a server-side session (`auth_session`), and every access t
 
 ApexRX keeps one account per person: **user → membership (role) → organization**. A pharmacy is an organization, never a shared login.
 
-- **Staff sign-in:** `pharmacies.html` has two paths, *Register a pharmacy* and *Staff sign-in* (also `pharmacies.html#staff`). Staff sign in with their own email and password; the backend returns their memberships (`GET /auth/me`) and the workspace opens on one of them. Someone in several pharmacies chooses one first, and can switch later from the workspace's organization selector. Every request is authorized on the backend from the membership (`get_org_access`), so changing an organization id in the browser opens nothing.
-- **Inviting** (owners and managers, Employees → *Invite an employee*): email + role. Managers may invite staff only; owners any role (same rules as before). The employee does **not** need an ApexRX account. `POST /organizations/{id}/invitations` stores the invitation; no membership exists until it is accepted. **While email is disabled** the response carries the link's token once (`share_token`, never stored) and the workspace shows the link with **Copy link** for the inviter to give to the employee; with email enabled it is emailed instead. Owners and managers see every invitation with its status (pending, accepted with a new or existing account, expired, revoked) and how its link was delivered, and can renew it (**New link** / **Resend**: the old link stops working) or **Revoke** it.
+- **Staff sign-in:** `pharmacies.html` has two paths, *Register a pharmacy* and *Staff sign-in* (also `pharmacies.html#staff`). Staff sign in with their own email and password; the backend returns their memberships (`GET /auth/me`) and the dashboard opens on one of them. Someone in several pharmacies chooses one first, and can switch later from the dashboard's organization selector. Every request is authorized on the backend from the membership (`get_org_access`), so changing an organization id in the browser opens nothing.
+- **Inviting** (owners and managers, Branches and team → *Invite a team member*): email + role. Managers may invite staff only; owners any role (same rules as before). The employee does **not** need an ApexRX account. `POST /organizations/{id}/invitations` stores the invitation; no membership exists until it is accepted. **While email is disabled** the response carries the link's token once (`share_token`, never stored) and the dashboard shows the link with **Copy link** for the inviter to give to the employee; with email enabled it is emailed instead. Owners and managers see every invitation with its status (pending, accepted with a new or existing account, expired, revoked) and how its link was delivered, and can renew it (**New link** / **Resend**: the old link stops working) or **Revoke** it.
 - **Accepting** (`accept-invitation.html`): a new person sets up their own name and password (the owner never sees or chooses it), which creates the account, joins and signs them in. Only an *emailed* link marks the email verified; a link given by the inviter does not. An existing account signs in instead (no second account) and joins; its other memberships and roles are kept. An account with a different email address is refused (`email_mismatch`).
 - **Invitation links:** 32 random bytes in the URL fragment; only a SHA-256 hash is stored; bound to the organization and the invited address; single use; expire after `INVITATION_TTL_HOURS` (72); revoked, expired, replaced and used links are refused by the backend with a clear reason. At most one open invitation per organization and address (database-enforced); at most 30 invitations per organization per hour.
-- Direct adding of an existing account (`POST /organizations/{id}/members`) still exists in the API; the workspace uses invitations.
+- Direct adding of an existing account (`POST /organizations/{id}/members`) still exists in the API; the dashboards use invitations.
 
 ## Password reset
 
@@ -358,9 +358,8 @@ Passwords are hashed with Argon2id through pwdlib's recommended configuration, `
 - **Timeout:** requests time out after 45 seconds, long enough for that wake-up.
 - **Fewer, parallel requests:**
   - The admin overview uses one counts request instead of seven.
-  - The pharmacy workspace loads the organization, branches, documents and orders at the same time.
+  - The dashboards load the organization, branches, stock and orders at the same time.
   - Registration saves the location and uploads documents at the same time.
-- **No flashing:** a workspace section repainting after a save stays visible, dimmed, instead of flashing "Loading…".
 - **Busy buttons:** admin buttons show "Opening…", "Approving…" and similar while they wait.
 
 ## Login rate limiting
@@ -523,7 +522,7 @@ The test deployment uses free tiers only.
 
 ### Database migrations: always before the code
 
-The service doesn't run migrations by itself: Render only starts `uvicorn`. The ORM models always expect the latest schema. **If code is deployed before its migration has been applied, sign-in, registration, the workspace and admin fail with 503 "A database error occurred".**
+The service doesn't run migrations by itself: Render only starts `uvicorn`. The ORM models always expect the latest schema. **If code is deployed before its migration has been applied, sign-in, registration, the dashboards and admin fail with 503 "A database error occurred".**
 - This happens even with `PHONE_VERIFICATION_REQUIRED=false`, because every query that loads a user selects the new columns. Public search keeps working.
 - `/health` returns **503** with "Database schema is not up to date … run `alembic upgrade head`", and the startup log says the same.
 - Optional safety net: if Render's **Health Check Path** is set to `/health`, Render won't switch traffic to a new deploy whose database hasn't been migrated.
@@ -611,7 +610,8 @@ Patient search shows only **approved** pharmacies, **active** locations and **li
 
 ## Development Roadmap
 
-- Supplier workspace screens (stock, prices and incoming orders). The pharmacy workspace exists; suppliers still use the API.
+- Stock batches (batch number, expiry date) in the API, so the dashboards' expiry tracking can be connected.
+- Patient ordering, and forecasting from real order history.
 - A catalogue import script for loading real medicine data.
 - Re-enable email with a provider (verification, password reset, invitation emails), and an admin tool to help users who forget their password.
 - Subscription plans and Mobile Money payments (not part of registration today).
