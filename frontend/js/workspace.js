@@ -86,7 +86,7 @@
     if (!live || !live.organization) {
       settle(); delete container.dataset.section;
       container.replaceChildren(msg('Sign in with your pharmacy account to use this section. The preview has no live data.'));
-      return;
+      return Promise.resolve();
     }
     const renderers = { overview: renderOverview, branches: renderBranches, employees: renderEmployees, inventory: renderInventory, orders: renderOrders };
     // Repainting the section that is already on screen (after a save, say):
@@ -96,7 +96,7 @@
     container.dataset.section = name;
     if (refreshing) { container.classList.add('ws-refreshing'); container.setAttribute('aria-busy', 'true'); }
     else { settle(); container.replaceChildren(msg('Loading…')); }
-    Promise.resolve(renderers[name](container, () => my === token)).catch(err => {
+    return Promise.resolve(renderers[name](container, () => my === token)).catch(err => {
       if (my === token && err.status !== 401) container.replaceChildren(msg(errorText(err), 'error'));
     }).finally(() => { if (my === token) settle(); });
   }
@@ -231,28 +231,99 @@
     const parts = [heading(`Members (${members.filter(m => m.is_active).length} active)`), status,
       table(['Name', 'Email', 'Role', 'Status', 'Actions'], rows, 'No members.')];
     if (canManage()) {
-      const f = el('form', { class: 'ws-form', id: 'member-form', novalidate: true });
+      // Invitations: the employee needs no ApexRX account. They set up their
+      // own password (or sign in) from the emailed link; the membership exists
+      // only once they accept. Nobody else ever chooses or sees their password.
+      const [invites, caps] = await Promise.all([
+        API.invitations.list(orgId()),
+        API.auth.capabilities().catch(() => ({ invitation_emails: false }))
+      ]);
+      if (!current()) return;
+      const emailing = !!caps.invitation_emails;
+      const f = el('form', { class: 'ws-form', id: 'invite-form', novalidate: true });
       const formStatus = el('div');
-      const submit = el('button', { class: 'ws-btn primary-sm', text: 'Add employee' });
-      f.append(heading('Add an employee'),
-        msg('The employee needs their own ApexRX account first: they register at For Pharmacies with their own email and choose “Joining an existing pharmacy”. Accounts are never shared.'),
+      const submit = el('button', { class: 'ws-btn primary-sm', text: emailing ? 'Send invitation' : 'Create invitation link' });
+      f.append(heading('Invite an employee'),
+        emailing
+          ? msg('Enter their email address and role. They receive an email to set up their own account (or sign in to an existing one) and join this pharmacy. Accounts are never shared.')
+          : msg('Email is temporarily unavailable, so ApexRX cannot email invitations. Enter their email address and role to get an invitation link, then give it to the employee yourself (for example by WhatsApp). They use it to set up their own account (or sign in to an existing one) and join this pharmacy. Accounts are never shared.', 'warn'),
         el('div', { class: 'ws-grid' },
-          el('label', { text: 'Their account email *' }, el('input', { name: 'email', type: 'email', required: true, autocomplete: 'off' })),
+          el('label', { text: 'Email address *' }, el('input', { name: 'email', type: 'email', required: true, autocomplete: 'off' })),
           el('label', { text: 'Role' }, el('select', { name: 'role' },
             (owner ? ['staff', 'manager', 'owner'] : ['staff']).map(r => el('option', { value: r, text: ROLE_LABELS[r] }))))),
         formStatus, submit);
       f.addEventListener('submit', e => {
         e.preventDefault();
         const email = f.elements.email.value.trim();
-        if (!email) { formStatus.replaceChildren(msg('Enter the employee’s account email.', 'error')); return; }
+        if (!/^\S+@\S+\.\S+$/.test(email)) { formStatus.replaceChildren(msg('Enter the employee’s email address.', 'error')); return; }
+        let result = null;
         act(submit, formStatus, async () => {
-          await API.organizations.addMember(orgId(), email, f.elements.role.value); render('employees');
-        }, `${email} added as ${ROLE_LABELS[f.elements.role.value].toLowerCase()}.`);
+          result = await API.invitations.create(orgId(), email, f.elements.role.value);
+        }).then(ok => {
+          if (!ok || !result) return;
+          render('employees').then(() => showInviteResult(result, `Invitation emailed to ${result.email}.`));
+        });
       });
-      parts.push(f);
-    } else parts.push(msg('Only owners and managers can add or change employees.'));
+      parts.push(f, invitationTable(invites, owner));
+    } else parts.push(msg('Only owners and managers can invite or change employees.'));
     c.replaceChildren(...parts);
   }
+
+  const INVITE_STATUS = { pending: 'Pending', accepted: 'Accepted', expired: 'Expired', revoked: 'Revoked' };
+
+  // After creating or renewing an invitation: either it was emailed, or (email
+  // disabled) the link is shown once, for the inviter to give to the employee.
+  function showInviteResult(result, emailedText) {
+    const box = document.querySelector('#invite-status');
+    if (!box) return;
+    if (result.email_sent) { box.replaceChildren(msg(emailedText)); return; }
+    if (!result.share_token) { box.replaceChildren(msg(result.detail, 'warn')); return; }
+    const base = location.href.split('#')[0].replace(/[^/]*$/, '');
+    const url = `${base}accept-invitation.html#token=${result.share_token}`;
+    const field = el('input', { type: 'text', readonly: true, value: url, 'aria-label': `Invitation link for ${result.email}`, id: 'invite-link' });
+    const copy = button('Copy link', async e => {
+      try { await navigator.clipboard.writeText(url); e.target.textContent = 'Copied'; } catch (err) { field.select(); }
+    }, 'primary-sm');
+    box.replaceChildren(el('div', { class: 'ws-msg warn invite-link-box' },
+      el('p', { text: result.detail }),
+      el('p', {}, el('strong', { text: `Invitation link for ${result.email} (${ROLE_LABELS[result.role] || result.role})` })),
+      el('div', { class: 'invite-link-row' }, field, copy),
+      el('small', { text: `It works once and expires ${date(result.expires_at)}. It is shown only now: if you lose it, choose “New link” (the old one then stops working).` })));
+    field.focus(); field.select();
+  }
+  function invitationTable(invites, owner) {
+    const status = el('div', { id: 'invite-status' });
+    const rows = invites.map(inv => {
+      const manageable = owner || inv.role === 'staff';
+      const failed = inv.delivery === 'failed' && inv.status === 'pending';
+      const delivery = inv.status === 'accepted'
+        ? `Accepted ${date(inv.accepted_at)}${inv.account_created ? ' (new account)' : ' (existing account)'}`
+        : inv.delivery === 'sent' ? `Email sent ${date(inv.sent_at)}` : inv.delivery === 'failed' ? 'Email not sent'
+          : inv.delivery === 'link' ? 'Link given by you (no email)' : 'Not sent yet';
+      return el('tr', { 'data-invite': inv.email },
+        el('td', { text: inv.email }),
+        el('td', { text: ROLE_LABELS[inv.role] || inv.role }),
+        el('td', {}, el('span', { class: `ws-badge inv-${failed ? 'failed' : inv.status}`, text: failed ? 'Email failed' : INVITE_STATUS[inv.status] || inv.status })),
+        el('td', {}, el('span', { text: delivery }), inv.status === 'pending' ? el('small', { class: 'ws-sub', text: `Expires ${date(inv.expires_at)}` }) : null),
+        el('td', { class: 'ws-cell-actions' }, manageable && (inv.status === 'pending' || inv.status === 'expired') ? [
+          button(inv.delivery === 'link' ? 'New link' : 'Resend', e => {
+            let result = null;
+            act(e.target, status, async () => { result = await API.invitations.resend(orgId(), inv.invitation_id); })
+              .then(ok => {
+                if (!ok || !result) return;
+                render('employees').then(() => showInviteResult(result, `Invitation emailed again to ${result.email}. The earlier link no longer works.`));
+              });
+          }),
+          inv.status === 'pending' ? button('Revoke', e => {
+            if (!confirm(`Revoke the invitation for ${inv.email}? Its link stops working.`)) return;
+            act(e.target, status, async () => { await API.invitations.revoke(orgId(), inv.invitation_id); render('employees'); }, `Invitation for ${inv.email} revoked.`);
+          }, 'danger') : null
+        ] : null));
+    });
+    return el('div', { class: 'ws-form' }, heading(`Invitations (${invites.filter(i => i.status === 'pending').length} pending)`), status,
+      table(['Email', 'Role', 'Status', 'Email delivery', 'Actions'], rows, 'No invitations yet.'));
+  }
+
 
   /* ---------------------------------------------------------- inventory */
   async function renderInventory(c, current) {

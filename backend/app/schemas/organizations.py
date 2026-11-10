@@ -1,7 +1,8 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Annotated
 
-from pydantic import BaseModel, EmailStr, model_validator
+from pydantic import BaseModel, EmailStr, Field, StringConstraints, model_validator
 
 from app.models.enums import (
     DocumentStatus,
@@ -77,9 +78,14 @@ class MemberResponse(BaseModel):
 
 # Locations --------------------------------------------------------------------
 class _LocationFields(BaseModel):
+    # Rwandan address: region = province, city = district, then sector, cell
+    # and village; address = street or landmark.
     address: LongText | None = None
     city: ShortText | None = None
     region: ShortText | None = None
+    sector: ShortText | None = None
+    cell: ShortText | None = None
+    village: ShortText | None = None
     latitude: Latitude | None = None
     longitude: Longitude | None = None
     phone: Phone | None = None
@@ -113,6 +119,9 @@ class LocationResponse(ORMModel):
     address: str | None
     city: str | None
     region: str | None
+    sector: str | None = None
+    cell: str | None = None
+    village: str | None = None
     latitude: Decimal | None
     longitude: Decimal | None
     phone: str | None
@@ -134,3 +143,58 @@ class DocumentResponse(ORMModel):
     uploaded_at: datetime
     reviewed_at: datetime | None
     rejection_reason: str | None
+
+
+# Invitations ------------------------------------------------------------------
+class InvitationCreate(BaseModel):
+    email: EmailStr
+    role: MembershipRole
+
+
+class InvitationResponse(BaseModel):
+    invitation_id: int
+    email: str
+    role: MembershipRole
+    status: str  # pending | accepted | revoked | expired
+    delivery: str  # sent | failed | not_sent | link (shared by the inviter while email is disabled)
+    created_at: datetime
+    expires_at: datetime
+    sent_at: datetime | None
+    send_count: int
+    accepted_at: datetime | None
+    account_created: bool | None
+    revoked_at: datetime | None
+    invited_by_name: str | None
+
+
+class InvitationSendResponse(InvitationResponse):
+    email_sent: bool
+    detail: str
+    # Only while email is disabled: the link's token, for the inviter to share.
+    share_token: str | None = None
+
+
+class InvitationTokenRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=200)
+
+
+class InvitationPreview(BaseModel):
+    organization_name: str
+    organization_type: OrganizationType
+    role: MembershipRole
+    email: str  # the invited address (the link holder controls that mailbox)
+    invited_by_name: str | None
+    expires_at: datetime
+    account_exists: bool
+
+
+class InvitationAcceptNew(InvitationTokenRequest):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=150)]
+    password: Annotated[str, Field(min_length=8, max_length=128)]
+
+
+class InvitationAccepted(BaseModel):
+    organization_id: int
+    organization_name: str
+    organization_type: OrganizationType
+    role: MembershipRole

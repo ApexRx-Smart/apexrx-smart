@@ -2,16 +2,14 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 from pwdlib import PasswordHash
-from pwdlib.hashers.argon2 import Argon2Hasher
 
 from app.core.config import settings
 
-# Argon2id with OWASP's recommended parameters (19 MiB, 2 passes, 1 lane).
-# pwdlib's default (64 MiB, 3 passes, 4 lanes) costs about three times as much
-# CPU per sign-in and is noticeably slow on small hosting instances. Hashes made
-# with the old parameters still verify, and are re-hashed with these on the
-# next successful sign-in (see verify_password_and_update).
-password_hash = PasswordHash((Argon2Hasher(time_cost=2, memory_cost=19456, parallelism=1),))
+# pwdlib's recommended configuration (Argon2id, argon2-cffi defaults:
+# 64 MiB, 3 passes, 4 lanes). A hash made with any other parameters (for
+# example the cheaper ones briefly used in November 2026) still verifies and is
+# re-hashed with these on the next successful sign-in (verify_password_and_update).
+password_hash = PasswordHash.recommended()
 
 # Verified against when the email is unknown, so failed logins take the same
 # time whether or not the account exists.
@@ -38,32 +36,39 @@ def verify_password_and_update(password: str, hashed_password: str | None) -> tu
     return password_hash.verify_and_update(password, hashed_password)
 
 
-def create_access_token(subject: str) -> tuple[str, int]:
-    """Return ``(token, expires_in_seconds)``."""
-    expires_in = settings.access_token_expire_minutes * 60
+def create_access_token(subject: str, session_id: int, not_after: datetime | None = None) -> tuple[str, int]:
+    """Return ``(token, expires_in_seconds)``. The token names its server-side
+    session (``sid``); it never outlives ``not_after`` (the session's maximum age)."""
     now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(minutes=settings.access_token_expire_minutes)
+    if not_after is not None:
+        expires_at = min(expires_at, not_after)
     payload = {
         "sub": subject,
+        "sid": str(session_id),
         "iat": now,
-        "exp": now + timedelta(seconds=expires_in),
+        "exp": expires_at,
         "type": "access",
     }
     token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
-    return token, expires_in
+    return token, max(1, int((expires_at - now).total_seconds()))
 
 
-def decode_access_token(token: str) -> str | None:
-    """Return the token subject, or ``None`` if the token is invalid/expired."""
+def decode_access_token(token: str) -> tuple[str, str] | None:
+    """Return ``(subject, session_id)``, or ``None`` if the token is invalid,
+    expired or names no session."""
     try:
         payload = jwt.decode(
             token,
             settings.jwt_secret_key,
             algorithms=[settings.jwt_algorithm],
-            options={"require": ["sub", "exp"]},
+            options={"require": ["sub", "exp", "sid"]},
         )
     except jwt.PyJWTError:
         return None
     if payload.get("type") != "access":
         return None
-    subject = payload.get("sub")
-    return subject if isinstance(subject, str) else None
+    subject, sid = payload.get("sub"), payload.get("sid")
+    if not isinstance(subject, str) or not isinstance(sid, str):
+        return None
+    return subject, sid

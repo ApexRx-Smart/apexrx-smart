@@ -25,8 +25,11 @@ The backend address is set in `js/config.js` (`window.APEX_CONFIG.API_BASE_URL`)
 | `how-it-works.html` | "Built for everyone in the medicine chain" and "How it works", moved from the landing page |
 | `about.html` | About ApexRX_Smart, Our Mission, Our Vision, Our Team and Our Organization. Placeholder copy (Lorem ipsum, "Team member name") to replace; see the comment at the top of the file |
 | `legal.html#privacy`, `#terms`, `#cookies` | One layout for the legal pages (`js/legal.js` shows the one in the address). Clearly marked placeholders, not approved policies |
-| `pharmacies.html` | Pharmacy registration and sign-in, then the pharmacy workspace |
-| `suppliers.html` | Supplier registration and sign-in (`js/suppliers.js`) |
+| `pharmacies.html` | Pharmacy registration and sign-in (`js/registration.js`), then the pharmacy workspace (`js/pharmacies.js`, `js/workspace.js`) |
+| `suppliers.html` | Supplier registration and sign-in (`js/registration.js`, the same journey with `<body data-role="supplier">`) |
+| `verify-email.html` | Opened from the verification email; sends the link's token to `POST /auth/email/verify` (`js/verify-email.js`) |
+| `accept-invitation.html` | Opened from a staff invitation: set up your own account, or sign in, and join (`js/accept-invitation.js`) |
+| `reset-password.html` | "Forgot password?": says it is temporarily unavailable while email is disabled (`GET /auth/capabilities`); the reset form works again once email returns (`js/reset-password.js`) |
 | `admin.html` | Admin console (staff only) |
 
 - **Shared header and footer:** `js/site-layout.js` provides them for `index.html`, `how-it-works.html`, `about.html` and `legal.html`, so the navigation is defined once.
@@ -44,7 +47,8 @@ The backend address is set in `js/config.js` (`window.APEX_CONFIG.API_BASE_URL`)
   - Fields go back to hidden when their form is submitted.
 - **Sign in or create account:** both registration pages have an "Already have an account? Sign in" switch on their first step, and `#signin` opens it directly; the homepage **Sign in** button uses `pharmacies.html#signin`.
   - Sign-in mode asks only for email and password, and calls `POST /auth/login`.
-  - A supplier-only account signing in on the pharmacy page is pointed to `suppliers.html`, instead of being asked to register a pharmacy.
+  - A supplier-only account signing in on the pharmacy page is pointed to `suppliers.html`, instead of being asked to register a pharmacy (and the other way round). An ApexRX administrator is told to sign out instead.
+  - A session already in the tab (a refresh, another ApexRX page, the admin portal) is continued, and the page always says which account it is: "Signed in as … · Sign out".
 
 ## How the pages use the API
 
@@ -54,26 +58,29 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 |---|---|
 | Homepage medicine search | `GET /search/pharmacies?q=`: availability status, price, location and freshness. Never exact quantities. |
 | Homepage **Sign in** / **Get started** | Open `pharmacies.html#signin` / `pharmacies.html` |
-| Pharmacies step 1, Account | **Create account:** `POST /auth/register`, then `POST /auth/login` (an email that already has an account signs in). **Sign in:** `POST /auth/login` only. |
-| Pharmacies step 2, Verify | `GET /auth/phone/status`, then `POST /auth/phone/send-code` and `POST /auth/phone/verify`. The step is skipped when the number is already verified or the backend doesn't require it. **Resend code** counts down `resend_after` |
-| Pharmacies step 3, Profile | `POST /organizations` (type `pharmacy`). The phone field is filled with the verified number, read-only, and the backend enforces it, `POST /organizations/{id}/locations`, `POST /organizations/{id}/documents` for each selected file. Coming back to this step updates the same records with `PATCH`. |
+| Pharmacy page: *Register a pharmacy* / *Staff sign-in* tabs (`#staff`, `#signin`) | Staff sign-in is `POST /auth/login` with the person's own account, then `GET /auth/me`. Several pharmacies: a chooser, then the workspace. **Forgot password?** opens `reset-password.html` |
+| Workspace **Sign out** (top bar and sidebar), public header **Sign out** | `POST /auth/logout`: ends this session only |
+| Session activity, inactivity warning, other tabs | `js/api.js`: `POST /auth/session/activity` on real user activity; see the root README, "Sessions" |
+| Employees → Invite an employee (email disabled: **Create invitation link** shows the link once, with **Copy link**), invitation list (New link / Resend, Revoke) | `POST/GET /organizations/{id}/invitations`, `.../{inv}/resend`, `.../{inv}/revoke` (owners and managers) |
+| Registration step 1, Account (both pages) | **Create account:** `POST /auth/register`, then `POST /auth/login` (an email that already has an account signs in). **Sign in:** `POST /auth/login` only. Then everything below is decided from `GET /auth/me`, `GET /auth/email/status` and the organization's records, so an incomplete registration resumes where it stopped |
+| Step 2, Verify email | `GET /auth/email/status`; `POST /auth/email/send {next}` sends the link (automatically the first time). **I've verified my email** re-checks the status; the page also re-checks when it regains focus and when `verify-email.html` reports success in the same browser. **Resend** counts down `resend_after` |
+| `verify-email.html` | `POST /auth/email/verify {token}` (no session). Messages for verified, already verified, invalid, expired, used and superseded links |
+| Step 3, Details | `POST /organizations` (`type` from the page's `data-role`; 403 `email_unverified` brings the user back to step 2), then `POST /organizations/{id}/locations` with `name`, `region` (province), `city` (district), `sector`, `cell`, `village`, `address` (street or landmark), `phone`, `whatsapp_phone`, `latitude`/`longitude` (optional; "Use my current location", checked against Rwanda's bounds). Coming back updates the same records with `PATCH`. Province to village come from `data/rwanda-locations.json` |
+| Step 4, Documents | `POST /organizations/{id}/documents` per selected file. Pharmacies: pharmacy license, business license, owner ID. Suppliers: business license, owner ID |
+| Step 5, Review | `GET /organizations/{id}`, `/locations`, `/documents`: status, review note, stored details, document statuses and reasons. Owners and managers can **Edit details** and **Add a document**; owners can **Resubmit for review** after a rejection (`POST /organizations/{id}/resubmit`). Pharmacies: **Open your workspace** |
 | Workspace name, avatar and profile | `GET /auth/me`, `GET /organizations/{id}`, `GET /organizations/{id}/locations` |
 | Workspace profile: documents | `GET /organizations/{id}/documents`: each document's review status |
 | Overview card count, **Overview** and **Supplier chat** lists | `GET /purchase-orders?organization_id=`: one row per supplier you have ordered from, with the latest order's number, status, total and item count. Typing filters by supplier name, then adds matching supplier stock. |
 | **Find a source** and supplier search | `GET /supplier-offers`: approved pharmacies only, with exact supplier stock. A medicine name is required. |
 | **Open chat** on any supplier row | Opens the supplier's WhatsApp with a prefilled message, or calls their phone |
 | "Sample data" badge and workspace note | Switch to "Live data" and a live note when signed in |
-| Page refresh | Resumes the signed-in session from `sessionStorage` |
+| Page refresh | Resumes the signed-in session from `sessionStorage` (shown as "Signed in as …") |
 | **Restart demo** | Signs out |
+| Status card, **Registration and documents** (profile) | The organization's status; opens the registration review |
 
 **Just exploring?** still opens the workspace with sample data and no account.
 
-| Supplier page (`suppliers.html`) | Endpoint |
-|---|---|
-| Step 1, Account | As on the pharmacy page: create an account, or sign in |
-| Step 2, Business | `POST /organizations` with **`type: "supplier"`**: the caller becomes owner, and the status starts as `pending`. Then `POST /organizations/{id}/locations` (the warehouse) and `POST /organizations/{id}/documents` (business license, owner ID). Coming back updates the same records with `PATCH`. No SMS step: the backend requires a verified phone only for pharmacies |
-| Step 3, Review | `GET /organizations/{id}`, `/locations`, `/documents`: status, warehouses and document review status. Owners and managers can **Edit business details** and **Add a document**. **Check status** reloads |
-| Approval | In the admin console, like pharmacies |
+The supplier page uses the same steps and endpoints, with `type: "supplier"`, a warehouse instead of a branch, and no workspace yet (suppliers stay on the review).
 
 ### Pharmacy workspace sections (`js/workspace.js`)
 
@@ -84,7 +91,8 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 | Branches: list | `GET /organizations/{id}/locations?include_inactive=true` | Everyone |
 | Branches: add, edit, deactivate/reactivate | `POST` / `PATCH /organizations/{id}/locations[/{loc}]` (`is_active`) | Owners, managers |
 | Employees: list | `GET /organizations/{id}/members` | Everyone |
-| Employees: add (existing account), change role, deactivate, remove | `POST` / `PATCH` / `DELETE /organizations/{id}/members[/{m}]` | Owners (everyone); managers (staff only) |
+| Employees: invite (email + role, no account needed), resend, revoke | `POST /organizations/{id}/invitations`, `.../{inv}/resend`, `.../{inv}/revoke`, `GET .../invitations` | Owners (any role); managers (staff only) |
+| Employees: change role, deactivate, remove | `PATCH` / `DELETE /organizations/{id}/members[/{m}]` | Owners (everyone); managers (staff only) |
 | Inventory: branch selector, list | `GET /organizations/{id}/inventory?location_id=` | Everyone |
 | Inventory: set quantity, add a catalogue medicine | `PUT .../locations/{loc}/stock/{product}`, `GET /catalogue/products` | Everyone (approved pharmacies) |
 | Inventory: price and listing | `PUT .../stock/{product}/offer` | Owners, managers |
@@ -123,13 +131,14 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 
 ## Not connected yet (no backend support in the v6 data model)
 
-- **Plan and payment (step 4):** still simulated. There is no subscription data.
-- **License number:** there is no column for it. It is shown on the workspace profile for this session only. The uploaded license documents are what ApexRX reviews.
+- **No plan or payment:** registration has no subscription or payment step, and the workspace shows the real verification status instead of a plan.
+- **Licence numbers (pharmacy license, NPC, TIN, Rwanda FDA):** there are no columns for them and the requirements are not confirmed, so the form does not ask for them (the old "License number" field, which was never saved, was removed). The uploaded documents are what ApexRX reviews.
+- **Rwandan places:** `data/rwanda-locations.json` (5 provinces, 30 districts, 416 sectors, 2,149 cells, 14,837 villages) is from the MIT-licensed `rwanda-geo-data` package (see `data/README-rwanda-locations.txt`). Check it against official NISR/MINALOC data before a real launch. If it cannot load, the form falls back to typed names.
 - **Account holder's name:** the account form has no name field, so registration uses the part of the email before `@`. It can be changed later with `PATCH /auth/me`.
 - **Supplier chat:** messages in the sample chat dialog stay in the browser. Live suppliers are contacted on WhatsApp or by phone, as the roles document describes.
 - **Homepage map pins and headline numbers:** illustrative content, unchanged. No public endpoint lists every pharmacy or returns platform totals.
 - **Supplier search by supplier name:** `/supplier-offers` searches by medicine. Supplier names are matched only among suppliers you have already ordered from.
 - **Supplier workspace:** suppliers can register and follow their verification on `suppliers.html`. There are no screens for stock, prices or incoming orders yet; suppliers use the API for those.
 - **Supplier documents:** suppliers are asked for a business license and an owner ID, the generic types the admin console already knows. The project's roles document says the exact supplier document requirements are still to be confirmed. The backend accepts any document type, so adding types later is a frontend change only.
-- **Translations:** the About and Legal page bodies are English only (their header and footer are translated). The new Kinyarwanda strings on the registration pages should be reviewed by a native speaker.
+- **Translations:** the About and Legal page bodies are English only (their header and footer are translated). The Kinyarwanda strings on the registration pages (including the email verification ones) should be reviewed by a native speaker.
 - **Translations:** the new workspace sections are in English only (French and Kinyarwanda fall back to English).

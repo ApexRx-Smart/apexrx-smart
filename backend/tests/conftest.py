@@ -27,10 +27,14 @@ os.environ["DATABASE_URL"] = _test_url
 # A fresh random signing secret per run (placeholders are rejected at startup).
 os.environ["JWT_SECRET_KEY"] = secrets.token_urlsafe(48)
 os.environ.pop("TRUSTED_CLIENT_IP_HEADER", None)
-# Test mode with the in-memory mock SMS provider (never a real provider).
+# Test mode with the in-memory mock email provider (never a real provider).
 os.environ["APP_ENV"] = "test"
-os.environ["SMS_PROVIDER"] = "mock"
-os.environ.pop("PHONE_VERIFICATION_REQUIRED", None)
+os.environ["EMAIL_PROVIDER"] = "mock"
+os.environ["FRONTEND_BASE_URL"] = "http://frontend.test"
+# Most suites exercise the email-dependent code paths (kept for when email is
+# re-enabled) with the mock provider and verification required. The production
+# configuration (no email provider, verification off) is in test_without_email.py.
+os.environ["EMAIL_VERIFICATION_REQUIRED"] = "true"
 os.environ.pop("RATE_LIMIT_STORAGE_URI", None)
 os.environ["UPLOAD_DIR"] = tempfile.mkdtemp(prefix="apexrx-uploads-")
 # Never touch a real Supabase bucket by accident: tests use the local backend or
@@ -48,7 +52,7 @@ from app.core.database import engine  # noqa: E402
 from app.main import app  # noqa: E402
 
 TABLES = (
-    "phone_verification, search_event, purchase_order_status_history, purchase_order_item, purchase_order, "
+    "auth_session, organization_invitation, password_reset, email_verification, phone_verification, search_event, purchase_order_status_history, purchase_order_item, purchase_order, "
     "stock_adjustment, product_offer, stock, product, drug, organization_document, "
     "location, membership, organization, app_user"
 )
@@ -67,15 +71,16 @@ def _schema():
 @pytest.fixture(autouse=True)
 def _clean():
     from app.core.rate_limit import login_limiter
-    from app.services.sms import set_sms_provider
-    from app.services.sms.mock import mock_provider
+    from app.services.email import set_email_provider
+    from app.services.email.mock import mock_provider
+    from app.services.password_reset import limiter as reset_limiter
 
-    for reset in (login_limiter.reset, mock_provider.reset):
+    for reset in (login_limiter.reset, mock_provider.reset, reset_limiter.reset):
         reset()
     yield
-    for reset in (login_limiter.reset, mock_provider.reset):
+    for reset in (login_limiter.reset, mock_provider.reset, reset_limiter.reset):
         reset()
-    set_sms_provider(None)
+    set_email_provider(None)
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {TABLES} RESTART IDENTITY CASCADE"))
 

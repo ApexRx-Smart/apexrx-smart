@@ -92,22 +92,25 @@ Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
 [frontend/README.md](frontend/README.md) maps every page and control to its endpoint. In short:
 
 - **Homepage search** calls `GET /search/pharmacies`. It shows availability, price, location and how fresh the data is, never exact quantities.
-- **Pharmacy registration** (`pharmacies.html`) creates the account (`POST /auth/register`), signs in, creates the pharmacy organization and its location, and uploads the verification documents. An existing email signs in instead.
-- **Phone verification** (step 2): the user's mobile number is verified by SMS one-time code (`/auth/phone/*`). The backend only allows a pharmacy to be registered with that verified number. See [Phone verification (SMS)](#phone-verification-sms).
+- **Registration** (`pharmacies.html` and `suppliers.html`, both driven by `js/registration.js`): Account -> Verify email -> Details -> Documents -> Review.
+  - **Account:** `POST /auth/register` then sign in (an existing email signs in instead), or "Already have an account? Sign in".
+  - **Verify email:** skipped while email delivery is temporarily disabled (see [Email: temporarily disabled](#email-temporarily-disabled)); the details step says so. The verification code is kept for when email returns.
+  - **Details:** business name and phone, branch or warehouse name, WhatsApp (optional), a structured Rwandan address (province, district, sector, cell, village from `frontend/data/rwanda-locations.json`, plus street or landmark) and optional coordinates ("Use my current location"). Stored on the organization and its first location.
+  - **Documents:** pharmacy license, business license and owner ID for pharmacies; business license and owner ID for suppliers.
+  - **Review:** the real status, ApexRX's review note, the stored details and documents, uploads, and "Resubmit for review" after a rejection. Pharmacies then open their workspace.
+  - **Resuming:** progress is read back from the backend, so signing in again continues an incomplete registration where it stopped.
+  - The page always shows which account is signed in ("Signed in as … · Sign out"). There is no payment or subscription step, and phone numbers are contact details only.
 - **The pharmacy workspace** (`js/workspace.js`) runs the pharmacy day to day. All of it uses real backend data:
   - **Overview:** organization, status, branches, members and purchase-order counts.
   - **Branches:** list, add, edit, deactivate and reactivate.
-  - **Employees:** add an existing account by email, change roles, deactivate, remove.
+  - **Employees:** invite by email and role (no account needed; see [Staff accounts and invitations](#staff-accounts-and-invitations)), resend or revoke invitations, change roles, deactivate, remove.
   - **Inventory:** per branch, set quantities, prices and listing.
   - **Purchase orders:** create a draft with a receiving branch, edit lines, submit, cancel with a reason, view history.
   - **Organization selector:** for users who belong to several pharmacies.
   - It also lists suppliers from the pharmacy's purchase orders and searches supplier stock with `GET /supplier-offers`, which works only for approved pharmacies. **Open chat** opens the supplier's WhatsApp or phone.
   - Buttons follow the user's role, but the backend enforces every rule.
-- **Joining an existing pharmacy:** someone who registers to work at an existing pharmacy chooses "Joining an existing pharmacy instead?". They wait for the owner or a manager to add their email, instead of registering a new pharmacy.
-- **Supplier registration (`suppliers.html`):**
-  - A supplier creates an account (or signs in).
-  - It then registers the business, its warehouse and its documents with `POST /organizations` and `type: "supplier"`, and follows its verification status.
-  - Same API and admin review as pharmacies. No SMS step, because the backend requires it only for pharmacies.
+- **Joining an existing pharmacy:** someone who registers to work at an existing pharmacy chooses "Joining an existing pharmacy instead?". They wait for the owner or a manager to invite their email, instead of registering a new pharmacy. Staff normally just accept the invitation email and then use *Staff sign-in*.
+- **Supplier registration (`suppliers.html`):** the same journey with `type: "supplier"` and a warehouse; same API and admin review as pharmacies.
 - **Public pages:**
   - `how-it-works.html`, `about.html` (placeholder content to replace) and `legal.html` (placeholder privacy, terms and cookie pages, not approved policies).
   - They share one header and footer, from `js/site-layout.js`.
@@ -117,7 +120,7 @@ Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
 
 - **The admin dashboard** (`admin.html`) lets ApexRX staff review registrations. See [Admin dashboard](#admin-dashboard).
 
-Still simulated in the browser, because the v6 data model has no support for them: the plan and payment step, and in-app supplier chat. Supplier organizations have no workspace screens yet; they use the API.
+Still simulated in the browser: in-app supplier chat (the sample conversations in the preview). There is no subscription or payment anywhere in registration. Supplier organizations have no workspace screens yet; they use the API.
 
 ### Verify frontend changes
 
@@ -126,7 +129,7 @@ After making changes, check the following:
 1. Open the home page and verify the Kigali map, logos, audience images, and animations.
 2. Select English, French, and Kinyarwanda and verify that the language selection is applied.
 3. Search for a medicine on the home page and check that results come back from the backend. An empty database returns no results: see [Test data](#test-data).
-4. Open the pharmacy workflow and register with a new email and matching passwords (8 characters minimum). With the local backend in development mode (`APP_ENV=development`, `SMS_PROVIDER=mock`), enter a Rwandan mobile number and choose **Send code by SMS**. Read the code from `GET /dev/sms/latest` (see [Phone verification (SMS)](#phone-verification-sms)) and enter it. Then fill in the profile, upload the documents and continue through the simulated payment step.
+4. Open the pharmacy workflow and register with a new email and matching passwords (8 characters minimum). With email disabled (the default), registration goes straight to the details; fill them in, upload the documents and check the review. To exercise the dormant email flows locally, run the backend with `APP_ENV=development EMAIL_PROVIDER=mock EMAIL_VERIFICATION_REQUIRED=true` and open links from `GET /dev/email/latest`.
 5. In the workspace, check the profile and document statuses. Sign in as an **approved** pharmacy to try supplier search.
 6. Check narrow and wide layouts, navigation, return navigation, and social links.
 
@@ -172,13 +175,16 @@ cp .env.example .env    # then edit DATABASE_URL and JWT_SECRET_KEY
 | `UPLOAD_DIR` | no | Local document storage only (development). Default `backend/uploads/` |
 | `MAX_UPLOAD_SIZE_BYTES` | no | Default 10 MB |
 | `DEFAULT_CURRENCY` | no | Default `RWF` |
-| `APP_ENV` | no | `production` (default), `development` or `test`. Only non-production allows the mock SMS provider and the `/dev` endpoints. On Render, any value other than `production` stops the service from starting |
-| `PHONE_VERIFICATION_REQUIRED` | no | Default `true`: a pharmacy can only be registered with an SMS-verified number |
-| `SMS_PROVIDER` | for SMS | Adapter name. `mock` works only outside production; real adapters are added as described in [Phone verification (SMS)](#phone-verification-sms). If it is unset, sending a code returns 503 |
-| `SMS_SENDER_ID` | no | Sender name or number, for providers that support one |
-| `OTP_TTL_SECONDS` / `OTP_MAX_ATTEMPTS` / `OTP_RESEND_COOLDOWN_SECONDS` | no | Defaults 300 / 5 / 60 |
-| `OTP_MAX_SENDS_PER_PHONE_PER_HOUR` / `..._PER_USER_PER_HOUR` / `..._PER_IP_PER_HOUR` | no | Defaults 5 / 10 / 20. The IP limit applies only when the client IP is trustworthy |
-| `PHONE_DEFAULT_REGION` / `PHONE_ALLOWED_REGIONS` | no | Defaults `RW` / `RW` (ISO country codes, comma-separated) |
+| `APP_ENV` | no | `production` (default), `development` or `test`. Only non-production allows the mock email provider and the `/dev` endpoints. On Render, any value other than `production` stops the service from starting |
+| `EMAIL_VERIFICATION_REQUIRED` | no | Default `false` while email is disabled. Do not set it to `true` without an email provider: new organizations could not register |
+| `EMAIL_PROVIDER` | no | Leave unset in deployments (email is disabled). `mock` exists for development and tests only and is refused in production |
+| `SESSION_IDLE_TIMEOUT_MINUTES` / `SESSION_MAX_AGE_HOURS` | no | Defaults 30 / 12. See [Sessions](#sessions) |
+| `INVITATION_TTL_HOURS` | no | Default 72. Staff invitation links |
+| `PASSWORD_RESET_TTL_MINUTES` / `PASSWORD_RESET_MAX_PER_USER_PER_HOUR` / `..._PER_IP_PER_HOUR` | no | Defaults 60 / 3 / 10 |
+| `FRONTEND_BASE_URL` | no | Only used for links inside emails (development/tests while email is disabled). Not needed in deployments |
+| `EMAIL_VERIFICATION_TTL_MINUTES` / `EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS` | no | Defaults 1440 (24 hours) / 60 |
+| `EMAIL_VERIFICATION_MAX_SENDS_PER_USER_PER_HOUR` / `..._PER_IP_PER_HOUR` | no | Defaults 5 / 20. The IP limit applies only when the client IP is trustworthy |
+| `PHONE_DEFAULT_REGION` / `PHONE_ALLOWED_REGIONS` | no | Defaults `RW` / `RW`. Business phone numbers are normalized with these (contact only, not verification) |
 
 **Security:** never commit `.env`, database credentials, JWT secrets or the Supabase secret key.
 
@@ -252,71 +258,98 @@ ruff check app tests alembic
 
 The document tests use an in-memory fake of the Supabase Storage client, and the suite forces `DOCUMENT_STORAGE=local`, so tests never touch a real bucket. `tests/test_supabase_live.py` is an optional round trip against the real bucket (a dummy PDF under a random `test-.../` prefix, deleted afterwards). It runs only with `SUPABASE_LIVE_TESTS=1` and the `SUPABASE_*` variables set.
 
-## Phone verification (SMS)
+## Email: temporarily disabled
 
-**Flow:** a pharmacy owner signs in, verifies their mobile number by SMS, and only then can register the pharmacy. All decisions are made on the backend.
+ApexRX has **no email provider** at the moment: the Gmail API integration (and the optional Resend and Brevo adapters) were removed so the service can be deployed without one. The application runs without any email configuration. What that means:
+
+| Feature | While email is disabled |
+|---|---|
+| Email verification | Not required (`EMAIL_VERIFICATION_REQUIRED` defaults to `false`). Registration goes from the account to the details, and the page says why. `POST /auth/email/send` answers **503**. ApexRX approval of every pharmacy and supplier (documents, review) is unchanged |
+| Forgot password / reset | Unavailable. `POST /auth/password/forgot` answers **503** (`reason: email_unavailable`) for every address, before looking the address up, so it reveals nothing. `reset-password.html` says so. A user who forgets their password must contact ApexRX support (no in-app recovery exists yet) |
+| Staff invitations | Still available. Nothing is emailed: the owner or manager who creates (or renews) an invitation gets its link once, on screen, with **Copy link**, and gives it to the employee themselves. The list shows "Link given by you (no email)"; **New link** replaces it. Accepting such a link does **not** mark the employee's email as verified |
+| Password-changed notice | Not sent (a notification only; the password change itself works) |
+| `GET /auth/capabilities` | Public: `{email_delivery, email_verification_required, password_reset, invitation_emails}`, all `false` |
+
+Nothing reports an email as sent unless a provider accepted it. Sessions, sign-out, inactivity, roles, memberships, approval and password hashing do not depend on email.
+
+**Re-enabling email later:** add an adapter implementing `EmailProvider` in `backend/app/services/email/`, register it in `PROVIDERS`, set `EMAIL_PROVIDER` (and `FRONTEND_BASE_URL`, used in the email links) on the server, send a real test message, then set `EMAIL_VERIFICATION_REQUIRED=true` if wanted. The verification, reset and invitation-email code below is kept and tested with the in-memory mock.
+
+### Email verification (dormant)
+
+**Flow (when email is enabled):** a pharmacy or supplier owner creates an account and signs in, ApexRX emails a link to that address, and opening the link verifies it. With `EMAIL_VERIFICATION_REQUIRED=true`, only then can the organization be registered.
 
 | Endpoint | What it does |
 |---|---|
-| `GET /auth/phone/status` | `{required, verified, verified_phone, sms_available}`. The page uses it to decide whether to show the step |
-| `POST /auth/phone/send-code` `{phone}` | Normalizes the number to E.164, applies the limits, stores a hashed code and sends the SMS. Returns the normalized and masked number, `expires_in` and `resend_after`, **never the code** |
-| `POST /auth/phone/verify` `{phone, code}` | Single-use check. On success it sets `app_user.verified_phone` and `phone_verified_at` |
-| `POST /organizations` (pharmacy) | **403** without a verified phone. **400** if the requested phone isn't the verified number. If no phone is given, the verified number is used. Changing a pharmacy's phone later also needs that new number to be verified |
+| `GET /auth/email/status` (signed in) | `{email, verified, verified_at, required, delivery_available, pending, expires_at, resend_after}`. The registration page uses it to show (or skip) the step and to resume |
+| `POST /auth/email/send` `{next}` (signed in) | Applies the limits, stores a hashed token and emails a link to the **account's** address. **503** while email is disabled |
+| `POST /auth/email/verify` `{token}` (no session) | Opened from the link by `verify-email.html`. Single use. Errors are 400 with a `reason`: `invalid`, `expired`, `used` or `superseded` |
+| `POST /organizations` | With verification required: **403** (`reason: email_unverified`) until the caller's email is verified |
 
-**Codes:**
-- Six random digits (`secrets`), valid for 5 minutes, single-use. The row is locked while it is checked, so two simultaneous requests can't both use a code.
-- Only an HMAC of the code is stored. It is keyed with a secret derived from `JWT_SECRET_KEY` and bound to the user, number and purpose. A code for one number or account never verifies another.
-- A new code invalidates the earlier ones. After 5 wrong attempts the code is dead.
-- Sending is limited by a 60-second cooldown per number, and per hour per number (5), per user (10) and per trustworthy client IP (20).
-  - **The limits live in PostgreSQL, not process memory.** They are counted from `phone_verification` rows inside one transaction.
-  - That transaction first locks the user's row, then takes transaction-scoped advisory locks for the number and the IP, always in that order.
-  - Checking and recording are therefore atomic, even with simultaneous requests or several app instances, and the limits survive restarts.
-  - Only one code per user is issued at a time.
-  - A partial unique index means the database itself refuses a second valid code for the same user and purpose.
-  - The client IP is stored only as an HMAC.
-- **The limits fail closed.** If the database can't check or record a limit, no SMS is sent and the client gets a generic 503 ("Verification codes cannot be sent right now"). Internal details are only logged.
-- **The code is saved before it is sent.** The row is committed first and only then is the SMS sent, so a code can never be delivered without being stored.
-  - If the provider refuses the message, the row is marked `delivery_failed_at` and invalidated. It still counts towards the hourly limits, so a failing provider can't be hammered, but not towards the cooldown, so the user can retry at once.
-  - Trade-off: issuing a new code invalidates the previous one *before* sending. If that send fails, the user simply requests another code.
-  - Remaining corner case: if recording a failed delivery also fails (the database is down at that moment), the undelivered code stays stored until it expires. Nobody knows it, but the user may have to wait out the cooldown.
-- Codes and full phone numbers never appear in API responses or logs; logs show a masked number such as `+2507*****456`.
+**Links and tokens:**
+- `<FRONTEND_BASE_URL>/verify-email.html?next=pharmacy#token=...`. The token (32 random bytes) is in the URL **fragment**, so it is never sent to a server in a request line or Referer. The page removes it from the address bar before calling the API, and the page sets `referrer: no-referrer`.
+- Only a SHA-256 hash of the token is stored (`email_verification`), bound to the user and to the address it was sent to. If the account's address changes, or the account is deactivated, the link stops working.
+- Valid for 24 hours (configurable), single-use. Sending a new email invalidates the earlier links; a partial unique index lets the database itself refuse a second usable link for the same user.
+- Opening the link needs no session, because opening it proves access to the mailbox, which is what is being verified. It can be opened on another device. In the same browser, the registration tab is notified (BroadcastChannel) and also re-checks when it regains focus, so it continues by itself.
 
-**Phone numbers:**
-- Parsed with [`phonenumbers`](https://pypi.org/project/phonenumbers/) (libphonenumber).
-- Rwandan formats such as `0788 123 456`, `788123456`, `250788123456` and `+250 788 123 456` become `+250788123456`.
-- Only mobile numbers from `PHONE_ALLOWED_REGIONS` are accepted. Letters are refused, since libphonenumber would otherwise map them to keypad digits.
-- To support another country, add it to `PHONE_ALLOWED_REGIONS`.
+**Limits** (as for the former SMS codes, in PostgreSQL so they hold across restarts and instances): a 60-second resend cooldown, at most 5 emails per user per hour and 20 per trustworthy client IP per hour. The user's row and an advisory lock for the IP are locked while checking and recording, so the check is atomic. The limits fail closed: if the database cannot check them, no email is sent (generic 503). The link is stored before the email is sent; a provider failure answers 502, marks the row failed and lets the user retry immediately. Tokens and full addresses never appear in responses or logs (logs show `a***a@example.com`).
 
 **Modes:**
-- **Development and tests:** `APP_ENV=development` (or `test`) with `SMS_PROVIDER=mock`.
-  - The mock sends nothing. It keeps messages in memory only.
-  - `GET /dev/sms/latest`, signed in, returns **your own** latest test code.
-  - The `/dev` routes aren't mounted in production, and the endpoint also answers 404 in production itself.
-  - The tests use the mock automatically (`tests/conftest.py`).
-- **Production:** `APP_ENV=production`, the default.
-  - The mock is refused. With no real provider configured, `send-code` answers **503** "SMS verification is not available right now", a warning is logged at startup, and new pharmacies can't register.
-  - A delivery failure answers **502**. Nothing falls back to the mock, and the stored code is marked as failed and invalidated.
-- **Before a provider exists:** set `PHONE_VERIFICATION_REQUIRED=false`. The step is then skipped and pharmacies register without a verified number. There is never a fixed code.
+- **Deployment** (`APP_ENV=production`): no provider; the features above are unavailable as described. The mock is refused.
+- **Development and tests:** `APP_ENV=development` (or `test`) with `EMAIL_PROVIDER=mock` keeps messages in memory; `GET /dev/email/latest` (signed in) and `GET /dev/email/latest-to?to=` return the latest message with its link. The `/dev` routes are not mounted in production.
 
-**Adding a real provider (adapter):**
-1. Create `backend/app/services/sms/<name>.py` with a class that has `name` and `send(to, message) -> SmsResult`. It calls the provider's HTTP API and raises `SmsDeliveryError` on any failure, never failing silently.
-2. Read the provider's credentials inside the adapter from environment variables, for example `SMS_<NAME>_API_KEY` or a username and sender ID. Never commit them.
-3. Register a factory in `PROVIDERS` in `backend/app/services/sms/__init__.py`.
-4. Set `SMS_PROVIDER=<name>` and the credentials on Render. `GET /auth/phone/status` should then report `"sms_available": true`.
-
-Typical providers need an API key or token, an account ID or username, and a registered sender ID or number. Get the exact names from the provider you choose. No provider has been chosen or tested yet, so **real SMS delivery has not been verified**.
+**Phone numbers** are business contact details (and later Mobile Money). They are normalized to E.164 with [`phonenumbers`](https://pypi.org/project/phonenumbers/) (`0788 123 456` -> `+250788123456`, numbers from `PHONE_ALLOWED_REGIONS` only), and are never used to verify anyone. The former SMS verification was removed; its old table `phone_verification` and the columns `app_user.verified_phone` / `phone_verified_at` are left in the database untouched (nothing writes them any more) and can be dropped by a later migration.
 
 **Testing locally:**
 ```bash
 cd backend
-python -m pytest tests/test_phone_otp.py tests/test_pharmacy_phone_binding.py tests/test_phone_numbers_and_sms.py
-# Browser test: run the backend with APP_ENV=development SMS_PROVIDER=mock OTP_RESEND_COOLDOWN_SECONDS=5
-python ../frontend/tests/e2e_phone_otp.py
+python -m pytest tests/test_without_email.py tests/test_email_verification.py tests/test_registration_profile.py \
+    tests/test_sessions.py tests/test_invitations.py tests/test_password_reset.py
+# Browser tests (local backends on the same throwaway database, APP_ENV=development):
+#   port 8000: EMAIL_PROVIDER=mock EMAIL_VERIFICATION_REQUIRED=true   (dormant email flows)
+#   port 8001: no email, SESSION_IDLE_TIMEOUT_MINUTES=1                (e2e_accounts inactivity part)
+#   port 8002: no email, defaults                                      (the deployed configuration)
+python ../frontend/tests/e2e_no_email.py
+python ../frontend/tests/e2e_registration.py
+python ../frontend/tests/e2e_accounts.py
 ```
+
+## Sessions
+
+Every sign-in creates a server-side session (`auth_session`), and every access token names it (`sid`). The backend accepts a token only while its session is usable, so a frontend timer is never the only protection:
+
+| Limit | Default | What happens |
+|---|---|---|
+| Access token | 30 min (`ACCESS_TOKEN_EXPIRE_MINUTES`) | Short-lived. While the user is active, the page gets a fresh one from `POST /auth/session/activity` |
+| Inactivity | 30 min (`SESSION_IDLE_TIMEOUT_MINUTES`) | No user activity for that long: the session ends on the server (`401`, reason `session_idle`) |
+| Maximum age | 12 h (`SESSION_MAX_AGE_HOURS`) | Sign in again after that, however active (`session_expired`) |
+
+- **What counts as activity:** only real user input (pointer, keyboard, wheel, touch) and opening or reloading a page. `js/api.js` reports it at most once a minute; ordinary API calls (refreshes, searches as you type, `GET /auth/me`, `GET /auth/session`) never move the inactivity clock, so background requests cannot keep a session alive.
+- **Warning:** two minutes before the limit, a banner ("You will be signed out soon because of inactivity" with a countdown) offers **Stay signed in**. At the limit the page signs out (server and browser) and shows "You were signed out after 30 minutes of inactivity".
+- **Sign-out** (`POST /auth/logout`, the workspace's **Sign out**, the public header's **Sign out**, the registration page's "Sign out"): ends this session only. The token stops working at once. Other people, the same person's other sign-ins, memberships, roles and the organization are untouched.
+- **Several tabs:** tabs that share a session (opened from one another) stay in step through a BroadcastChannel: activity in one keeps all alive, a renewed token is shared, and signing out or timing out in one signs out all of them ("You signed out in another tab"). A tab only adopts a token for the session it already has, so nothing can sign a tab in again after a sign-out. A tab opened separately is its own session.
+- **No cached private data:** signed-in API responses are sent with `Cache-Control: no-store`, the token lives in `sessionStorage` (cleared when the tab closes), and a page restored by the browser's Back button after a sign-out reloads instead of showing the workspace again.
+- **Password changes:** changing the password signs out every other session; a password reset signs out all of them. Deactivated accounts are refused on every request.
+- Tokens issued before migration `f3a9c1d7b2e5` have no session, so everyone signs in once more after the deployment.
+
+## Staff accounts and invitations
+
+ApexRX keeps one account per person: **user → membership (role) → organization**. A pharmacy is an organization, never a shared login.
+
+- **Staff sign-in:** `pharmacies.html` has two paths, *Register a pharmacy* and *Staff sign-in* (also `pharmacies.html#staff`). Staff sign in with their own email and password; the backend returns their memberships (`GET /auth/me`) and the workspace opens on one of them. Someone in several pharmacies chooses one first, and can switch later from the workspace's organization selector. Every request is authorized on the backend from the membership (`get_org_access`), so changing an organization id in the browser opens nothing.
+- **Inviting** (owners and managers, Employees → *Invite an employee*): email + role. Managers may invite staff only; owners any role (same rules as before). The employee does **not** need an ApexRX account. `POST /organizations/{id}/invitations` stores the invitation; no membership exists until it is accepted. **While email is disabled** the response carries the link's token once (`share_token`, never stored) and the workspace shows the link with **Copy link** for the inviter to give to the employee; with email enabled it is emailed instead. Owners and managers see every invitation with its status (pending, accepted with a new or existing account, expired, revoked) and how its link was delivered, and can renew it (**New link** / **Resend**: the old link stops working) or **Revoke** it.
+- **Accepting** (`accept-invitation.html`): a new person sets up their own name and password (the owner never sees or chooses it), which creates the account, joins and signs them in. Only an *emailed* link marks the email verified; a link given by the inviter does not. An existing account signs in instead (no second account) and joins; its other memberships and roles are kept. An account with a different email address is refused (`email_mismatch`).
+- **Invitation links:** 32 random bytes in the URL fragment; only a SHA-256 hash is stored; bound to the organization and the invited address; single use; expire after `INVITATION_TTL_HOURS` (72); revoked, expired, replaced and used links are refused by the backend with a clear reason. At most one open invitation per organization and address (database-enforced); at most 30 invitations per organization per hour.
+- Direct adding of an existing account (`POST /organizations/{id}/members`) still exists in the API; the workspace uses invitations.
+
+## Password reset
+
+**Unavailable while email is disabled.** "Forgot password?" (staff, supplier, admin and invitation sign-ins) leads to `reset-password.html`, which says the feature is temporarily unavailable and to contact ApexRX support; `POST /auth/password/forgot` answers 503 for every address. Signed-in users can still change their password (`POST /auth/me/password`, which signs out their other sessions). There is no admin tool to reset another user's password yet.
+
+When email is re-enabled, the dormant flow works as follows: the same public answer for every address (the email is sent after the response), a single-use link valid 60 minutes stored only as a hash, limits per address (3/hour) and per IP (10/hour), and a successful reset signs out every session and sends a confirmation. Memberships and roles are never touched.
 
 ## Password hashing
 
-Passwords are hashed with Argon2id (`pwdlib`), using OWASP's recommended parameters: 19 MiB of memory, 2 passes, 1 lane (`backend/app/core/security.py`). These cost about a third of pwdlib's default (64 MiB, 3 passes, 4 lanes), which made sign-in and registration slow on small hosting instances. Hashes made with the old parameters still work. They are re-hashed with the current ones the next time that user signs in successfully, so no migration is needed.
+Passwords are hashed with Argon2id through pwdlib's recommended configuration, `PasswordHash.recommended()` (argon2-cffi defaults: 64 MiB of memory, 3 passes, 4 lanes; `backend/app/core/security.py`). In November 2026 cheaper parameters (19 MiB, 2 passes, 1 lane) were briefly used; that change was reverted. Any hash made with other parameters still verifies and is re-hashed with the recommended ones the next time that user signs in successfully, so no migration is needed.
 
 ## Responsiveness
 
@@ -399,7 +432,7 @@ Verification documents are files in a **private Supabase Storage bucket**. Their
   - Filter by status: awaiting review, approved or rejected.
   - From each row: download the file, approve it, reject it with a reason, or open the organization.
 - **Users:** every account, with a name or email search and a filter for platform administrators.
-  - Each row shows the phone and whether it was verified by SMS, the registration date, active or inactive, and admin.
+  - Each row shows the phone (with "Verified by SMS" for accounts verified before SMS verification was removed), the registration date, active or inactive, and admin.
   - **Deactivate** / **Reactivate** and **Make admin** / **Remove admin** use `PATCH /admin/users/{id}`, after a confirmation.
   - Your own row has no buttons. The backend refuses deactivating yourself or removing your own admin access anyway.
   - A deactivated account loses access straight away: existing tokens stop working.
@@ -501,7 +534,7 @@ These are three separate actions:
 |---|---|---|
 | **Apply a migration** | The database structure only | `alembic upgrade head`, run from your machine against the database |
 | **Deploy application code** | What Render runs | Merging to `main` (Render deploys automatically) |
-| **Turn mandatory phone verification on or off** | Whether a pharmacy needs an SMS-verified phone | The `PHONE_VERIFICATION_REQUIRED` environment variable on Render. It changes behaviour, not the schema, and needs no migration |
+| **Turn mandatory email verification on or off** | Whether registering an organization needs a verified email | `EMAIL_VERIFICATION_REQUIRED` on Render. Leave it unset (false) while email is disabled |
 
 **Safe order for the testing environment** (for example, PR #24 and migration `c4d1e8f2a9b7`):
 1. **Back up.** In Neon, open **Branches → Create branch** from the testing branch (for example `pre-c4d1e8f2a9b7`). That gives you an instant copy you can restore.
@@ -525,7 +558,7 @@ These are three separate actions:
    SELECT to_regclass('phone_verification');                -- phone_verification
    ```
    Re-run the counts from step 2. They must be identical.
-5. **Choose the verification setting** on Render *before* deploying. Use `PHONE_VERIFICATION_REQUIRED=false` until a real SMS provider is configured; otherwise new pharmacies can't register.
+5. **Email:** nothing to configure. Leave `EMAIL_PROVIDER` and `EMAIL_VERIFICATION_REQUIRED` unset (see [Email: temporarily disabled](#email-temporarily-disabled)), and remove any old `SMS_*`, `OTP_*`, `PHONE_VERIFICATION_REQUIRED`, `GMAIL_*`, `RESEND_API_KEY`, `BREVO_API_KEY` or `EMAIL_FROM_*` variables.
 6. **Deploy the code** by merging the PR. Then `GET /health` must return 200 with `"schema": "up to date"`. Check that sign-in and patient search work.
 
 **Rolling back:**
@@ -551,7 +584,7 @@ Create a web service with root directory `backend`.
 |---|---|
 | Build command | `pip install -r requirements.txt` |
 | Start command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
-| Environment | `DATABASE_URL` (Neon), `JWT_SECRET_KEY` (**at least 32 random characters**, or the service will not start), `APP_ENV=production` (also the default), `SMS_PROVIDER` and the provider's credentials (or `PHONE_VERIFICATION_REQUIRED=false` until there is a provider), `CORS_ORIGINS` (must include the Netlify URL, for example `https://your-site.netlify.app`), `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_BUCKET_NAME=organization-documents`. Leave `TRUSTED_CLIENT_IP_HEADER` unset unless `tools/render-ip-check` has verified a header |
+| Environment | `DATABASE_URL` (Neon), `JWT_SECRET_KEY` (**at least 32 random characters**, or the service will not start), `APP_ENV=production` (also the default), no email variables (email is disabled; see [Email: temporarily disabled](#email-temporarily-disabled)), `CORS_ORIGINS` (must include the Netlify URL, for example `https://your-site.netlify.app`), `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_BUCKET_NAME=organization-documents`. Leave `TRUSTED_CLIENT_IP_HEADER` unset unless `tools/render-ip-check` has verified a header |
 
 Limits of the free plan:
 
@@ -580,8 +613,7 @@ Patient search shows only **approved** pharmacies, **active** locations and **li
 
 - Supplier workspace screens (stock, prices and incoming orders). The pharmacy workspace exists; suppliers still use the API.
 - A catalogue import script for loading real medicine data.
-- A real SMS provider adapter (the infrastructure is ready; see [Phone verification (SMS)](#phone-verification-sms)).
-- Password reset and email verification.
-- Subscription plans and real payments (the plan step is simulated).
+- Re-enable email with a provider (verification, password reset, invitation emails), and an admin tool to help users who forget their password.
+- Subscription plans and Mobile Money payments (not part of registration today).
 - PostGIS for distance search at scale (bounding-box and haversine search is used today).
 - Notifications (email/WhatsApp) for order status changes.

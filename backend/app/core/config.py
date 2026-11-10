@@ -22,14 +22,23 @@ PLACEHOLDER_MARKERS = ("replace-with", "change-me", "changeme", "placeholder", "
 
 class Settings(BaseSettings):
     # "production" unless explicitly set: development-only behaviour (the mock
-    # SMS provider, the /dev endpoints) is never enabled by accident.
+    # email provider, the /dev endpoints) is never enabled by accident.
     app_env: Literal["development", "test", "production"] = "production"
 
     database_url: str
     # Validated by _strong_jwt_secret: at least 32 characters, not a placeholder.
     jwt_secret_key: str
     jwt_algorithm: str = "HS256"
+    # Access tokens are short-lived and renewed by real user activity
+    # (POST /auth/session/activity). Each one names a server-side session
+    # (auth_session) that is checked on every request, so a token stops working
+    # as soon as its session is signed out, idle too long or past its maximum age.
     access_token_expire_minutes: int = Field(default=30, gt=0)
+    # Signed out after this long without user activity (clicks, typing,
+    # navigation; background requests do not count). Default 30 minutes.
+    session_idle_timeout_minutes: int = Field(default=30, ge=1, le=24 * 60)
+    # Absolute limit: sign in again after this long, however active.
+    session_max_age_hours: int = Field(default=12, ge=1, le=24 * 30)
 
     # Comma-separated list in the environment, e.g.
     # CORS_ORIGINS=http://localhost:5501,http://127.0.0.1:5501
@@ -77,23 +86,36 @@ class Settings(BaseSettings):
     # Default currency for offers and purchase orders (ISO 4217).
     default_currency: str = "RWF"
 
-    # Phone verification by SMS one-time code (see app/services/otp.py).
-    # When true, creating a pharmacy requires the owner's phone to be verified.
-    phone_verification_required: bool = True
-    # SMS provider adapter name (app/services/sms). Unset: SMS is not
-    # configured and sending a code fails with a clear 503. "mock" is refused
-    # in production.
-    sms_provider: str | None = None
-    # Optional sender name/number passed to real providers.
-    sms_sender_id: str | None = None
-    otp_ttl_seconds: int = Field(default=300, ge=30, le=3600)
-    otp_max_attempts: int = Field(default=5, ge=1, le=20)
-    otp_resend_cooldown_seconds: int = Field(default=60, ge=0, le=3600)
-    otp_max_sends_per_phone_per_hour: int = Field(default=5, ge=1)
-    otp_max_sends_per_user_per_hour: int = Field(default=10, ge=1)
-    otp_max_sends_per_ip_per_hour: int = Field(default=20, ge=1)
-    # Phone numbers: parsed with this default region, and only numbers from
-    # these regions are accepted (ISO 3166 codes, comma-separated).
+    # Email delivery is temporarily disabled (no real provider is integrated;
+    # see app/services/email/__init__.py). Email verification is therefore not
+    # required by default. Setting this to true without an email provider
+    # blocks new organizations (logged at startup).
+    email_verification_required: bool = False
+    # Development and tests only: "mock" keeps messages in memory (refused in
+    # production). Unset: email features report themselves as unavailable.
+    email_provider: str | None = None
+    # Where the frontend is served; used for links inside emails (development
+    # and tests while email is disabled).
+    frontend_base_url: str = "http://127.0.0.1:5501"
+    email_verification_ttl_minutes: int = Field(default=24 * 60, ge=10, le=7 * 24 * 60)
+    email_verification_resend_cooldown_seconds: int = Field(default=60, ge=0, le=3600)
+    email_verification_max_sends_per_user_per_hour: int = Field(default=5, ge=1)
+    email_verification_max_sends_per_ip_per_hour: int = Field(default=20, ge=1)
+
+    # Staff invitations (app/services/invitations.py).
+    invitation_ttl_hours: int = Field(default=72, ge=1, le=24 * 30)
+    invitation_resend_cooldown_seconds: int = Field(default=60, ge=0, le=3600)
+    invitation_max_per_organization_per_hour: int = Field(default=30, ge=1)
+
+    # Password reset (app/services/password_reset.py).
+    password_reset_ttl_minutes: int = Field(default=60, ge=5, le=24 * 60)
+    password_reset_cooldown_seconds: int = Field(default=60, ge=0, le=3600)
+    password_reset_max_per_user_per_hour: int = Field(default=3, ge=1)
+    password_reset_max_per_ip_per_hour: int = Field(default=10, ge=1)
+
+    # Phone numbers (business contact, future Mobile Money; not used to verify
+    # anyone): parsed with this default region, and only numbers from these
+    # regions are accepted (ISO 3166 codes, comma-separated).
     phone_default_region: str = "RW"
     phone_allowed_regions: Annotated[list[str], NoDecode] = ["RW"]
 
@@ -128,11 +150,19 @@ class Settings(BaseSettings):
             raise ValueError("PHONE_ALLOWED_REGIONS must list at least one region, e.g. RW.")
         return regions
 
-    @field_validator("sms_provider", mode="before")
+    @field_validator("email_provider", mode="before")
     @classmethod
     def _normalize_provider(cls, value: object) -> object:
         if isinstance(value, str):
             return value.strip().lower() or None
+        return value
+
+    @field_validator("frontend_base_url")
+    @classmethod
+    def _frontend_url(cls, value: str) -> str:
+        value = value.strip().rstrip("/")
+        if not value.startswith(("https://", "http://")):
+            raise ValueError("FRONTEND_BASE_URL must start with https:// (or http:// for local development).")
         return value
 
     @property

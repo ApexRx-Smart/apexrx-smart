@@ -7,3 +7,4 @@ backend/uploads/
 
 # Local test credentials (never commit)
 test_creds.md
+client_secret*

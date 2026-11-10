@@ -21,8 +21,9 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db, set_session_actor
 from app.core.errors import Forbidden, NotFound, Unauthorized
 from app.core.security import decode_access_token
-from app.models import Location, Membership, Organization, User
+from app.models import AuthSession, Location, Membership, Organization, User
 from app.models.enums import MembershipRole, OrganizationStatus, OrganizationType
+from app.services import sessions
 
 bearer_scheme = HTTPBearer(auto_error=False, description="JWT from POST /auth/login")
 
@@ -33,22 +34,46 @@ MANAGERS = frozenset({MembershipRole.OWNER, MembershipRole.MANAGER})
 OWNERS = frozenset({MembershipRole.OWNER})
 
 
-def get_current_user(
+@dataclass(frozen=True)
+class Auth:
+    user: User
+    session: AuthSession
+
+
+def get_auth(
     db: DbSession,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
-) -> User:
+) -> Auth:
+    """The signed-in user and their server-side session. The token must be
+    valid AND its session still usable: not signed out, not idle for longer
+    than SESSION_IDLE_TIMEOUT_MINUTES, not older than SESSION_MAX_AGE_HOURS
+    (app/services/sessions.py). Refusals carry a ``reason``."""
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise Unauthorized("Not authenticated.")
-    subject = decode_access_token(credentials.credentials)
-    if subject is None or not subject.isdigit():
+    decoded = decode_access_token(credentials.credentials)
+    if decoded is None or not decoded[0].isdigit() or not decoded[1].isdigit():
         raise Unauthorized("Invalid or expired token.")
-    user = db.get(User, int(subject))
+    user = db.get(User, int(decoded[0]))
     if user is None or not user.is_active:
         raise Unauthorized("Invalid or expired token.")
+    session = db.get(AuthSession, int(decoded[1]))
+    issue = sessions.problem(session, user.user_id)
+    if issue is not None:
+        reason, message = issue
+        if session is not None and session.user_id == user.user_id and session.revoked_at is None:
+            sessions.revoke(db, session, "idle" if reason == "session_idle" else "expired")
+        raise Unauthorized(message, extra={"reason": reason})
     # Every write made with this session is attributed to this user by the
     # database triggers (app.user_id).
     set_session_actor(db, user.user_id)
-    return user
+    return Auth(user, session)
+
+
+CurrentAuth = Annotated[Auth, Depends(get_auth)]
+
+
+def get_current_user(auth: CurrentAuth) -> User:
+    return auth.user
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]

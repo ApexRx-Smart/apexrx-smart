@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, EmailStr, Field, StringConstraints
+from pydantic import BaseModel, EmailStr, Field, StringConstraints, computed_field
 
 from app.models.enums import MembershipRole, OrganizationStatus, OrganizationType
 from app.schemas.common import ORMModel, Phone
@@ -31,6 +31,17 @@ class TokenResponse(BaseModel):
     expires_in: int
     # Keep on this browser and send with later sign-ins for this account.
     device_token: str | None = None
+    # The server-side session: signed out after this many seconds without
+    # user activity, and at session_expires_at at the latest.
+    idle_timeout_seconds: int | None = None
+    session_expires_at: datetime | None = None
+
+
+class SessionResponse(BaseModel):
+    idle_timeout_seconds: int
+    last_activity_at: datetime
+    idle_expires_at: datetime
+    expires_at: datetime
 
 
 class UserResponse(ORMModel):
@@ -38,11 +49,18 @@ class UserResponse(ORMModel):
     name: str
     email: EmailStr
     phone: str | None
+    email_verified_at: datetime | None = None
+    # Historical (former SMS verification); no longer set.
     verified_phone: str | None = None
     phone_verified_at: datetime | None = None
     is_platform_admin: bool
     is_active: bool
     created_at: datetime
+
+    @computed_field
+    @property
+    def email_verified(self) -> bool:
+        return self.email_verified_at is not None
 
 
 class MembershipSummary(BaseModel):
@@ -68,31 +86,34 @@ class ChangePasswordRequest(BaseModel):
     new_password: Password
 
 
-# Phone verification (SMS one-time code) --------------------------------------
-class PhoneCodeRequest(BaseModel):
-    # Validated and normalized by app/services/phone.py (clear messages).
-    phone: str = Field(max_length=40)
+# Email verification (emailed link) -----------------------------------------
+class EmailSendRequest(BaseModel):
+    # Which registration page the link returns to after verification.
+    next: Literal["pharmacy", "supplier"] | None = None
 
 
-class PhoneVerifyRequest(BaseModel):
-    phone: str = Field(max_length=40)
-    code: str = Field(max_length=20)
-
-
-class PhoneCodeSentResponse(BaseModel):
-    phone: str  # the normalized E.164 number the code was sent to
-    phone_masked: str
+class EmailSentResponse(BaseModel):
+    email_masked: str
     expires_in: int
     resend_after: int
 
 
-class PhoneStatusResponse(BaseModel):
-    required: bool  # creating a pharmacy needs a verified phone
+class EmailStatusResponse(BaseModel):
+    email: EmailStr
     verified: bool
-    verified_phone: str | None
-    sms_available: bool
+    verified_at: datetime | None
+    required: bool  # registering an organization needs a verified email
+    delivery_available: bool  # an email provider is configured
+    pending: bool  # an unexpired link was sent to this address
+    expires_at: datetime | None
+    resend_after: int  # seconds until another email may be requested
 
 
-class PhoneVerifiedResponse(BaseModel):
+class EmailVerifyRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=200)
+
+
+class EmailVerifiedResponse(BaseModel):
     verified: bool = True
-    verified_phone: str
+    already_verified: bool
+    email_masked: str

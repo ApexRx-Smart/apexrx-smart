@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.database import engine
-from tests.helpers import PASSWORD, admin, login, mark_phone_verified, organization, register, user
+from tests.helpers import PASSWORD, admin, login, mark_email_verified, organization, register, user
 
 
 def _is_admin(email):
@@ -61,7 +61,7 @@ def test_non_admin_cannot_use_admin_user_endpoint_on_self(client):
 
 def test_organization_requests_cannot_self_approve_or_promote(client):
     h = user(client, "m@x.example.com")
-    mark_phone_verified(client, h)
+    mark_email_verified(client, h)
     org = client.post(
         "/organizations",
         json={"name": "Mine", "type": "pharmacy", "status": "approved", "is_platform_admin": True},
@@ -77,7 +77,9 @@ def test_admin_claims_in_token_are_ignored(client):
     register(client, "m@x.example.com")
     uid = client.post("/auth/login", json={"email": "m@x.example.com", "password": PASSWORD})
     me = client.get("/auth/me", headers={"Authorization": f"Bearer {uid.json()['access_token']}"}).json()
-    forged = _token(me["user_id"], is_platform_admin=True, role="admin", admin=True)
+    # A real session id, so only the extra claims differ from a genuine token.
+    sid = jwt.decode(uid.json()["access_token"], options={"verify_signature": False})["sid"]
+    forged = _token(me["user_id"], sid=sid, is_platform_admin=True, role="admin", admin=True)
     r = client.get("/admin/organizations", headers={"Authorization": f"Bearer {forged}"})
     assert r.status_code == 403
 

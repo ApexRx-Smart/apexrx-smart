@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Join your team — ApexRX Smart</title>
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="assets/logos/logo-mark.svg">
+<link rel="stylesheet" href="css/pharmacies.css">
+</head>
+<body class="verify-page">
+<!-- Opened from a staff invitation email: accept-invitation.html#token=...
+     js/accept-invitation.js checks it (POST /invitations/inspect), then the
+     invitee sets up their own account or signs in, and accepts. -->
+<header><a class="brand" href="index.html"><img src="assets/logos/logo-mark.svg" alt="" width="38"><span>ApexRX<span class="green"> Smart</span><small>Smarter access. Better health.</small></span></a><a class="home-link" href="index.html">← Back to website</a><label class="language-control"><span class="sr-only">Language</span><select id="workflow-language" aria-label="Language"><option value="en">English</option><option value="fr">Français</option><option value="rw">Kinyarwanda</option></select></label></header>
+<main class="verify-main">
+<section class="workspace access-card" aria-labelledby="invite-title">
+<div class="mail-icon" id="invite-icon" aria-hidden="true">✉</div>
+<h2 id="invite-title" tabindex="-1">Checking your invitation…</h2>
+<p id="invite-message" class="muted" role="status">This takes a moment.</p>
+<dl class="supplier-facts" id="invite-facts" hidden>
+<dt>Organization</dt><dd id="invite-org"></dd>
+<dt>Role</dt><dd id="invite-role"></dd>
+<dt>Email address</dt><dd id="invite-email"></dd>
+<dt>Invited by</dt><dd id="invite-by"></dd>
+</dl>
+
+<form id="new-account" hidden novalidate>
+<p class="note">Set up your own ApexRX account. Your password is yours alone: nobody at the pharmacy sees or chooses it.</p>
+<label>Your full name<input name="name" autocomplete="name" maxlength="150" required></label>
+<label>Password<input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required></label>
+<label>Confirm password<input name="confirm" type="password" autocomplete="new-password" minlength="8" placeholder="Re-enter your password" required></label>
+<button class="primary" id="new-account-submit">Create my account and join <span>→</span></button>
+</form>
+
+<form id="sign-in" hidden novalidate>
+<p class="note">An ApexRX account already uses this email address. Sign in with it to accept.</p>
+<label>Email address<input name="email" type="email" autocomplete="username" readonly></label>
+<label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+<p class="forgot-row"><a href="reset-password.html?next=pharmacy" id="invite-forgot">Forgot password?</a></p>
+<button class="primary" id="sign-in-submit">Sign in and join <span>→</span></button>
+</form>
+
+<div id="signed-in" hidden>
+<p class="note"><span>Signed in as</span> <strong id="signed-in-email"></strong></p>
+<button class="primary" id="accept-button" type="button">Accept the invitation <span>→</span></button>
+<button class="text-button" id="switch-account" type="button">Sign out and use another account</button>
+</div>
+
+<div class="actions" id="invite-actions" hidden>
+<a class="primary" id="invite-continue" href="pharmacies.html">Open your pharmacy workspace <span>→</span></a>
+</div>
+<p id="form-error" role="alert"></p>
+</section>
+</main>
+<div id="notice" role="status"></div>
+<script src="js/pharmacies-i18n.js"></script>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/accept-invitation.js"></script>
+<script src="js/password-toggle.js"></script>
+</body></html>

@@ -607,3 +607,5 @@ footer.site.footer-wide{background:#121329;padding:76px 0 26px;}
    "Powered by Netlify" badge that Netlify pins to the bottom-right corner. */
 .footer-bottom .footer-legal{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;}
 .footer-bottom .footer-sep{opacity:.6;}
+/* Header when signed in: the account email instead of "Sign in" */
+.signed-in-chip{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

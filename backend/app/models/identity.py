@@ -34,8 +34,10 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(30))
-    # Set only by a successful SMS verification (E.164). Kept apart from the
-    # editable ``phone`` so changing that never carries a verification over.
+    # Set only by a successful email verification (an emailed link, see
+    # app/services/email_verification.py). Required to register an organization.
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Historical: set by the former SMS phone verification, no longer written.
     verified_phone: Mapped[str | None] = mapped_column(String(20))
     phone_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
@@ -131,9 +133,14 @@ class Location(Base):
         BigInteger, ForeignKey("organization.organization_id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Rwandan addresses: ``region`` holds the province, ``city`` the district,
+    # then sector, cell and village; ``address`` is the street or landmark.
     address: Mapped[str | None] = mapped_column(Text)
     city: Mapped[str | None] = mapped_column(String(100))
     region: Mapped[str | None] = mapped_column(String(100))
+    sector: Mapped[str | None] = mapped_column(String(100))
+    cell: Mapped[str | None] = mapped_column(String(100))
+    village: Mapped[str | None] = mapped_column(String(100))
     latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
     phone: Mapped[str | None] = mapped_column(String(30))

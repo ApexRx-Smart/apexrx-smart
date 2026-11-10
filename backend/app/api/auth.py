@@ -1,13 +1,14 @@
 import math
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, BackgroundTasks, Request, Response, status
 from sqlalchemy import func, select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentAuth, CurrentUser, DbSession
 from app.core import device_token
+from app.core.config import settings
 from app.core.errors import AppError, Conflict, TooManyRequests, Unauthorized
 from app.core.rate_limit import account_subject, client_ip, device_subject, login_limiter
-from app.core.security import create_access_token, hash_password, verify_password, verify_password_and_update
+from app.core.security import hash_password, verify_password, verify_password_and_update
 from app.models import Membership, Organization, User
 from app.schemas.auth import (
     ChangePasswordRequest,
@@ -15,11 +16,14 @@ from app.schemas.auth import (
     MembershipSummary,
     MeResponse,
     RegisterRequest,
+    SessionResponse,
     TokenResponse,
     UpdateMeRequest,
     UserResponse,
 )
 from app.schemas.common import Message
+from app.services import account_emails, sessions
+from app.services.email import email_delivery_available
 
 router = APIRouter()
 
@@ -87,15 +91,65 @@ def login(payload: LoginRequest, request: Request, db: DbSession):
         login_limiter.record_failure(ip, subject)
         raise Unauthorized("Invalid email or password.")
     if new_hash:
-        # Stored with older, slower hashing parameters: upgrade it now.
+        # Stored with non-current hashing parameters: re-hash with the current ones.
         user.password_hash = new_hash
         db.commit()
 
     login_limiter.record_success(subject)
-    token, expires_in = create_access_token(subject=str(user.user_id))
+    issued = sessions.start(db, user)
+    return token_response(issued, device_token=device_token.issue(user.user_id))
+
+
+def token_response(issued: sessions.IssuedToken, device_token: str | None = None) -> TokenResponse:
     return TokenResponse(
-        access_token=token, expires_in=expires_in, device_token=device_token.issue(user.user_id)
+        access_token=issued.token,
+        expires_in=issued.expires_in,
+        device_token=device_token,
+        idle_timeout_seconds=int(sessions.idle_timeout().total_seconds()),
+        session_expires_at=issued.session.expires_at,
     )
+
+
+@router.get("/capabilities")
+def capabilities():
+    """What works on this server right now (public). Email delivery is
+    temporarily disabled, so the features that need it say so."""
+    email = email_delivery_available()
+    return {
+        "email_delivery": email,
+        "email_verification_required": settings.email_verification_required,
+        "password_reset": email,
+        "invitation_emails": email,
+    }
+
+
+@router.post("/session/activity", response_model=TokenResponse)
+def session_activity(auth: CurrentAuth, db: DbSession):
+    """Called by the page when the user is actually active (clicks, typing,
+    navigation), at most about once a minute; never by background refreshes.
+    Moves the session's inactivity clock and returns a fresh access token for
+    the same session."""
+    return token_response(sessions.renew(db, auth.session))
+
+
+@router.get("/session", response_model=SessionResponse)
+def session_status(auth: CurrentAuth):
+    """The current session's limits. Reading it is not activity."""
+    s = auth.session
+    return SessionResponse(
+        idle_timeout_seconds=int(sessions.idle_timeout().total_seconds()),
+        last_activity_at=s.last_activity_at,
+        idle_expires_at=s.last_activity_at + sessions.idle_timeout(),
+        expires_at=s.expires_at,
+    )
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(auth: CurrentAuth, db: DbSession):
+    """End this session only. The access token stops working immediately.
+    Other sessions, memberships, roles and organizations are unchanged."""
+    sessions.revoke(db, auth.session, "signed_out")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 def _me(db, user: User) -> MeResponse:
@@ -138,10 +192,15 @@ def update_me(payload: UpdateMeRequest, user: CurrentUser, db: DbSession):
 
 
 @router.post("/me/password", response_model=Message)
-def change_password(payload: ChangePasswordRequest, user: CurrentUser, db: DbSession):
+def change_password(payload: ChangePasswordRequest, auth: CurrentAuth, db: DbSession, background: BackgroundTasks):
+    """Change the password. Every other session of this account is signed out
+    (this one stays), and a confirmation email is sent."""
+    user = auth.user
     if not verify_password(payload.current_password, user.password_hash):
         # 400, not 401: the session is valid, only the confirmation failed.
         raise AppError("Current password is incorrect.")
     user.password_hash = hash_password(payload.new_password)
+    sessions.revoke_all(db, user.user_id, "password_changed", keep=auth.session.session_id)
     db.commit()
+    background.add_task(account_emails.send_password_changed, user.user_id)
     return Message(detail="Password updated.")

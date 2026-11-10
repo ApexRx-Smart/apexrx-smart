@@ -9,7 +9,7 @@
       motion_pause:'Pause image motion', motion_resume:'Resume image motion',
       community_tag:'Closer to care.', community_caption:'Connecting people, pharmacies and possibilities.', how_map_label:'One city. A connected medicine network.', footer_invite:'Better access starts with connection.', footer_connect:'Connect with us ↗',
       nav_patients:'For Patients', nav_pharmacies:'For Pharmacies', nav_suppliers:'For Suppliers', nav_how:'How it works', nav_about:'About',
-      btn_signin:'Sign in', btn_start:'Get started',
+      btn_signin:'Sign in', btn_start:'Get started', btn_signout:'Sign out', signed_in_as:'Signed in as',
       h1_pre:'Find the medicines you need in ', h1_accent:'Kigali.',
       hero_lede:'Real-time information from pharmacies across Kigali, helping you access the right medicines, faster and easier.',
       hero_search_ph:'Search for a medicine, e.g. Amoxicillin 500mg',
@@ -53,7 +53,7 @@
       motion_pause:'Mettre les images en pause', motion_resume:'Animer les images',
       community_tag:'Plus près des soins.', community_caption:'Relier les habitants, les pharmacies et les possibilités.', how_map_label:'Une ville. Un réseau de pharmacies connecté.', footer_invite:'Un meilleur accès commence par un lien.', footer_connect:'Restons en contact ↗',
       nav_patients:'Patients', nav_pharmacies:'Pharmacies', nav_suppliers:'Fournisseurs', nav_how:'Comment ça marche', nav_about:'À propos',
-      btn_signin:'Se connecter', btn_start:'Commencer',
+      btn_signin:'Se connecter', btn_start:'Commencer', btn_signout:'Se déconnecter', signed_in_as:'Connecté en tant que',
       h1_pre:'Trouvez les médicaments dont vous avez besoin à ', h1_accent:'Kigali.',
       hero_lede:'Des informations en temps réel venant des pharmacies de Kigali, pour accéder plus vite et plus facilement aux bons médicaments.',
       hero_search_ph:'Recherchez un médicament, ex. Amoxicilline 500mg',
@@ -98,7 +98,7 @@
       motion_pause:'Hagarika amashusho', motion_resume:'Komeza amashusho',
       community_tag:'Hafi y’ubuvuzi.', community_caption:'Guhuza abantu na farumasi.', how_map_label:'Umujyi umwe. Farumasi zihujwe.', footer_invite:'Guhuzwa bituma kubona imiti byoroha.', footer_connect:'Tuvugishe ↗',
       nav_patients:'Abarwayi', nav_pharmacies:'Farumasi', nav_suppliers:'Abatanga imiti', nav_how:'Uko bikora', nav_about:'Abo turi bo',
-      btn_signin:'Injira', btn_start:'Tangira',
+      btn_signin:'Injira', btn_start:'Tangira', btn_signout:'Sohoka', signed_in_as:'Winjiye nka',
       h1_pre:'Shaka imiti ukeneye i ', h1_accent:'Kigali.',
       hero_lede:'Amakuru y’ako kanya aturuka muri farumasi zo muri Kigali, agufasha kubona imiti ikwiye vuba kandi byoroshye.',
       hero_search_ph:'Shakisha umuti, urugero: Amoxicillin 500mg',
@@ -162,11 +162,41 @@
   // Entering an existing account's email and password there signs you in.
   function openAccountFlow(hash){ location.href = 'pharmacies.html?lang=' + encodeURIComponent(lang) + hash; }
   ['signInBtn','signInBtnMobile'].forEach(function(id){
-    document.getElementById(id).addEventListener('click', function(){ openAccountFlow('#signin'); });
+    document.getElementById(id).addEventListener('click', function(){
+      openAccountFlow(window.ApexAPI && ApexAPI.session.isSignedIn() ? '' : '#signin');
+    });
   });
   ['getStartedBtn','getStartedBtnMobile'].forEach(function(id){
-    document.getElementById(id).addEventListener('click', function(){ openAccountFlow(''); });
+    document.getElementById(id).addEventListener('click', function(){
+      // Signed in: this button signs out (only this session; see js/api.js).
+      if (window.ApexAPI && ApexAPI.session.isSignedIn()) { ApexAPI.auth.logout(); return; }
+      openAccountFlow('');
+    });
   });
+  // When this tab is signed in, the header says who it is: "Sign in" becomes
+  // the account (opening the workspace) and "Get started" becomes "Sign out".
+  function paintAccountButtons(){
+    var api = window.ApexAPI, email = api && api.session.isSignedIn() && api.session.email();
+    var signedIn = !!(api && api.session.isSignedIn());
+    ['signInBtn','signInBtnMobile'].forEach(function(id){
+      var b = document.getElementById(id);
+      if (signedIn) {
+        b.removeAttribute('data-i18n');
+        b.textContent = email || t('signed_in_as');
+        b.title = t('signed_in_as') + ' ' + (email || '');
+        b.classList.add('signed-in-chip');
+      } else {
+        b.setAttribute('data-i18n', 'btn_signin'); b.textContent = t('btn_signin'); b.removeAttribute('title');
+        b.classList.remove('signed-in-chip');
+      }
+    });
+    ['getStartedBtn','getStartedBtnMobile'].forEach(function(id){
+      var b = document.getElementById(id);
+      b.setAttribute('data-i18n', signedIn ? 'btn_signout' : 'btn_start');
+      b.textContent = t(signedIn ? 'btn_signout' : 'btn_start');
+    });
+  }
+  window.addEventListener('apexrx:signed-out', function(){ paintAccountButtons(); toast(t('btn_signout') + ' ✓'); });
 
   /* ================= STAT COUNTERS ================= */
   var counters = document.querySelectorAll('.num[data-count]');
@@ -402,6 +432,7 @@
       var raw = a.getAttribute('href'), hash = raw.indexOf('#') === -1 ? '' : raw.slice(raw.indexOf('#'));
       a.setAttribute('href', raw.split(/[?#]/)[0] + '?lang=' + encodeURIComponent(lang) + hash);
     });
+    paintAccountButtons();
   }
   var langSelect = document.getElementById('langSelect');
   var saved = 'en';
