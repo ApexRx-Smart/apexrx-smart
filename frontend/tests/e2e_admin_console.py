@@ -1,4 +1,4 @@
-"""End-to-end check of the admin console sections (frontend/admin.html):
+"""End-to-end check of the admin console sections (frontend/ops-console-7f3k9q.html):
 Overview, Documents, Users, Catalogue (drugs and products) and Search
 insights, against a LOCAL backend and a throwaway database.
 
@@ -171,7 +171,7 @@ def main():
         page.on("dialog", on_dialog)
 
         # ---- 1. Access: a regular account cannot open the console.
-        page.goto(SITE + "/admin.html")
+        page.goto(SITE + "/ops-console-7f3k9q.html")
         page.fill("#login-form [name=email]", f"console-target-{RUN}@example.com")
         page.fill("#login-form [name=password]", PASSWORD)
         page.click("#login-button")
@@ -182,7 +182,7 @@ def main():
         page.fill("#login-form [name=password]", ADMIN_PASSWORD)
         page.click("#login-button")
         page.wait_for_selector("[data-panel=overview]:not([hidden])")
-        check("1. an admin lands on the Overview", page.url.endswith("/admin.html") or page.url.endswith("#overview"))
+        check("1. an admin lands on the Overview", page.url.endswith("/ops-console-7f3k9q.html") or page.url.endswith("#overview"))
 
         # ---- 2. Overview numbers come from the backend.
         page.wait_for_function("!['–', '…'].includes(document.querySelector('[data-overview=docs_pending]').textContent)")

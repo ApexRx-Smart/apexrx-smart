@@ -31,7 +31,7 @@ The backend address is set in `js/config.js` (`window.APEX_CONFIG.API_BASE_URL`)
 | `verify-email.html` | Opened from the verification email; sends the link's token to `POST /auth/email/verify` (`js/verify-email.js`) |
 | `accept-invitation.html` | Opened from a staff invitation: set up your own account, or sign in, and join (`js/accept-invitation.js`) |
 | `reset-password.html` | "Forgot password?": says it is temporarily unavailable while email is disabled (`GET /auth/capabilities`); the reset form works again once email returns (`js/reset-password.js`) |
-| `admin.html` | Admin console (staff only) |
+| `ops-console-7f3k9q.html` | Admin console (staff only). Not linked from any public page; open the URL directly |
 
 - **Shared header and footer:** `js/site-layout.js` provides them for `index.html`, `how-it-works.html`, `about.html` and `legal.html`, so the navigation is defined once.
   - Each page includes it twice: `data-part="header"` and `data-part="footer"`. It renders in place, before `js/script.js`.
@@ -42,8 +42,8 @@ The backend address is set in `js/config.js` (`window.APEX_CONFIG.API_BASE_URL`)
   - Product: For Patients goes to `index.html#hero-search` (`#hero-search` on the landing page itself). The others go to the registration pages and How it works.
   - Company: all four links go to `about.html` for now.
   - Legal: the three legal pages.
-  - Admin Portal: bottom left, next to the copyright.
-- **Show/hide password:** `js/password-toggle.js` adds an eye button to every password field on `pharmacies.html`, `suppliers.html` and `admin.html`.
+  - There is no admin link: the admin console is never linked from the public site.
+- **Show/hide password:** `js/password-toggle.js` adds an eye button to every password field on `pharmacies.html`, `suppliers.html` and `ops-console-7f3k9q.html`.
   - It has a "Show password" / "Hide password" label (English, French, Kinyarwanda) and `aria-pressed`, and works from the keyboard.
   - Fields go back to hidden when their form is submitted.
 - **Sign in or create account:** both registration pages have an "Already have an account? Sign in" switch on their first step, and `#signin` opens it directly; the homepage **Sign in** button uses `pharmacies.html#signin`.
@@ -103,7 +103,7 @@ Owners manage everyone else; managers manage staff only; staff update quantities
 - **Plans and payments.** The card says "Not live yet. ApexRX takes no payments and has no paid plans yet."
 - **In-app chat.** Conversations are built from orders; messages go through WhatsApp.
 
-### Admin dashboard (`admin.html`)
+### Admin dashboard (`ops-console-7f3k9q.html`)
 
 | Control | Endpoint |
 |---|---|
