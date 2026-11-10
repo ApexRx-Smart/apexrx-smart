@@ -21,7 +21,7 @@
  *   3 Documents -> POST .../documents for each selected file.
  *   4 Review    -> the organization's real status, review notes, details and
  *                  documents; upload more, resubmit after a rejection.
- *                  Pharmacies continue to their workspace (js/pharmacies.js).
+ *                  Then the dashboard opens (pharmacy-dashboard.html or supplier-dashboard.html).
  *
  * There is no payment or subscription step. Phone numbers are contact details,
  * never used to verify anyone.
@@ -96,7 +96,7 @@
   <button class="primary" id="account-submit">Create account <span>→</span></button>
   <p class="auth-switch"><span id="auth-switch-text">Already have an account?</span> <button type="button" class="text-button" id="auth-switch">Sign in</button></p>
   <p class="role-hint" id="other-hint">${T.otherHint} <a href="${T.otherHref}">${T.otherLink}</a></p>
-  ${ROLE === 'pharmacy' ? '<button type="button" class="text-button" id="explore">Just exploring? Preview the workspace ↗</button>' : ''}
+  <button type="button" class="text-button" id="explore">Just exploring? Preview the workspace ↗</button>
 </form>
 
 <form id="verify-email" class="step-form" hidden novalidate>
@@ -157,7 +157,7 @@
     <button type="button" class="secondary" id="review-edit">Edit details</button>
     <button type="button" class="secondary" id="review-refresh">Check status</button>
     <button type="button" class="secondary" id="review-resubmit" hidden>Resubmit for review</button>
-    ${ROLE === 'pharmacy' ? '<button type="button" class="primary" id="open-workspace">Open your workspace →</button>' : ''}
+    <button type="button" class="primary" id="open-workspace">Open your workspace →</button>
   </div>
 </div>
 
@@ -328,7 +328,7 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     const mine = myMemberships(reg.me);
     if (ROLE === 'pharmacy' && mine.length > 1 && !opts.review && (opts.choose || !savedChoice())) return showOrgChoice(mine);
     if (canManage() && !reg.location) return showDetails();
-    if (ROLE === 'pharmacy' && !opts.review) {
+    if (!opts.review) {
       const needsDocuments = canManage() && !reg.documents.length && ['pending', 'rejected'].includes(reg.org.status);
       if (!needsDocuments) return openWorkspace();
     }
@@ -362,13 +362,17 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     const link = $('#account-panel-link'); link.textContent = linkText; link.href = href;
   }
 
-  async function openWorkspace() {
-    if (!window.ApexPharmacyWorkspace) return showReview();
-    await window.ApexPharmacyWorkspace.open();
+  // The dashboard (pharmacy-dashboard.html or supplier-dashboard.html) opens on
+  // the organization remembered for this tab.
+  function openWorkspace() {
+    if (reg && reg.membership) remember(reg.membership.organization_id);
+    location.href = `${ROLE}-dashboard.html`;
   }
 
   /* -------------------------------------------------------- step 0: account */
-  let authMode = (location.hash === '#signin' || location.hash === '#staff') ? 'signin' : 'create';
+  // Read before the sign-in tabs rewrite the hash.
+  const WANTS_REVIEW = location.hash === '#review';
+  let authMode = (location.hash === '#signin' || location.hash === '#staff' || WANTS_REVIEW) ? 'signin' : 'create';
   const AUTH_TEXT = {
     create: { title: T.createTitle, description: T.createDesc, submit: 'Create account', note: 'Your account is created on ApexRX Smart.', switchText: 'Already have an account?', switchButton: 'Sign in' },
     signin: ROLE === 'pharmacy'
@@ -457,7 +461,8 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
   });
 
   const explore = $('#explore');
-  if (explore) explore.addEventListener('click', () => { if (window.ApexPharmacyWorkspace) window.ApexPharmacyWorkspace.preview(); });
+  // Sample data in the browser only; the dashboard labels it as a preview.
+  if (explore) explore.addEventListener('click', () => { location.href = `${ROLE}-dashboard.html?preview=1`; });
 
   /* --------------------------------------------- step 1: verify the email */
   const emailState = { status: null, resendAt: 0, timer: null, autoSent: false, lastCheck: 0 };
@@ -997,14 +1002,19 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     show(0, false);
     if (authMode === 'signin') $('#account').elements.email.focus();
     loadPlaces(); // in the background, for the details step
+    // Sent back here by a dashboard after an inactivity or ended-session sign-out.
+    const signedOut = new URLSearchParams(location.search).get('signed_out');
+    if (signedOut) formError(signedOutText({ reason: signedOut }));
     if (!API || !API.session.isSignedIn()) return;
     // A session from this tab (a refresh, or another ApexRX page): continue it,
     // and show which account it is ("Signed in as … · Sign out").
-    try { await route(); } catch (err) {
+    // #review (from the dashboard's "Registration details"): the review step,
+    // where details are edited, documents uploaded and a rejection resubmitted.
+    try { await route({ review: WANTS_REVIEW }); } catch (err) {
       reg = null; paintSignedIn(); show(0, false);
       if (err.status !== 401) formError(errorText(err));
     }
   }
-  // After the page's other scripts (js/pharmacies.js registers the workspace).
+  // After the page's other scripts (language and motion helpers).
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else setTimeout(start);
 })();

@@ -60,8 +60,8 @@
     title(`You have joined ${result.organization_name}.`, `Your role: ${ROLES[result.role] || result.role}. From now on, sign in with your own email and password.`, true);
     only('#invite-actions');
     const link = $('#invite-continue');
-    link.href = result.organization_type === 'supplier' ? 'suppliers.html' : 'pharmacies.html';
-    link.firstChild.nodeValue = (result.organization_type === 'supplier' ? 'Open your supplier registration' : 'Open your pharmacy workspace') + ' ';
+    link.href = result.organization_type === 'supplier' ? 'supplier-dashboard.html' : 'pharmacy-dashboard.html';
+    link.firstChild.nodeValue = (result.organization_type === 'supplier' ? 'Open your supplier dashboard' : 'Open your pharmacy dashboard') + ' ';
   }
 
   async function accept() {
