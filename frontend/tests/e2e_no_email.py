@@ -74,6 +74,11 @@ def watch(page, errors):
         x in m.text for x in ("status of 400", "status of 401", "status of 409", "status of 503", "Permissions policy")) else None)
 
 
+def on_dashboard(page, timeout=30000):
+    page.wait_for_url("**/*-dashboard.html*", timeout=timeout)
+    page.wait_for_selector(".nav[aria-current=page]", timeout=timeout)
+
+
 def visible(page, selector, timeout=20000):
     page.wait_for_selector(f"{selector}:not([hidden])", timeout=timeout)
 
@@ -134,15 +139,16 @@ def main():
 
         # ===================================== invitations shared as links
         page.click("#open-workspace")
-        visible(page, "#dashboard")
-        page.click(".sidebar [data-view=employees]")
+        on_dashboard(page)
+        page.click(".nav[data-v=set]")
         page.wait_for_selector("#invite-form")
+        wait_text(page, "#invite-help", "Email is temporarily unavailable")
         check("invitations: the form says email is unavailable and offers a link instead",
               "Email is temporarily unavailable" in page.inner_text("#invite-form")
-              and page.inner_text("#invite-form button.primary-sm") == "Create invitation link")
+              and page.inner_text("#invite-submit") == "Create invitation link")
         staff_email = f"ne-staff-{RUN}@example.com"
         page.fill("#invite-form [name=email]", staff_email)
-        page.click("#invite-form button.primary-sm")
+        page.click("#invite-submit")
         page.wait_for_selector("#invite-link")
         link = page.input_value("#invite-link")
         check("invitations: the owner gets a single-use link, not a claim that an email was sent",
@@ -161,9 +167,9 @@ def main():
         staff.click("#new-account-submit")
         visible(staff, "#invite-actions")
         staff.click("#invite-continue")
-        visible(staff, "#dashboard")
+        on_dashboard(staff)
         check("invitations: the employee joins with their own account and the Staff role",
-              name in staff.inner_text("#pharmacy-name") and staff.inner_text("#dash-user") == f"{staff_email} · Staff")
+              name in staff.inner_text("#me-name") and staff.inner_text("#dash-user") == f"{staff_email} · Staff")
         staff_token = staff.evaluate("JSON.parse(sessionStorage.getItem('apexrx_session')).token")
         me = call("GET", "/auth/me", token=staff_token)[1]
         check("invitations: joining by a shared link does not mark the address verified", me["email_verified"] is False)
@@ -179,7 +185,7 @@ def main():
         # New link replaces the old one.
         second_email = f"ne-second-{RUN}@example.com"
         page.fill("#invite-form [name=email]", second_email)
-        page.click("#invite-form button.primary-sm")
+        page.click("#invite-submit")
         page.wait_for_function(f"document.querySelector('#invite-link')?.value && document.querySelector('#invite-status').textContent.includes('{second_email}')")
         old_link = page.input_value("#invite-link")
         page.click(f"tr[data-invite='{second_email}'] button:has-text('New link')")
