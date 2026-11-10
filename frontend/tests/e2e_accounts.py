@@ -1,7 +1,7 @@
 """End-to-end check of accounts, staff access and sessions, against LOCAL
 backends and a throwaway database:
 
-  * sign-out from the workspace ends the server session, other people are not
+  * sign-out from the dashboard ends the server session, other people are not
     affected, back navigation shows nothing private, the public site shows who
     is signed in, signing in again and switching accounts work;
   * staff invitations from the workspace: a new employee sets up their own
@@ -132,12 +132,25 @@ def refused(token, api=API, seconds=5):
     return False
 
 
+def on_dashboard(page, timeout=30000):
+    """The signed-in user is on their dashboard (pharmacy-dashboard.html)."""
+    page.wait_for_url("**/*-dashboard.html*", timeout=timeout)
+    page.wait_for_selector(".nav[aria-current=page]", timeout=timeout)
+
+
+def is_dashboard(page):
+    return "-dashboard.html" in page.url
+
+
 def staff_sign_in(page, email, password=PW):
     page.goto("about:blank")  # a fresh load (a hash change alone would not reload the page)
     page.goto(SITE + "/pharmacies.html#staff")
-    page.wait_for_selector("#account:not([hidden]), #dashboard:not([hidden])")
-    if page.is_visible("#dashboard"):
-        page.click("#dash-signout")
+    # A signed-in tab goes straight on to its dashboard: sign out there first.
+    page.wait_for_function("location.pathname.endsWith('-dashboard.html') || !!document.querySelector('#account:not([hidden])')")
+    if is_dashboard(page):
+        page.wait_for_selector("#out")
+        page.click("#out")
+        page.wait_for_url("**/pharmacies.html*")
         page.wait_for_selector("#account:not([hidden])")
     if page.get_attribute("#tab-signin", "aria-selected") != "true":
         page.click("#tab-signin")
@@ -147,8 +160,9 @@ def staff_sign_in(page, email, password=PW):
 
 
 def open_employees(page):
-    page.click(".sidebar [data-view=employees]")
+    page.click(".nav[data-v=set]")
     page.wait_for_selector("#invite-form", timeout=20000)
+    page.wait_for_function("!document.querySelector('#invites').textContent.includes('Loading')")
 
 
 def main():
@@ -166,17 +180,17 @@ def main():
         page = ctx.new_page()
         watch(page, errors)
         staff_sign_in(page, owner_email)
-        visible(page, "#dashboard")
+        on_dashboard(page)
         check("sign in: the owner reaches the workspace, identity shown",
-              f"Accounts Pharmacy {RUN}" in page.inner_text("#pharmacy-name")
-              and page.inner_text("#dash-user") == f"{owner_email} · Owner" and page.inner_text("#dash-signout") == "Sign out")
+              f"Accounts Pharmacy {RUN}" in page.inner_text("#me-name")
+              and page.inner_text("#dash-user") == f"{owner_email} · Owner" and page.inner_text("#out") == "Sign out")
         old_token = token_of(page)
         page.goto(SITE + "/index.html")
         page.wait_for_function("document.querySelector('#signInBtn').textContent.includes('@')")
         check("public site: the header shows who is signed in, and offers Sign out",
               page.inner_text("#signInBtn") == owner_email and page.inner_text("#getStartedBtn") == "Sign out")
         page.click("#signInBtn")
-        visible(page, "#dashboard")
+        on_dashboard(page)
         check("public site: the account button returns to the workspace", True)
         page.goto(SITE + "/index.html")
         page.click("#getStartedBtn")
@@ -187,16 +201,16 @@ def main():
         page.wait_for_load_state("load")
         visible(page, "#account")
         check("back button: the workspace is not shown again after signing out",
-              page.is_hidden("#dashboard") and f"Accounts Pharmacy {RUN}" not in page.inner_text("body"))
+              not is_dashboard(page) and f"Accounts Pharmacy {RUN}" not in page.inner_text("body"))
         page.goto(SITE + "/pharmacies.html")
-        check("protected page: visiting it again asks to sign in", page.is_visible("#account") and page.is_hidden("#dashboard"))
+        check("protected page: visiting it again asks to sign in", page.is_visible("#account") and not is_dashboard(page))
 
         # Sign in again, then sign out from the workspace button.
         staff_sign_in(page, owner_email)
-        visible(page, "#dashboard")
+        on_dashboard(page)
         second = token_of(page)
         other_session = login(owner_email)  # the same person on another device
-        page.click("#dash-signout")
+        page.click("#out")
         visible(page, "#account")
         check("workspace sign-out: back to sign in, this session ended on the server",
               refused(second) and token_of(page) is None)
@@ -206,10 +220,10 @@ def main():
 
         # Switching accounts on the same tab.
         staff_sign_in(page, other_email)
-        visible(page, "#dashboard")
+        on_dashboard(page)
         check("switching accounts: the second account sees only its own pharmacy",
-              f"Other Pharmacy {RUN}" in page.inner_text("#pharmacy-name") and page.inner_text("#dash-user").startswith(other_email))
-        page.click("#dash-signout")
+              f"Other Pharmacy {RUN}" in page.inner_text("#me-name") and page.inner_text("#dash-user").startswith(other_email))
+        page.click("#out")
         visible(page, "#account")
         ctx.close()
 
@@ -218,12 +232,12 @@ def main():
         page = ctx.new_page()
         watch(page, errors)
         staff_sign_in(page, owner_email)
-        visible(page, "#dashboard")
+        on_dashboard(page)
         open_employees(page)
         new_email = f"acc-newstaff-{RUN}@example.com"
         page.fill("#invite-form [name=email]", new_email)
         page.select_option("#invite-form [name=role]", "staff")
-        page.click("#invite-form button.primary-sm")
+        page.click("#invite-submit")
         wait_text(page, "#invite-status", f"Invitation emailed to {new_email}")
         check("invite: an employee without an account is invited by email and role",
               "Pending" in page.inner_text(f"tr[data-invite='{new_email}']") and "Email sent" in page.inner_text(f"tr[data-invite='{new_email}']"))
@@ -251,11 +265,11 @@ def main():
         visible(inv, "#invite-actions")
         check("accept: the account is created and joined", f"You have joined Accounts Pharmacy {RUN}." == inv.inner_text("#invite-title"))
         inv.click("#invite-continue")
-        visible(inv, "#dashboard")
+        on_dashboard(inv)
         check("staff: opens the right pharmacy with the Staff role, without registering a pharmacy",
-              f"Accounts Pharmacy {RUN}" in inv.inner_text("#pharmacy-name") and inv.inner_text("#dash-user") == f"{new_email} · Staff")
-        inv.click(".sidebar [data-view=employees]")
-        wait_text(inv, "#workspace-section", "Only owners and managers can invite")
+              f"Accounts Pharmacy {RUN}" in inv.inner_text("#me-name") and inv.inner_text("#dash-user") == f"{new_email} · Staff")
+        inv.click(".nav[data-v=set]")
+        wait_text(inv, "#view", "Only owners and managers can invite")
         check("staff: cannot invite employees", inv.locator("#invite-form").count() == 0)
         staff_token = token_of(inv)
         check("staff: the backend refuses invitations and other pharmacies",
@@ -263,30 +277,30 @@ def main():
               and call("GET", f"/organizations/{other_org}", token=staff_token)[0] == 404)
         inv.evaluate(f"sessionStorage.setItem('apexrx_selected_pharmacy', '{other_org}')")
         inv.reload()
-        visible(inv, "#dashboard")
+        on_dashboard(inv)
         check("staff: changing the stored pharmacy id in the browser does not open another pharmacy",
-              f"Other Pharmacy {RUN}" not in inv.inner_text("#pharmacy-name"))
-        inv.click("#dash-signout")
+              f"Other Pharmacy {RUN}" not in inv.inner_text("#me-name"))
+        inv.click("#out")
         visible(inv, "#account")
         staff_sign_in(inv, new_email)
-        visible(inv, "#dashboard")
+        on_dashboard(inv)
         check("staff sign-in: the employee signs in on their own and reaches the workspace", True)
         inv.goto(link)
         inv.wait_for_function("document.querySelector('#invite-title').textContent.includes('already been accepted')")
         check("accept: the invitation link works only once", True)
         invitee_ctx.close()
         page.reload()
-        visible(page, "#dashboard")
+        on_dashboard(page)
         open_employees(page)
         wait_text(page, f"tr[data-invite='{new_email}']", "Accepted")
         check("invitations: the owner sees it accepted with a new account",
               "new account" in page.inner_text(f"tr[data-invite='{new_email}']")
-              and new_email in page.inner_text("#workspace-section table"))
+              and new_email in page.inner_text("#team"))
 
         # ======================================= invitations (existing account)
         page.fill("#invite-form [name=email]", other_email)
         page.select_option("#invite-form [name=role]", "manager")
-        page.click("#invite-form button.primary-sm")
+        page.click("#invite-submit")
         wait_text(page, "#invite-status", "Invitation emailed")
         link = mail_to(other_email)["link"]
         existing_ctx = context(browser)
@@ -294,7 +308,7 @@ def main():
         watch(ex, errors)
         # Signed in as someone else first: refused.
         staff_sign_in(ex, new_email)
-        visible(ex, "#dashboard")
+        on_dashboard(ex)
         ex.goto(link)
         visible(ex, "#signed-in")
         check("accept: a different signed-in account cannot accept it",
@@ -323,11 +337,13 @@ def main():
               sorted(choices) == sorted([f"Accounts Pharmacy {RUN}", f"Other Pharmacy {RUN}"])
               and "Manager" in multi.inner_text("#org-choice-list") and "Owner" in multi.inner_text("#org-choice-list"))
         multi.click(f"#org-choice-list button[data-org='{org}']")
-        visible(multi, "#dashboard")
+        on_dashboard(multi)
         check("several pharmacies: the chosen pharmacy opens with that role",
-              f"Accounts Pharmacy {RUN}" in multi.inner_text("#pharmacy-name") and multi.inner_text("#dash-user").endswith("Manager"))
-        multi.select_option("#org-switch", str(other_org))
-        multi.wait_for_function(f"document.querySelector('#pharmacy-name').textContent.includes('Other Pharmacy {RUN}')")
+              f"Accounts Pharmacy {RUN}" in multi.inner_text("#me-name") and multi.inner_text("#dash-user").endswith("Manager"))
+        with multi.expect_navigation():
+            multi.select_option("#org", f"pharmacy:{other_org}")
+        on_dashboard(multi)
+        wait_text(multi, "#me-name", f"Other Pharmacy {RUN}")
         check("several pharmacies: switching without signing out loads the other role",
               multi.inner_text("#dash-user").endswith("Owner"))
         ctx2.close()
@@ -336,11 +352,11 @@ def main():
         revoke_email, resend_email = f"acc-revoke-{RUN}@example.com", f"acc-resend-{RUN}@example.com"
         for email in (revoke_email, resend_email):
             page.fill("#invite-form [name=email]", email)
-            page.click("#invite-form button.primary-sm")
+            page.click("#invite-submit")
             wait_text(page, "#invite-status", f"Invitation emailed to {email}")
         revoke_link = mail_to(revoke_email)["link"]
-        page.once("dialog", lambda d: d.accept())
         page.click(f"tr[data-invite='{revoke_email}'] button:has-text('Revoke')")
+        page.click("#dlg[open] button.solid")  # the page's own confirmation
         wait_text(page, f"tr[data-invite='{revoke_email}']", "Revoked")
         first_link = mail_to(resend_email)["link"]
         time.sleep(2.5)  # INVITATION_RESEND_COOLDOWN_SECONDS=2 on the test backend
@@ -392,7 +408,7 @@ def main():
         page.wait_for_function("document.querySelector('#reset-title').textContent.includes('already been used')")
         check("reset: the link works only once", True)
         staff_sign_in(page, new_email, "Brand-New-Pass-77")
-        visible(page, "#dashboard")
+        on_dashboard(page)
         check("reset: membership and role are unchanged", page.inner_text("#dash-user") == f"{new_email} · Staff")
         ctx.close()
 
@@ -401,12 +417,12 @@ def main():
         a = ctx.new_page()
         watch(a, errors)
         staff_sign_in(a, owner_email)
-        visible(a, "#dashboard")
+        on_dashboard(a)
         with ctx.expect_page() as opened:
             a.evaluate("window.open('pharmacies.html', '_blank')")
         b = opened.value
         watch(b, errors)
-        visible(b, "#dashboard")
+        on_dashboard(b)
         check("tabs: a second tab of the same session opens the workspace",
               b.evaluate("JSON.parse(sessionStorage.getItem('apexrx_session')).sid") == a.evaluate("JSON.parse(sessionStorage.getItem('apexrx_session')).sid"))
         b_token = token_of(b)
@@ -417,7 +433,7 @@ def main():
             a.keyboard.press("Shift")  # real input: a keydown
             time.sleep(10)
         check("tabs: activity in one tab keeps the other tab signed in",
-              b.is_visible("#dashboard") and token_of(b) is not None)
+              is_dashboard(b) and token_of(b) is not None)
         check("server: the session is still valid after more than the limit thanks to activity",
               call("GET", "/auth/me", token=b_token, api=IDLE_API)[0] == 200)
         # No more user activity; background requests every 10 s must not help.
@@ -430,7 +446,10 @@ def main():
         check("warning: 'Stay signed in' in one tab continues the session in both", b.locator("#apex-idle-warning").count() == 0)
         idle_start = time.time()
         while not a.is_visible("#account") and time.time() - idle_start < 100:
-            b.evaluate("ApexAPI.auth.me().catch(() => {})")  # automated, not activity
+            try:  # automated, not activity (the tab may be navigating to sign-in by now)
+                b.evaluate("window.ApexAPI && ApexAPI.session.isSignedIn() && ApexAPI.auth.me().catch(() => {})")
+            except Exception:
+                pass
             time.sleep(10)
         elapsed = time.time() - idle_start
         visible(a, "#account", timeout=5000)
@@ -443,12 +462,12 @@ def main():
         check("inactivity: the server refuses the old token", status == 401, body)
         # Manual sign-out in one tab signs out the other.
         staff_sign_in(a, owner_email)
-        visible(a, "#dashboard")
+        on_dashboard(a)
         with ctx.expect_page() as opened:
             a.evaluate("window.open('pharmacies.html', '_blank')")
         c = opened.value
-        visible(c, "#dashboard")
-        a.click("#dash-signout")
+        on_dashboard(c)
+        a.click("#out")
         visible(c, "#account", timeout=10000)
         check("tabs: signing out in one tab signs out the other", "another tab" in c.inner_text("#form-error"))
         ctx.close()

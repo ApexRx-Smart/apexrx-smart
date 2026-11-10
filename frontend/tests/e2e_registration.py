@@ -107,6 +107,11 @@ def session_token(page):
     return page.evaluate("JSON.parse(sessionStorage.getItem('apexrx_session')).token")
 
 
+def on_dashboard(page, timeout=30000):
+    page.wait_for_url("**/*-dashboard.html*", timeout=timeout)
+    page.wait_for_selector(".nav[aria-current=page]", timeout=timeout)
+
+
 def visible(page, selector, timeout=20000):
     page.wait_for_selector(f"{selector}:not([hidden])", timeout=timeout)
 
@@ -302,14 +307,19 @@ def main():
         check("authorization: another account cannot read the new pharmacy", status == 404)
 
         page.click("#open-workspace")
-        visible(page, "#dashboard")
-        check("workspace: opens after registration, with the real status and no plan card",
-              name in page.inner_text("#pharmacy-name") and "Pending review" in page.inner_text("#status-card")
-              and "RWF" not in page.inner_text("#dashboard"))
-        page.click(".sidebar [data-view=profile]")
+        on_dashboard(page)
+        check("dashboard: opens after registration, with the real status and no plan price",
+              name in page.inner_text("#me-name") and "Pending verification" in page.inner_text("#ver")
+              and "awaiting verification" in page.inner_text(".banner") and "/ month" not in page.inner_text("#view")
+              and "not live yet" in page.inner_text("#plan-card").lower())
+        page.click(".nav[data-v=set]")
+        page.wait_for_function("!document.querySelector('#docs').textContent.includes('Loading')")
+        check("dashboard: the uploaded documents are listed with their status",
+              f"pharmacy-license-{RUN}.pdf" in page.inner_text("#docs") and "Pending verification" in page.inner_text("#docs"))
         page.click("#open-registration")
+        page.wait_for_url("**/pharmacies.html*")
         visible(page, "#review")
-        check("workspace: 'Registration and documents' leads back to the review", page.is_hidden("#dashboard"))
+        check("dashboard: 'Registration details' leads back to the review", page.inner_text("#review-status") == "Pending review")
         ctx.close()
 
         # Signing in again: a complete pharmacy goes to the workspace.
@@ -318,8 +328,8 @@ def main():
         watch(page, errors)
         page.goto(SITE + "/pharmacies.html#signin")
         fill_account(page, email, confirm=False)
-        visible(page, "#dashboard")
-        check("sign in: a registered pharmacy opens its workspace", name in page.inner_text("#pharmacy-name"))
+        on_dashboard(page)
+        check("sign in: a registered pharmacy opens its dashboard", name in page.inner_text("#me-name"))
         ctx.close()
 
         # ================================== verification link problems, resend
@@ -489,8 +499,9 @@ def main():
         visible(page, "#account")
         check("supplier: sign out returns to sign in", page.inner_text("#form-error") == "")
         fill_account(page, supplier_email, confirm=False)
-        visible(page, "#review")
-        check("sign in: an existing supplier sees their registration", supplier in page.inner_text("#review-name"))
+        on_dashboard(page)
+        check("sign in: an existing supplier opens the supplier dashboard",
+              page.url.split("?")[0].endswith("/supplier-dashboard.html") and supplier in page.inner_text("#me-name"))
         ctx.close()
 
         # A supplier who signs in on the pharmacy page is pointed to the supplier page.
@@ -503,8 +514,9 @@ def main():
         check("sign in: a supplier on the pharmacy page is not asked to register a pharmacy",
               "belongs to a supplier" in page.inner_text("#account-panel-text") and page.is_hidden("#verify-email"))
         page.click("#account-panel-link")
-        visible(page, "#review")
-        check("sign in: ...and continues on the supplier page, still signed in", supplier in page.inner_text("#review-name"))
+        on_dashboard(page)
+        check("sign in: ...and continues to the supplier dashboard, still signed in",
+              page.url.split("?")[0].endswith("/supplier-dashboard.html") and supplier in page.inner_text("#me-name"))
         ctx.close()
 
         # ======================================= translations and mobile layout

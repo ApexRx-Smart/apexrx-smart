@@ -94,7 +94,10 @@
   }
   // t: a TokenResponse. extra: fields kept from the current session (email, idle limit).
   function saveSession(t, extra) {
-    var prev = memorySession || {};
+    // A renewed token (no `extra`) keeps the stored fields even on a page that
+    // has not read the session yet (navigating between pages): otherwise the
+    // email would be lost. A sign-in (with `extra`) never inherits them.
+    var prev = memorySession || (extra ? {} : storedSession()) || {};
     var s = Object.assign({}, prev, extra || {}, {
       token: t.access_token,
       expiresAt: Date.now() + Math.max(0, (t.expires_in || 0) - 30) * 1000,
@@ -104,6 +107,9 @@
     try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(s)); } catch (e) { /* ignore */ }
     memorySession = s;
     return s;
+  }
+  function storedSession() {
+    try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { return null; }
   }
   function clearSession() {
     memorySession = null;
@@ -335,12 +341,14 @@
   }
 
   // Real user activity only. Called from input events, never from requests.
-  function markActivity() {
+  function markActivity(e) {
     if (!currentToken()) return;
     lastActivity = Date.now();
     var s = current();
     post2('activity', { sid: s && s.sid, at: lastActivity });
-    if (warningEl) hideWarning();
+    // Pressing "Stay signed in" itself: keep the warning until the button's own
+    // click (removing it on pointerdown would leave the click with no target).
+    if (warningEl && !(e && e.target && warningEl.contains(e.target))) hideWarning();
     reportActivity(false);
   }
   var reportTimer = null;
