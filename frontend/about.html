@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>About — ApexRX Smart</title>
-<meta name="description" content="ApexRX_Smart connects patients, pharmacies and suppliers in Kigali, so people can find the medicines they need faster.">
+<meta name="description" content="ApexRX_Smart gives patients, healthcare professionals, pharmacies and suppliers in Kigali better access to medicine availability information.">
 <meta name="theme-color" content="#0f1a3d">
 <link rel="icon" type="image/svg+xml" href="assets/logos/logo-mark.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -27,11 +27,14 @@
 -->
 <main id="top">
 
-<section class="page-hero">
+<section class="page-hero about-hero">
   <div class="wrap">
     <div class="eyebrow" data-i18n="nav_about">About</div>
     <h1 data-i18n="about_h1">About ApexRX_Smart</h1>
-    <p data-i18n="about_hero">Helping everyone in Kigali find the right medicine, at the right pharmacy, at the right time.</p>
+    <p data-i18n="about_hero">Better access to medicine information for everyone in the medicine chain: patients, healthcare professionals, pharmacies and suppliers.</p>
+    <ul class="hero-chips" aria-label="Who ApexRX_Smart serves">
+      <li><span data-i18n="about_chip1">Patients</span></li><li><span data-i18n="about_chip2">Healthcare professionals</span></li><li><span data-i18n="about_chip3">Pharmacies</span></li><li><span data-i18n="about_chip4">Suppliers</span></li>
+    </ul>
   </div>
 </section>
 
@@ -40,8 +43,8 @@
     <div>
       <div class="eyebrow" data-i18n="about_who">— Who we are</div>
       <h2 id="about-title" class="sr-only" data-i18n="about_h1">About ApexRX_Smart</h2>
-      <p data-i18n="about_p1">ApexRX_Smart is a digital healthcare platform that connects patients, pharmacies and suppliers in Kigali. It shows which pharmacies have a medicine in stock, so people can find what they need before they leave home.</p>
-      <p data-i18n="about_p2">For pharmacies, it is a simple workspace to keep stock up to date, compare supplier prices and order. For suppliers, it is a direct line to verified pharmacies that need their products.</p>
+      <p class="lead" data-i18n="about_p1">ApexRX_Smart is a digital healthcare platform built in Kigali. It shows where medicines are available, so that patients and the professionals who care for them can find a medicine quickly and reliably, close to home.</p>
+      <p data-i18n="about_p2">Behind every search, pharmacies keep their stock and prices up to date and source medicines from verified suppliers. ApexRX connects these links of the medicine chain without replacing the systems they already use.</p>
       <a class="btn btn-pill" href="how-it-works.html" data-i18n="nav_how">How it works</a>
     </div>
     <figure>
@@ -50,15 +53,64 @@
   </div>
 </section>
 
-<section class="about-section wrap" aria-labelledby="why-title">
-  <div class="section-head">
-    <div class="eyebrow" data-i18n="about_why">— Why ApexRX</div>
-    <h2 id="why-title" data-i18n="about_why_h">One search instead of many trips</h2>
+<section class="about-section wrap" aria-labelledby="matters-title">
+  <div class="matters">
+    <div class="eyebrow" data-i18n="about_matters">— Why it matters</div>
+    <h2 id="matters-title" data-i18n="about_matters_h">Finding a medicine should not be a guessing game</h2>
+    <p data-i18n="about_matters_p">Medicine availability is often hard to know. Patients, healthcare professionals, pharmacies and suppliers face delays, uncertainty and missed opportunities because information about where medicines are, and how to get them, is limited and scattered.</p>
   </div>
-  <div class="why-grid">
-    <article class="why-card"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/></svg></span><h3 data-i18n="about_w1_h">Patients</h3><p data-i18n="about_w1_p">Today, finding a medicine can mean going from one pharmacy to the next. ApexRX shows nearby pharmacies that have it, with the price and how recently the stock was confirmed.</p></article>
-    <article class="why-card"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l1.5-5.5A2 2 0 0 1 6.4 3h11.2a2 2 0 0 1 1.9 1.5L21 10"/><rect x="3" y="10" width="18" height="10" rx="1.5"/><path d="M9 15h6M12 12v6"/></svg></span><h3 data-i18n="about_w2_h">Pharmacies</h3><p data-i18n="about_w2_p">Pharmacies make their stock visible to patients, track batches and expiry dates, and compare prices from several suppliers in one place.</p></article>
-    <article class="why-card"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="10" rx="1.2"/><path d="M14 10h4l3.5 3.5V17h-7.5"/><circle cx="6" cy="19" r="1.8"/><circle cx="17.5" cy="19" r="1.8"/></svg></span><h3 data-i18n="about_w3_h">Suppliers</h3><p data-i18n="about_w3_p">Suppliers receive price requests from verified pharmacies, send offers and follow each order, instead of handling everything by phone.</p></article>
+</section>
+
+<section class="about-section wrap" id="who" aria-labelledby="for-title">
+  <div class="section-head">
+    <div class="eyebrow" data-i18n="about_for">— Who it’s for</div>
+    <h2 id="for-title" data-i18n="about_for_h">One platform for the whole medicine chain</h2>
+  </div>
+  <div class="role-grid">
+    <article class="role-card t-blue">
+      <div class="role-photo"><img src="assets/images/audience-patients.png" alt="Illustration: a patient uses her phone outside a Kigali pharmacy" loading="lazy" width="1536" height="1024"><span class="role-num">01</span></div>
+      <div class="role-body">
+        <h3 data-i18n="about_r1_h">Patients</h3>
+        <p class="role-lede" data-i18n="about_r1_p">Find out where your medicine is available before you leave home.</p>
+        <ul class="role-list"><li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span><span data-i18n="about_r1_1">Search a medicine by name, with no account</span></li><li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span><span data-i18n="about_r1_2">See nearby pharmacies: in stock, low stock or unavailable</span></li><li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span><span data-i18n="about_r1_3">Compare prices and distance, and see how fresh the information is</span></li></ul>
+        <a class="role-link" href="index.html#hero-search"><span data-i18n="about_r1_cta">Find a medicine</span> →</a>
+      </div>
+    </article>
+    <article class="role-card t-violet">
+      <div class="role-photo"><img src="assets/images/audience-professionals.png" alt="Illustration: a doctor consults a tablet with a patient" loading="lazy" width="1536" height="1024"><span class="role-num">02</span></div>
+      <div class="role-body">
+        <h3 data-i18n="about_r2_h">Doctors and healthcare professionals</h3>
+        <p class="role-lede" data-i18n="about_r2_p">Get reliable availability information to support better treatment decisions for your patients.</p>
+        <ul class="role-list"><li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span><span data-i18n="about_r2_1">Check whether a medicine is available nearby before prescribing</span></li><li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span><span data-i18n="about_r2_2">Tell patients which pharmacies have it, and at what price</span></li><li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span><span data-i18n="about_r2_3">Search freely, with no account and no patient data</span></li></ul>
+        <a class="role-link" href="index.html#hero-search"><span data-i18n="about_r2_cta">Check availability</span> →</a>
+      </div>
+    </article>
+    <article class="role-card t-green">
+      <div class="role-photo"><img src="assets/images/audience-pharmacies.png" alt="Illustration: a pharmacist scans a medicine box to manage stock" loading="lazy" width="1536" height="1024"><span class="role-num">03</span></div>
+      <div class="role-body">
+        <h3 data-i18n="about_r3_h">Pharmacies</h3>
+        <p class="role-lede" data-i18n="about_r3_p">Make your stock visible to patients and source medicines more efficiently.</p>
+        <ul class="role-list"><li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span><span data-i18n="about_r3_1">Publish your stock and prices; patients see availability, never quantities</span></li><li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span><span data-i18n="about_r3_2">Compare supplier prices and stock, and send order lists</span></li><li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span><span data-i18n="about_r3_3">Follow each order, and manage branches and staff accounts</span></li></ul>
+        <a class="role-link" href="pharmacies.html"><span data-i18n="about_r3_cta">Register your pharmacy</span> →</a>
+      </div>
+    </article>
+    <article class="role-card t-amber">
+      <div class="role-photo"><img src="assets/images/audience-suppliers.png" alt="Illustration: a supplier scans a carton of medical supplies" loading="lazy" width="1536" height="1024"><span class="role-num">04</span></div>
+      <div class="role-body">
+        <h3 data-i18n="about_r4_h">Medicine suppliers</h3>
+        <p class="role-lede" data-i18n="about_r4_p">Reach verified pharmacies, respond to demand and make sure medicines reach them.</p>
+        <ul class="role-list"><li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span><span data-i18n="about_r4_1">List your catalogue, prices and stock for verified pharmacies</span></li><li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span><span data-i18n="about_r4_2">Receive requests, send offers, accept or decline orders</span></li><li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span><span data-i18n="about_r4_3">Track each order from preparation to delivery</span></li></ul>
+        <a class="role-link" href="suppliers.html"><span data-i18n="about_r4_cta">Register as a supplier</span> →</a>
+      </div>
+    </article>
+  </div>
+</section>
+
+<section class="about-section flow-band" aria-labelledby="flow-title">
+  <div class="wrap">
+    <div class="eyebrow" data-i18n="about_flow">— How it connects</div>
+    <h2 id="flow-title" data-i18n="about_flow_h">From a search to a medicine in hand</h2>
+    <ol class="flow"><li class="flow-step"><span class="flow-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><span class="flow-n">01</span><h3 data-i18n="about_f1_h">Search</h3><p data-i18n="about_f1_p">A patient or a doctor looks for a medicine.</p></li><li class="flow-step"><span class="flow-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.1-7-11a7 7 0 0 1 14 0c0 4.9-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg></span><span class="flow-n">02</span><h3 data-i18n="about_f2_h">Find a pharmacy</h3><p data-i18n="about_f2_p">ApexRX shows nearby pharmacies that have it.</p></li><li class="flow-step"><span class="flow-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5 12 12l9-4.5M12 12v9"/></svg></span><span class="flow-n">03</span><h3 data-i18n="about_f3_h">Restock</h3><p data-i18n="about_f3_p">Pharmacies source what runs low from verified suppliers.</p></li><li class="flow-step"><span class="flow-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="10" rx="1.2"/><path d="M14 10h4l3.5 3.5V17h-7.5"/><circle cx="6" cy="19" r="1.8"/><circle cx="17.5" cy="19" r="1.8"/></svg></span><span class="flow-n">04</span><h3 data-i18n="about_f4_h">Deliver</h3><p data-i18n="about_f4_p">Suppliers confirm and deliver, and the medicine is back on the shelf.</p></li></ol>
   </div>
 </section>
 
@@ -67,12 +119,12 @@
     <article class="statement" id="mission">
       <div class="eyebrow" data-i18n="about_mission_e">— Our mission</div>
       <h2 data-i18n="about_mission_h">Our Mission</h2>
-      <p data-i18n="about_mission">To make medicine availability visible and reliable, so that patients find their medicines faster and pharmacies and suppliers can serve them better.</p>
+      <p data-i18n="about_mission">To make medicine availability visible and reliable for everyone in the medicine chain, so that patients get the right medicine faster, healthcare professionals decide with confidence, and pharmacies and suppliers serve them better.</p>
     </article>
     <article class="statement vision" id="vision">
       <div class="eyebrow" data-i18n="about_vision_e">— Our vision</div>
       <h2 data-i18n="about_vision_h">Our Vision</h2>
-      <p data-i18n="about_vision">A Rwanda where no one has to search pharmacy after pharmacy for a medicine, and where every pharmacy can plan its stock with confidence.</p>
+      <p data-i18n="about_vision">A Rwanda where no one goes from pharmacy to pharmacy looking for a medicine, where every prescription can be filled close to home, and where every pharmacy plans its stock with confidence.</p>
     </article>
   </div>
 </section>
@@ -83,10 +135,10 @@
     <h2 id="values-title" data-i18n="about_values_h">Our values</h2>
   </div>
   <div class="values-grid">
-    <article class="value"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8 12l3 3 5-6"/></svg></span><h3 data-i18n="about_v1_h">Trust</h3><p data-i18n="about_v1_p">Pharmacies and suppliers are checked by our team, using their licence details, before they can trade on the platform.</p></article>
-    <article class="value"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><h3 data-i18n="about_v2_h">Privacy</h3><p data-i18n="about_v2_p">Patients search without an account. They see whether a medicine is available, never a pharmacy’s exact quantities.</p></article>
-    <article class="value"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><h3 data-i18n="about_v3_h">Accuracy</h3><p data-i18n="about_v3_p">Every result shows when the stock was last confirmed, so people know how fresh the information is.</p></article>
-    <article class="value"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span><h3 data-i18n="about_v4_h">Access for everyone</h3><p data-i18n="about_v4_p">The platform works on a phone and is available in Kinyarwanda, English and French.</p></article>
+    <article class="value"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8 12l3 3 5-6"/></svg></span><h3 data-i18n="about_v1_h">Trust</h3><p data-i18n="about_v1_p">Every pharmacy and supplier is reviewed by our team, with its registration documents, before it can trade on the platform.</p></article>
+    <article class="value"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><h3 data-i18n="about_v2_h">Privacy</h3><p data-i18n="about_v2_p">Anyone can search without an account. People see whether a medicine is available, never a pharmacy’s exact quantities.</p></article>
+    <article class="value"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><h3 data-i18n="about_v3_h">Accuracy</h3><p data-i18n="about_v3_p">Every result shows when the stock was last confirmed, so people know how fresh the information is.</p></article>
+    <article class="value"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span><h3 data-i18n="about_v4_h">Access for everyone</h3><p data-i18n="about_v4_p">The platform works on a phone and is available in Kinyarwanda, English and French.</p></article>
   </div>
 </section>
 
@@ -96,8 +148,8 @@
     <h2 id="status-title" data-i18n="about_status_h">Built step by step</h2>
   </div>
   <div class="status-grid">
-    <div class="status now"><h3><span class="dot" aria-hidden="true"></span><span data-i18n="about_now_h">Available now</span></h3><ul><li data-i18n="about_now_1">Medicine search across registered pharmacies</li><li data-i18n="about_now_2">Registration and verification for pharmacies and suppliers</li><li data-i18n="about_now_3">Workspaces for stock, price requests and orders</li></ul></div>
-    <div class="status next"><h3><span class="dot" aria-hidden="true"></span><span data-i18n="about_next_h">In development</span></h3><ul><li data-i18n="about_next_1">AI-assisted demand forecasting</li><li data-i18n="about_next_2">Medicine reservation for patients</li><li data-i18n="about_next_3">Online subscription payments</li></ul></div>
+    <div class="status now"><h3><span class="dot" aria-hidden="true"></span><span data-i18n="about_now_h">Available now</span></h3><ul><li data-i18n="about_now_1">Medicine search across registered pharmacies</li><li data-i18n="about_now_2">Registration and verification for pharmacies and suppliers</li><li data-i18n="about_now_3">Workspaces for stock, supplier prices and orders</li></ul></div>
+    <div class="status next"><h3><span class="dot" aria-hidden="true"></span><span data-i18n="about_next_h">In development</span></h3><ul><li data-i18n="about_next_1">Batch and expiry date tracking</li><li data-i18n="about_next_2">Medicine reservation for patients</li><li data-i18n="about_next_3">AI-assisted demand forecasting</li><li data-i18n="about_next_4">Online subscription payments</li></ul></div>
   </div>
 </section>
 
@@ -152,13 +204,13 @@
     <h2 id="org-title" data-i18n="about_org_h">Our Organization</h2>
   </div>
   <div class="org-panel">
-    <div><h3 data-i18n="about_story_h">Our story</h3><p data-i18n="about_story_p">ApexRX_Smart was created to answer a simple question every patient in Kigali has asked: where can I find this medicine today? We are building the answer with pharmacies and suppliers, one district at a time.</p></div>
+    <div><h3 data-i18n="about_story_h">Our story</h3><p data-i18n="about_story_p">ApexRX_Smart started from a question every patient and every doctor in Kigali has asked: where can this medicine be found today? We are building the answer with pharmacies and suppliers, one district at a time.</p></div>
     <div><h3 data-i18n="about_where_h">Where we work</h3><p data-i18n="about_where_p">We start in Kigali, across Gasabo, Kicukiro and Nyarugenge, with the goal of serving the whole of Rwanda.</p></div>
-    <div id="contact"><h3 data-i18n="about_contact_h">Get in touch</h3><p data-i18n="about_contact_p">Pharmacy owner, supplier or partner? Follow us and send us a message:</p><p class="links"><a href="https://www.linkedin.com/company/136934009/" target="_blank" rel="noopener">LinkedIn ↗</a> <a href="https://x.com/Apexrxsmar1ogc" target="_blank" rel="noopener">X ↗</a></p></div>
+    <div id="contact"><h3 data-i18n="about_contact_h">Get in touch</h3><p data-i18n="about_contact_p">Pharmacy owner, supplier, health professional or partner? Follow us and send us a message:</p><p class="links"><a href="https://www.linkedin.com/company/136934009/" target="_blank" rel="noopener">LinkedIn ↗</a> <a href="https://x.com/Apexrxsmar1ogc" target="_blank" rel="noopener">X ↗</a></p></div>
   </div>
   <div class="join-band">
-    <div><h3 data-i18n="about_join_h">Join ApexRX_Smart</h3><p data-i18n="about_join_p">Register your pharmacy or your supplier business. Our team checks every registration before it goes live.</p></div>
-    <div class="join-actions"><a class="btn btn-pill" href="pharmacies.html" data-i18n="nav_pharmacies">For Pharmacies</a><a class="btn btn-ghost-light" href="suppliers.html" data-i18n="nav_suppliers">For Suppliers</a></div>
+    <div><h3 data-i18n="about_join_h">Ready to make better decisions?</h3><p data-i18n="about_join_p">Search for a medicine now, or register your pharmacy or supplier business. Our team reviews every registration before it goes live.</p></div>
+    <div class="join-actions"><a class="btn btn-pill" href="index.html#hero-search" data-i18n="about_r1_cta">Find a medicine</a><a class="btn btn-ghost-light" href="pharmacies.html" data-i18n="nav_pharmacies">For Pharmacies</a><a class="btn btn-ghost-light" href="suppliers.html" data-i18n="nav_suppliers">For Suppliers</a></div>
   </div>
 </section>
 </main>
