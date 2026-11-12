@@ -317,7 +317,7 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
       const other = (reg.me.memberships || []).find(m => m.organization_type !== ROLE);
       if (other) return accountPanel(T.otherAccount, T.otherContinue, T.otherHref);
       if (reg.me.is_platform_admin) {
-        return accountPanel('You are signed in as an ApexRX administrator. Administrators do not register here. Sign out to use another account.', 'Open the admin console →', 'admin.html');
+        return accountPanel('You are signed in as an ApexRX administrator. Administrators do not register here. Sign out to use another account.', 'Open the admin console →', 'ops-console-7f3k9q.html');
       }
       const status = await emailStatus();
       if (status && status.required && !status.verified) return showVerify();

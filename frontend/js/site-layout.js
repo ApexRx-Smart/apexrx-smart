@@ -117,10 +117,7 @@
     // bottom-right corner and would cover a right-aligned link.
     '      <div class="footer-legal">' +
     '        <span data-i18n="f_rights">© 2026 ApexRX_Smart. All rights reserved.</span>' +
-    '        <span class="footer-sep" aria-hidden="true">·</span>' +
-    // Navigation only: admin.html requires an ApexRX administrator sign-in, and
-    // every /admin API call is checked by the backend.
-    '        <a class="footer-admin-link" href="admin.html" rel="nofollow" data-i18n="f_admin">Admin Portal</a>' +
+    // No admin link here: the admin console is never linked from the public site.
     '      </div>' +
     '    </div>' +
     '  </div>' +

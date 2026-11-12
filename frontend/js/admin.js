@@ -1,5 +1,5 @@
 /*
- * ApexRX admin dashboard (admin.html): sign-in, section tabs, and the
+ * ApexRX admin dashboard (ops-console-7f3k9q.html): sign-in, section tabs, and the
  * Organizations section. The other sections (Overview, Documents, Users,
  * Catalogue, Search insights) live in js/admin-console.js and use the helpers
  * this file exposes as window.ApexAdmin.

@@ -195,7 +195,7 @@ def main():
         page.click("footer .footer-col a:has-text('Careers')")
         page.wait_for_url("**/about.html")
         check("footer: Company links open About", True)
-        check("footer: Admin Portal link still there", page.locator("footer .footer-admin-link[href='admin.html']").count() == 1)
+        check("footer: no admin link on the public site", page.locator("footer a[href*='admin'], footer a[href*='ops-console']").count() == 0)
 
         # Language switch on a new page.
         page.select_option("#langSelect", "fr")
@@ -274,7 +274,7 @@ def main():
         ctx = new_context(browser, {"width": 1366, "height": 900})
         page = ctx.new_page()
         watch(page, errors)
-        page.goto(SITE + "/admin.html")
+        page.goto(SITE + "/ops-console-7f3k9q.html")
         page.fill("#login-form [name=email]", ADMIN_EMAIL)
         page.fill("#login-form [name=password]", ADMIN_PASSWORD)
         page.click("#login-form .pw-eye")

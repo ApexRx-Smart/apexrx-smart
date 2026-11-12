@@ -1,5 +1,5 @@
 /*
- * ApexRX admin console sections (admin.html), next to js/admin.js which owns
+ * ApexRX admin console sections (ops-console-7f3k9q.html), next to js/admin.js which owns
  * sign-in, the section tabs and the Organizations section.
  *
  * Every number and row comes from the existing backend, through js/api.js:
