@@ -95,6 +95,7 @@ Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
 [frontend/README.md](frontend/README.md) maps every page and control to its endpoint. In short:
 
 - **Homepage search** calls `GET /search/pharmacies`. It shows availability, price, location and how fresh the data is, never exact quantities.
+- **Compare pharmacies** (`search.html`, the homepage's **See more**): filter by price range and distance, sort by price or nearest, use your location or a typed place, then open a pharmacy to see it on a map with the route from you and directions in Google Maps or OpenStreetMap. Maps use free OpenStreetMap services (no key, no billing); see `frontend/README.md`.
 - **Registration** (`pharmacies.html` and `suppliers.html`, both driven by `js/registration.js`): Account -> Verify email -> Details -> Documents -> Review.
   - **Account:** `POST /auth/register` then sign in (an existing email signs in instead), or "Already have an account? Sign in".
   - **Verify email:** skipped while email delivery is temporarily disabled (see [Email: temporarily disabled](#email-temporarily-disabled)); the details step says so. The verification code is kept for when email returns.
@@ -466,7 +467,7 @@ Authenticated endpoints need `Authorization: Bearer <token>`. List endpoints ret
 | Area | Endpoints |
 |---|---|
 | Auth | `POST /auth/register`, `POST /auth/login`, `GET/PATCH /auth/me`, `POST /auth/me/password` |
-| Patient search (public) | `GET /search/medicines?q=`, `GET /search/pharmacies?q=\|product_id=\|drug_id=&lat=&lng=&radius_km=&availability=&max_price=&sort=distance\|price\|freshness`, `GET /search/pharmacies/{location_id}` |
+| Patient search (public) | `GET /search/medicines?q=`, `GET /search/pharmacies?q=\|product_id=\|drug_id=&lat=&lng=&radius_km=&availability=&min_price=&max_price=&sort=distance\|price\|price_desc\|freshness&record=`, `GET /search/pharmacies/{location_id}` |
 | Catalogue | `GET /catalogue/drugs`, `GET /catalogue/products` (public); `POST/PATCH` (admin only) |
 | Organizations | `POST/GET /organizations`, `GET/PATCH /organizations/{id}`, `POST /organizations/{id}/resubmit` |
 | Members | `GET/POST /organizations/{id}/members`, `PATCH/DELETE /organizations/{id}/members/{membership_id}` |
