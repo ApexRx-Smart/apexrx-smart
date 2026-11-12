@@ -139,6 +139,7 @@ def test_patient_search(client):
     assert detail["pharmacy_name"] == "Kigali Pharmacy" and len(detail["medicines"]) == 1
     assert client.get(f"/search/pharmacies/{world.warehouse}").status_code == 404  # a supplier location
 
+
     legacy = client.get("/medicines/availability").json()
     assert {x["availability"] for x in legacy} == {"in_stock", "low_stock"} and "quantity" not in legacy[0]
 
@@ -152,6 +153,53 @@ def test_patient_search(client):
     # Deactivating a location removes it from search.
     client.patch(f"/organizations/{world.pharmacy}/locations/{far}", json={"is_active": False}, headers=world.pharmacy_owner)
     assert client.get("/search/pharmacies", params={"q": "paracetamol"}).json()["total"] == 1
+
+
+def _search_events() -> int:
+    with engine.connect() as conn:
+        return conn.execute(text("SELECT count(*) FROM search_event")).scalar()
+
+
+def test_patient_search_price_and_location_filters(client):
+    """Filters combine; branches without coordinates never get a distance."""
+    world = World(client)
+    stock(client, world.pharmacy_owner, world.pharmacy, world.branch, world.paracetamol, 50, "300.00")
+    far = location(client, world.pharmacy_owner, world.pharmacy, "Far Branch", -2.6, 29.74)
+    stock(client, world.pharmacy_owner, world.pharmacy, far, world.paracetamol, 20, "100.00")
+    nowhere = location(client, world.pharmacy_owner, world.pharmacy, "No Map Branch")  # no coordinates
+    stock(client, world.pharmacy_owner, world.pharmacy, nowhere, world.paracetamol, 20, "200.00")
+    search = lambda **p: client.get("/search/pharmacies", params={"q": "paracetamol", **p})  # noqa: E731
+
+    # Price range (inclusive) and both price orders.
+    r = search(min_price="150", max_price="300", sort="price").json()
+    assert [x["unit_price"] for x in r["items"]] == ["200.00", "300.00"] and r["total"] == 2
+    assert [x["unit_price"] for x in search(sort="price_desc").json()["items"]] == ["300.00", "200.00", "100.00"]
+    assert [x["unit_price"] for x in search(min_price="200").json()["items"]] == ["200.00", "300.00"]
+    # An impossible or invalid range is refused, not silently emptied.
+    assert search(min_price="400", max_price="100").status_code == 400
+    assert search(min_price="-1").status_code == 422
+
+    # Nearest first: the branch without coordinates comes last, with no distance.
+    near = search(lat=-1.95, lng=30.06).json()["items"]
+    assert [x["location_name"] for x in near] == ["Downtown", "Far Branch", "No Map Branch"]
+    assert near[0]["distance_km"] < 2 and near[1]["distance_km"] > 50 and near[2]["distance_km"] is None
+    assert near[2]["latitude"] is None and near[2]["directions_url"] is None
+    # A radius keeps only branches known to be inside it.
+    inside = search(lat=-1.95, lng=30.06, radius_km=10).json()
+    assert [x["location_name"] for x in inside["items"]] == ["Downtown"] and inside["total"] == 1
+    # Price and distance together: within 100 km and at most 250 RWF.
+    both = search(lat=-1.95, lng=30.06, radius_km=100, max_price="250").json()["items"]
+    assert [x["location_name"] for x in both] == ["Far Branch"]
+    # Sorting by price still reports distances when a location is given.
+    priced = search(lat=-1.95, lng=30.06, sort="price").json()["items"]
+    assert [x["unit_price"] for x in priced] == ["100.00", "200.00", "300.00"] and priced[0]["distance_km"] > 50
+
+    # Refinements from the expanded results page are not counted again in search insights.
+    before = _search_events()
+    search(min_price="150", record="false")
+    assert _search_events() == before
+    search()
+    assert _search_events() == before + 1
 
 
 def test_supplier_search(client):

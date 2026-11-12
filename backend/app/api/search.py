@@ -12,7 +12,7 @@ from typing import Annotated
 from urllib.parse import quote, urlencode
 
 from fastapi import APIRouter, Query
-from sqlalchemy import Float, and_, cast, func, null, or_, select
+from sqlalchemy import Float, and_, case, cast, func, null, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.catalogue import contains
@@ -53,13 +53,17 @@ RADIUS = Annotated[float | None, Query(gt=0, le=500, description="Requires lat/l
 # Helpers
 # ---------------------------------------------------------------------------
 def _distance_km(lat_col, lng_col, lat: float, lng: float):
-    """Haversine distance in km as a SQL expression (NULL when no coordinates)."""
+    """Haversine distance in km as a SQL expression (NULL when no coordinates).
+
+    The explicit CASE matters: PostgreSQL's LEAST() ignores NULLs, so without it
+    a location with no coordinates came out as half the Earth away (~20,015 km)."""
     lat1, lng1 = func.radians(lat), func.radians(lng)
     lat2, lng2 = func.radians(cast(lat_col, Float)), func.radians(cast(lng_col, Float))
     a = func.power(func.sin((lat2 - lat1) / 2), 2) + func.cos(lat1) * func.cos(lat2) * func.power(
         func.sin((lng2 - lng1) / 2), 2
     )
-    return 2 * EARTH_RADIUS_KM * func.asin(func.least(1.0, func.sqrt(a)))
+    distance = 2 * EARTH_RADIUS_KM * func.asin(func.least(1.0, func.sqrt(a)))
+    return case((or_(lat_col.is_(None), lng_col.is_(None)), null()), else_=distance)
 
 
 def _validate_geo(lat, lng, radius_km) -> None:
@@ -234,14 +238,26 @@ def search_pharmacies(
         list[AvailabilityStatus] | None,
         Query(description="Defaults to in_stock and low_stock"),
     ] = None,
+    min_price: Annotated[Decimal | None, Query(ge=0)] = None,
     max_price: Annotated[Decimal | None, Query(ge=0)] = None,
     sort: PharmacySort | None = None,
+    record: Annotated[
+        bool,
+        Query(description="Count this request in search insights. The expanded results page sends "
+                          "false when it only refines a search the patient already made."),
+    ] = True,
 ):
     """Pharmacies reporting a medicine, with price, availability status,
     freshness and (when lat/lng are given) distance. Public: no account needed.
 
+    Filters combine: text or ids, price range, radius. Branches without
+    coordinates have no distance (never an estimate): a radius excludes them and
+    the distance sort lists them last.
+
     Default sort: distance when lat/lng are given, otherwise price."""
     _validate_geo(lat, lng, radius_km)
+    if min_price is not None and max_price is not None and min_price > max_price:
+        raise AppError("min_price cannot be greater than max_price.")
     conditions = _product_filter(q, product_id, drug_id, patient_availability.c.product_id, patient_availability.c.drug_id)
     if not conditions:
         raise AppError("Provide q, product_id or drug_id.")
@@ -251,6 +267,8 @@ def search_pharmacies(
 
     stmt, distance = _patient_query(lat, lng)
     stmt = stmt.where(*conditions, pa.availability_status.in_([s.value for s in statuses]))
+    if min_price is not None:
+        stmt = stmt.where(pa.unit_price >= min_price)
     if max_price is not None:
         stmt = stmt.where(pa.unit_price <= max_price)
     if radius_km is not None:
@@ -262,6 +280,7 @@ def search_pharmacies(
     order = {
         PharmacySort.DISTANCE: [distance.asc().nulls_last()] if distance is not None else [],
         PharmacySort.PRICE: [pa.unit_price.asc()],
+        PharmacySort.PRICE_DESC: [pa.unit_price.desc()],
         PharmacySort.FRESHNESS: [pa.last_updated.desc()],
     }[sort]
 
@@ -269,7 +288,7 @@ def search_pharmacies(
     rows = db.execute(stmt.order_by(*order, pa.offer_id).limit(limit).offset(offset)).all()
     items = [_pharmacy_availability(r, r._mapping["distance_km"]) for r in rows]
 
-    if offset == 0:
+    if offset == 0 and record:
         _log_search(db, (q or "").strip() or f"product:{product_id or ''} drug:{drug_id or ''}",
                     product_id, drug_id, lat, lng, total)
     return Page(items=items, total=total, limit=limit, offset=offset)

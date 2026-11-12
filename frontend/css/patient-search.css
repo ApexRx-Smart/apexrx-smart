@@ -1,0 +1,123 @@
+/* Expanded patient search (search.html). Built on css/style.css tokens
+   (--ink, --green, --tint, --line, --font-display, ...); light theme like the
+   rest of the public site. */
+.sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap;}
+/* The hidden attribute always wins over this page's display rules (flex rows, the map message). */
+.page-search [hidden]{display:none !important;}
+
+/* Banner with the search box */
+.ps-hero{padding-block:calc(130px + env(safe-area-inset-top,0px)) 44px;}
+.ps-hero h1{font-size:clamp(30px,4.4vw,48px);}
+.ps-search{display:flex; gap:10px; margin-top:22px; max-width:640px; background:#fff; border-radius:16px; padding:6px; box-shadow:0 12px 30px rgba(0,0,0,.18);}
+.ps-search input{flex:1; min-width:0; border:0; outline:0; font:inherit; font-size:16px; padding:10px 12px; color:var(--text); background:transparent;}
+.ps-search .search-btn{flex:none;}
+@media (max-width:720px){ .ps-hero{padding-block:calc(110px + env(safe-area-inset-top,0px)) 34px;} }
+
+.ps-body{padding-block:22px 80px; display:flex; flex-direction:column; gap:16px;}
+.ps-back{align-self:flex-start; color:var(--green); font-weight:600; text-decoration:none; font-size:14px;}
+.ps-back:hover, .ps-back:focus-visible{text-decoration:underline;}
+
+/* Controls */
+.ps-btn{font:inherit; font-size:14px; font-weight:600; border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:10px; padding:9px 14px; cursor:pointer; white-space:nowrap;}
+.ps-btn:hover{border-color:var(--green); color:var(--green);}
+.ps-btn:disabled{opacity:.55; cursor:not-allowed;}
+.ps-link{font:inherit; font-size:14px; font-weight:600; background:none; border:0; padding:4px 0; color:var(--green); cursor:pointer; text-decoration:underline; text-underline-offset:3px;}
+.ps-body :focus-visible{outline:3px solid var(--rw-blue); outline-offset:2px;}
+.ps-filters input, .ps-filters select, .ps-route input{font:inherit; font-family:var(--font-body); font-size:15px; color:var(--text); background:#fff; border:1px solid rgba(15,26,61,.18); border-radius:10px; padding:9px 11px; min-width:0; width:100%;}
+.ps-filters input:focus, .ps-filters select:focus, .ps-route input:focus{border-color:var(--green); outline:none; box-shadow:0 0 0 3px rgba(26,148,88,.15);}
+.ps-filters select:disabled{background:var(--tint); color:var(--text-faint);}
+.ps-label, .ps-field > label, .ps-field legend{display:block; font-size:12.5px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px; padding:0;}
+.ps-cur{text-transform:none; letter-spacing:0; font-weight:600; color:var(--text-faint);}
+
+.ps-filters{background:var(--tint); border-radius:20px; padding:20px 22px; display:flex; flex-direction:column; gap:12px;}
+.ps-filters-title{font-family:var(--font-display); font-size:20px; margin:0; color:var(--ink);}
+.ps-filter-grid{display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,.8fr) minmax(0,1.8fr) minmax(0,.8fr); gap:16px 18px; align-items:start;}
+.ps-field{min-width:0; border:0; margin:0; padding:0;}
+.ps-price-row{display:flex; align-items:center; gap:8px;}
+.ps-price-row span{color:var(--text-faint);}
+.ps-loc-row{display:flex; gap:8px; flex-wrap:wrap;}
+.ps-loc-row input{flex:1 1 160px; width:auto;}
+.ps-origin{margin:8px 0 0; font-size:14px; display:flex; flex-wrap:wrap; gap:4px 10px; align-items:center;}
+.ps-origin span{font-weight:600; color:var(--ink);}
+.ps-places{list-style:none; margin:8px 0 0; padding:0; border:1px solid var(--line); border-radius:12px; background:#fff; max-height:220px; overflow:auto;}
+.ps-places li + li{border-top:1px solid var(--line);}
+.ps-places button{display:block; width:100%; text-align:left; font:inherit; font-size:13.5px; background:none; border:0; padding:9px 12px; cursor:pointer; color:var(--text);}
+.ps-places button:hover, .ps-places button:focus-visible{background:var(--tint);}
+.ps-places .ps-places-head{padding:8px 12px; font-size:12px; color:var(--text-faint);}
+.ps-msg{margin:6px 0 0; font-size:13px; color:var(--text-dim); min-height:0;}
+.ps-msg:empty, .ps-error:empty{display:none;}
+.ps-hint{display:block; margin-top:6px; font-size:12px; color:var(--text-faint);}
+.ps-filter-foot{display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;}
+.ps-filter-foot .ps-link{margin-left:auto;}
+.ps-error{margin:0; color:#a3302b; font-size:14px; font-weight:600;}
+.ps-privacy{margin:0; font-size:12px; color:var(--text-faint); max-width:90ch;}
+@media (max-width:980px){ .ps-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr));} .ps-loc{grid-column:1 / -1;} }
+@media (max-width:560px){ .ps-filter-grid{grid-template-columns:minmax(0,1fr);} .ps-filters{padding:16px;} }
+
+/* Results */
+.ps-count{margin:4px 0 0; font-weight:600; color:var(--text-dim);}
+.ps-count:empty{display:none;}
+.ps-results{list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px;}
+.ps-results[aria-busy="true"]{opacity:.55; transition:opacity .2s;}
+.ps-card{background:#fff; border:1px solid var(--line); border-radius:18px; padding:16px 18px; display:flex; flex-direction:column; gap:8px; min-width:0; box-shadow:0 6px 18px rgba(15,26,61,.05);}
+.ps-card-top{display:flex; justify-content:space-between; gap:12px; align-items:flex-start;}
+.ps-card h3{margin:0; font-size:16px; line-height:1.3; color:var(--ink); overflow-wrap:anywhere;}
+.ps-price{font-family:var(--font-display); font-weight:700; font-size:20px; color:var(--ink); white-space:nowrap; font-variant-numeric:tabular-nums;}
+.ps-place{margin:0; font-weight:600; color:var(--ink); overflow-wrap:anywhere;}
+.ps-addr{margin:0; font-size:13.5px; color:var(--text-dim); overflow-wrap:anywhere;}
+.ps-meta{display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; font-size:12.5px; color:var(--text-faint);}
+.ps-dist{font-weight:700; color:var(--ink);}
+.ps-best{font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:20px; background:rgba(0,161,222,.12); color:#00658c;}
+.ps-card .ps-btn{align-self:flex-start; margin-top:4px; background:var(--green); border-color:var(--green); color:#fff;}
+.ps-card .ps-btn:hover{background:var(--green-hover); color:#fff;}
+.ps-empty{grid-column:1 / -1; background:var(--tint); border-radius:18px; padding:26px 22px; color:var(--text-dim); text-align:center;}
+.ps-skel{height:150px; border-radius:18px; background:linear-gradient(90deg,var(--tint) 0,#e6edf6 50%,var(--tint) 100%); background-size:200% 100%; animation:ps-shimmer 1.2s infinite linear;}
+@keyframes ps-shimmer{to{background-position:-200% 0;}}
+.ps-more{align-self:center;}
+
+/* Selected pharmacy: details beside the map on wide screens, stacked on phones */
+.ps-back-results{align-self:flex-start;}
+#ps-detail-view{display:flex; flex-direction:column; gap:12px; scroll-margin-top:calc(110px + env(safe-area-inset-top,0px));} /* clear of the floating header */
+#ps-detail-view[hidden]{display:none;}
+.ps-detail{display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1.3fr); gap:22px; align-items:start;}
+.ps-info{background:#fff; border:1px solid var(--line); border-radius:20px; padding:22px; display:flex; flex-direction:column; gap:12px; min-width:0;}
+.ps-info h2{font-family:var(--font-display); font-size:clamp(22px,2.6vw,30px); line-height:1.15; margin:0; color:var(--ink); overflow-wrap:anywhere;}
+.ps-info .ps-branch{margin:-6px 0 0; color:var(--text-dim); font-weight:600;}
+.ps-facts{display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 14px; margin:0; font-size:14.5px;}
+.ps-facts dt{color:var(--text-faint); font-weight:600;}
+.ps-facts dd{margin:0; overflow-wrap:anywhere;}
+.ps-facts a{color:var(--green); font-weight:600;}
+.ps-searched{background:var(--tint); border-radius:14px; padding:12px 14px; display:flex; flex-direction:column; gap:4px;}
+.ps-searched small{color:var(--text-faint); font-weight:600; text-transform:uppercase; letter-spacing:.06em; font-size:11.5px;}
+.ps-medlist{list-style:none; margin:0; padding:0; border-top:1px solid var(--line);}
+.ps-medlist li{display:flex; justify-content:space-between; gap:10px; align-items:center; padding:9px 0; border-bottom:1px solid var(--line); font-size:14px;}
+.ps-medlist li.match{font-weight:700;}
+.ps-medlist .ps-medprice{white-space:nowrap; font-variant-numeric:tabular-nums;}
+.ps-info h3{margin:6px 0 0; font-size:15px; color:var(--ink);}
+.ps-mapcol{display:flex; flex-direction:column; gap:12px; min-width:0; position:sticky; top:calc(96px + env(safe-area-inset-top,0px));}
+.ps-map{height:440px; border-radius:20px; overflow:hidden; border:1px solid var(--line); background:var(--tint); z-index:0;}
+.ps-map-empty{height:auto; min-height:160px; display:flex; align-items:center; justify-content:center; text-align:center; padding:22px; color:var(--text-dim); font-size:14.5px;}
+.ps-route{background:var(--tint); border-radius:18px; padding:14px 16px; display:flex; flex-direction:column; gap:8px;}
+.ps-route-head{display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;}
+.ps-route-head .ps-label{margin:0;}
+.ps-mode{display:flex; gap:6px;}
+.ps-chip{font:inherit; font-size:13px; font-weight:600; border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:20px; padding:5px 12px; cursor:pointer;}
+.ps-chip[aria-pressed="true"]{background:var(--ink); border-color:var(--ink); color:#fff;}
+.ps-route-sum{font-weight:700; color:var(--ink); font-size:15px;}
+.ps-directions{display:flex; flex-wrap:wrap; gap:8px;}
+.ps-directions a{font-size:14px; font-weight:600; text-decoration:none; border-radius:10px; padding:9px 14px; border:1px solid var(--line); background:#fff; color:var(--ink);}
+.ps-directions a.primary{background:var(--green); border-color:var(--green); color:#fff;}
+.ps-directions a:hover{border-color:var(--green);}
+@media (max-width:900px){
+  .ps-detail{grid-template-columns:minmax(0,1fr);}
+  .ps-mapcol{position:static; order:-1;}   /* map first on phones: it is what the patient opened */
+  .ps-map{height:min(52vh,380px);}
+}
+
+/* Map markers (CSS only: no image files to load) */
+.ps-pin{width:22px; height:22px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); border:3px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,.35);}
+.ps-pin.pharmacy{background:var(--green);}
+.ps-pin.origin{background:var(--rw-blue); border-radius:50%; transform:none; width:18px; height:18px;}
+.leaflet-container{font-family:var(--font-body);}
+
+@media (prefers-reduced-motion:reduce){ .ps-skel{animation:none;} .ps-results[aria-busy="true"]{transition:none;} }

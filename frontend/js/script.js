@@ -45,7 +45,73 @@
       no_result:'No matching medicine found nearby. Try a different name.',
       t_signin:'Sign in is coming soon.', t_start:'Thanks for your interest. Onboarding opens soon.',
       t_results:'Results for',
-      t_updated:'Updated', t_searching:'Searching...', t_search_error:'Unable to load medicine availability. Please try again.'
+      t_updated:'Updated', t_searching:'Searching...', t_search_error:'Unable to load medicine availability. Please try again.',
+      // Expanded patient search (search.html, js/patient-search.js)
+      ps_see_more:'See more: compare prices, filter by location and get directions →',
+      ps_title:'Compare pharmacies',
+      ps_eyebrow:'Medicine search',
+      ps_lede:'Compare prices, find a pharmacy near you and get directions.',
+      ps_back:'← Back to search',
+      ps_filters:'Filter and sort',
+      ps_min:'Min price',
+      ps_max:'Max price',
+      ps_sort:'Sort by',
+      ps_sort_price:'Lowest price',
+      ps_sort_price_desc:'Highest price',
+      ps_sort_distance:'Nearest first',
+      ps_sort_fresh:'Recently updated',
+      ps_location:'Location',
+      ps_use_location:'Use my location',
+      ps_place_ph:'Or type a place, e.g. Kimironko',
+      ps_find:'Find',
+      ps_clear:'Clear',
+      ps_locating:'Finding your location…',
+      ps_loc_denied:'Location permission was denied. You can type a place instead.',
+      ps_loc_unavailable:'Your location is not available on this device. You can type a place instead.',
+      ps_loc_current:'Your current location',
+      ps_loc_map:'The point you chose on the map',
+      ps_place_none:'No place in Rwanda matches that name.',
+      ps_place_error:'Place search is not available right now. Try again, or use your location.',
+      ps_place_pick:'Choose the place:',
+      ps_distance:'Distance',
+      ps_any_distance:'Any distance',
+      ps_within:'Within {n} km',
+      ps_needs_location:'Set a location to filter by distance.',
+      ps_reset:'Reset filters',
+      ps_count_one:'1 pharmacy',
+      ps_count:'{n} pharmacies',
+      ps_count_of:'Showing {a} of {n} pharmacies',
+      ps_empty:'No pharmacy matches these filters. Try a wider price range or distance.',
+      ps_no_query:'Search for a medicine to compare pharmacies.',
+      ps_err_range:'The minimum price cannot be higher than the maximum.',
+      ps_err_price:'Prices must be numbers of 0 or more.',
+      ps_load_more:'Show more pharmacies',
+      ps_km:'{n} km away',
+      ps_no_coords:'No map location',
+      ps_cheapest:'Lowest price',
+      ps_view:'View pharmacy and directions',
+      ps_back_results:'← Back to results',
+      ps_phone:'Phone',
+      ps_address:'Address',
+      ps_searched:'You searched for',
+      ps_other_meds:'Medicines listed here',
+      ps_start:'Starting point',
+      ps_by_car:'By car',
+      ps_on_foot:'On foot',
+      ps_route_summary:'{d} km · about {m} min',
+      ps_route_fail:'The route could not be calculated right now. The map shows a straight line; the directions buttons still work.',
+      ps_route_loading:'Calculating the route…',
+      ps_start_hint:'Choose a starting point to see the route: use your location, type a place, or tap the map.',
+      ps_open_google:'Directions in Google Maps',
+      ps_open_osm:'Directions in OpenStreetMap',
+      ps_no_map:'This pharmacy has not added its map location yet. Directions use its address.',
+      ps_no_address:'This pharmacy has no map location or address yet. Call them for directions.',
+      ps_privacy:'Your location stays in this tab. It is used only to find nearby pharmacies and to calculate the route (OpenStreetMap services). ApexRX does not store it.',
+      ps_not_found:'This pharmacy is not listed any more.',
+      ps_tap_map:'Tap the map to set your starting point.',
+      ps_you:'You are here',
+      ps_loading:'Loading…',
+      ps_call:'Call'
     },
     fr: {
       stats_eyebrow:'ApexRX en chiffres', stats_title:'Une ville. Mieux connectée.',
@@ -89,7 +155,73 @@
       no_result:'Aucun médicament correspondant à proximité. Essayez un autre nom.',
       t_signin:'La connexion arrive bientôt.', t_start:'Merci de votre intérêt. L’inscription ouvre bientôt.',
       t_results:'Résultats pour',
-      t_updated:'Mis à jour', t_searching:'Recherche...', t_search_error:'Impossible de charger la disponibilité. Veuillez réessayer.'
+      t_updated:'Mis à jour', t_searching:'Recherche...', t_search_error:'Impossible de charger la disponibilité. Veuillez réessayer.',
+      // Expanded patient search (search.html, js/patient-search.js)
+      ps_see_more:'Voir plus : comparer les prix, filtrer par lieu et obtenir l’itinéraire →',
+      ps_title:'Comparer les pharmacies',
+      ps_eyebrow:'Recherche de médicament',
+      ps_lede:'Comparez les prix, trouvez une pharmacie près de vous et obtenez l’itinéraire.',
+      ps_back:'← Retour à la recherche',
+      ps_filters:'Filtrer et trier',
+      ps_min:'Prix min.',
+      ps_max:'Prix max.',
+      ps_sort:'Trier par',
+      ps_sort_price:'Prix le plus bas',
+      ps_sort_price_desc:'Prix le plus élevé',
+      ps_sort_distance:'Les plus proches',
+      ps_sort_fresh:'Mis à jour récemment',
+      ps_location:'Lieu',
+      ps_use_location:'Utiliser ma position',
+      ps_place_ph:'Ou saisissez un lieu, ex. Kimironko',
+      ps_find:'Chercher',
+      ps_clear:'Effacer',
+      ps_locating:'Recherche de votre position…',
+      ps_loc_denied:'L’accès à votre position a été refusé. Vous pouvez saisir un lieu à la place.',
+      ps_loc_unavailable:'Votre position n’est pas disponible sur cet appareil. Vous pouvez saisir un lieu à la place.',
+      ps_loc_current:'Votre position actuelle',
+      ps_loc_map:'Le point choisi sur la carte',
+      ps_place_none:'Aucun lieu au Rwanda ne correspond à ce nom.',
+      ps_place_error:'La recherche de lieu est indisponible pour le moment. Réessayez ou utilisez votre position.',
+      ps_place_pick:'Choisissez le lieu :',
+      ps_distance:'Distance',
+      ps_any_distance:'Toute distance',
+      ps_within:'À moins de {n} km',
+      ps_needs_location:'Indiquez un lieu pour filtrer par distance.',
+      ps_reset:'Réinitialiser les filtres',
+      ps_count_one:'1 pharmacie',
+      ps_count:'{n} pharmacies',
+      ps_count_of:'{a} sur {n} pharmacies affichées',
+      ps_empty:'Aucune pharmacie ne correspond à ces filtres. Élargissez la fourchette de prix ou la distance.',
+      ps_no_query:'Recherchez un médicament pour comparer les pharmacies.',
+      ps_err_range:'Le prix minimum ne peut pas dépasser le prix maximum.',
+      ps_err_price:'Les prix doivent être des nombres positifs ou nuls.',
+      ps_load_more:'Afficher plus de pharmacies',
+      ps_km:'à {n} km',
+      ps_no_coords:'Pas de position sur la carte',
+      ps_cheapest:'Prix le plus bas',
+      ps_view:'Voir la pharmacie et l’itinéraire',
+      ps_back_results:'← Retour aux résultats',
+      ps_phone:'Téléphone',
+      ps_address:'Adresse',
+      ps_searched:'Vous avez cherché',
+      ps_other_meds:'Médicaments disponibles ici',
+      ps_start:'Point de départ',
+      ps_by_car:'En voiture',
+      ps_on_foot:'À pied',
+      ps_route_summary:'{d} km · environ {m} min',
+      ps_route_fail:'L’itinéraire n’a pas pu être calculé. La carte montre une ligne droite ; les boutons d’itinéraire fonctionnent toujours.',
+      ps_route_loading:'Calcul de l’itinéraire…',
+      ps_start_hint:'Choisissez un point de départ pour voir l’itinéraire : votre position, un lieu saisi ou un point sur la carte.',
+      ps_open_google:'Itinéraire dans Google Maps',
+      ps_open_osm:'Itinéraire dans OpenStreetMap',
+      ps_no_map:'Cette pharmacie n’a pas encore indiqué sa position sur la carte. L’itinéraire utilise son adresse.',
+      ps_no_address:'Cette pharmacie n’a pas encore de position ni d’adresse. Appelez-la pour l’itinéraire.',
+      ps_privacy:'Votre position reste dans cet onglet. Elle sert uniquement à trouver les pharmacies proches et à calculer l’itinéraire (services OpenStreetMap). ApexRX ne l’enregistre pas.',
+      ps_not_found:'Cette pharmacie n’est plus listée.',
+      ps_tap_map:'Touchez la carte pour choisir votre point de départ.',
+      ps_you:'Vous êtes ici',
+      ps_loading:'Chargement…',
+      ps_call:'Appeler'
     },
     /* Kinyarwanda: à faire relire par un locuteur natif avant la mise en ligne */
     rw: {
@@ -134,7 +266,73 @@
       no_result:'Nta muti uhuye n’ibyo washakaga hafi aha. Gerageza irindi zina.',
       t_signin:'Kwinjira biraza vuba.', t_start:'Murakoze. Kwiyandikisha biraza vuba.',
       t_results:'Ibisubizo bya',
-      t_updated:'Byavuguruwe', t_searching:'Turashakisha...', t_search_error:'Ntibishobotse kubona amakuru y’imiti. Ongera ugerageze.'
+      t_updated:'Byavuguruwe', t_searching:'Turashakisha...', t_search_error:'Ntibishobotse kubona amakuru y’imiti. Ongera ugerageze.',
+      // Expanded patient search (search.html, js/patient-search.js)
+      ps_see_more:'Reba ibindi: gereranya ibiciro, shungura ukurikije aho uri, ubone inzira →',
+      ps_title:'Gereranya farumasi',
+      ps_eyebrow:'Gushaka umuti',
+      ps_lede:'Gereranya ibiciro, ubone farumasi ikwegereye n’inzira yo kuyigeraho.',
+      ps_back:'← Subira ku ishakisha',
+      ps_filters:'Shungura no gutondeka',
+      ps_min:'Igiciro gito',
+      ps_max:'Igiciro kinini',
+      ps_sort:'Tondeka ukurikije',
+      ps_sort_price:'Igiciro gito mbere',
+      ps_sort_price_desc:'Igiciro kinini mbere',
+      ps_sort_distance:'Ziri hafi mbere',
+      ps_sort_fresh:'Izavuguruwe vuba',
+      ps_location:'Aho uri',
+      ps_use_location:'Koresha aho ndi',
+      ps_place_ph:'Cyangwa andika ahantu, urugero Kimironko',
+      ps_find:'Shaka',
+      ps_clear:'Siba',
+      ps_locating:'Turashaka aho uri…',
+      ps_loc_denied:'Wanze ko tumenya aho uri. Ushobora kwandika ahantu.',
+      ps_loc_unavailable:'Aho uri ntibishoboka kumenyekana kuri iki gikoresho. Ushobora kwandika ahantu.',
+      ps_loc_current:'Aho uri ubu',
+      ps_loc_map:'Aho wahisemo ku ikarita',
+      ps_place_none:'Nta hantu mu Rwanda hahuye n’iryo zina.',
+      ps_place_error:'Gushaka ahantu ntibishoboka ubu. Ongera ugerageze cyangwa ukoreshe aho uri.',
+      ps_place_pick:'Hitamo ahantu:',
+      ps_distance:'Intera',
+      ps_any_distance:'Intera iyo ari yo yose',
+      ps_within:'Muri km {n}',
+      ps_needs_location:'Shyiraho aho uri kugira ngo ushungure ukurikije intera.',
+      ps_reset:'Siba ibyo washunguye',
+      ps_count_one:'Farumasi 1',
+      ps_count:'Farumasi {n}',
+      ps_count_of:'Herekanwa {a} kuri farumasi {n}',
+      ps_empty:'Nta farumasi ihuye n’ibyo wahisemo. Gerageza igiciro cyangwa intera binini.',
+      ps_no_query:'Shaka umuti kugira ngo ugereranye farumasi.',
+      ps_err_range:'Igiciro gito ntigishobora kuruta igiciro kinini.',
+      ps_err_price:'Ibiciro bigomba kuba imibare ingana na 0 cyangwa irenga.',
+      ps_load_more:'Erekana farumasi nyinshi',
+      ps_km:'km {n} uvuye aho uri',
+      ps_no_coords:'Nta hantu ku ikarita',
+      ps_cheapest:'Igiciro gito',
+      ps_view:'Reba farumasi n’inzira',
+      ps_back_results:'← Subira ku bisubizo',
+      ps_phone:'Telefoni',
+      ps_address:'Aderesi',
+      ps_searched:'Washatse',
+      ps_other_meds:'Imiti iboneka hano',
+      ps_start:'Aho uhagurukira',
+      ps_by_car:'Mu modoka',
+      ps_on_foot:'N’amaguru',
+      ps_route_summary:'km {d} · iminota nka {m}',
+      ps_route_fail:'Inzira ntiyabashije kubarwa ubu. Ikarita irerekana umurongo ugororotse; utubuto tw’inzira turakora.',
+      ps_route_loading:'Turabara inzira…',
+      ps_start_hint:'Hitamo aho uhagurukira kugira ngo ubone inzira: aho uri, ahantu wanditse, cyangwa kanda ku ikarita.',
+      ps_open_google:'Inzira kuri Google Maps',
+      ps_open_osm:'Inzira kuri OpenStreetMap',
+      ps_no_map:'Iyi farumasi ntirashyira aho iherereye ku ikarita. Inzira ikoresha aderesi yayo.',
+      ps_no_address:'Iyi farumasi nta hantu ku ikarita cyangwa aderesi irashyiraho. Bahamagare ubaze inzira.',
+      ps_privacy:'Aho uri biguma muri iyi paji. Bikoreshwa gusa mu gushaka farumasi zikwegereye no kubara inzira (serivisi za OpenStreetMap). ApexRX ntibibika.',
+      ps_not_found:'Iyi farumasi ntikiri ku rutonde.',
+      ps_tap_map:'Kanda ku ikarita uhitemo aho uhagurukira.',
+      ps_you:'Uri hano',
+      ps_loading:'Birimo gufunguka…',
+      ps_call:'Hamagara'
     }
   };
   var lang = 'en';
@@ -433,6 +631,7 @@
       a.setAttribute('href', raw.split(/[?#]/)[0] + '?lang=' + encodeURIComponent(lang) + hash);
     });
     paintAccountButtons();
+    try { window.dispatchEvent(new CustomEvent('apexrx:lang', { detail: lang })); } catch (e) { /* old browsers */ }
   }
   var langSelect = document.getElementById('langSelect');
   var saved = 'en';
@@ -480,9 +679,18 @@
       .join(' · ') || 'Medicine';
   }
 
+  // The expanded results page (search.html) for this query, in the current language.
+  function expandedHref(query){
+    return 'search.html?q=' + encodeURIComponent(query) + '&lang=' + encodeURIComponent(lang);
+  }
+
   if (searchForm && searchInput && searchResults && searchStatus && window.ApexAPI) {
+    // Set when the search comes from the address bar (search.html's "Back to search"):
+    // it repeats a search already counted, so it is not counted again.
+    var repeatSearch = false;
     searchForm.addEventListener('submit', function (event) {
       event.preventDefault();
+      var record = !repeatSearch; repeatSearch = false;
       var query = searchInput.value.trim();
       if (query.length < 2) { searchInput.focus(); return; }
 
@@ -494,7 +702,9 @@
       searchResults.classList.add('open');
       searchResults.replaceChildren();
 
-      ApexAPI.search.pharmacies({ q: query, sort: 'freshness', limit: 20 }, { signal: controller ? controller.signal : undefined })
+      var params = { q: query, sort: 'freshness', limit: 20 };
+      if (!record) params.record = false;
+      ApexAPI.search.pharmacies(params, { signal: controller ? controller.signal : undefined })
         .then(function (page) {
           if (activeSearch !== controller) return;
           searchStatus.textContent = '';
@@ -526,6 +736,13 @@
             row.appendChild(stock);
             searchResults.appendChild(row);
           });
+          // The homepage stays short; comparing, filtering and directions are on search.html.
+          var more = document.createElement('a');
+          more.className = 'result-more';
+          more.id = 'medicineSearchMore';
+          more.href = expandedHref(query);
+          more.textContent = t('ps_see_more');
+          searchResults.appendChild(more);
         })
         .catch(function (error) {
           if (controller && controller.signal.aborted && activeSearch !== controller) return;
@@ -533,5 +750,24 @@
           searchStatus.textContent = (error && error.status === 0) ? error.message : t('t_search_error');
         });
     });
+    // index.html?q=... (search.html's "Back to search") shows that search again.
+    var fromUrl = '';
+    try { fromUrl = (new URLSearchParams(location.search).get('q') || '').trim(); } catch (e) { /* ignore */ }
+    if (fromUrl.length >= 2) {
+      searchInput.value = fromUrl.slice(0, 100);
+      repeatSearch = true;
+      if (typeof searchForm.requestSubmit === 'function') searchForm.requestSubmit(); else searchForm.dispatchEvent(new Event('submit', { cancelable: true }));
+    }
   }
+
+  // For page scripts that share this page's language and formats (js/patient-search.js).
+  window.ApexSite = {
+    t: t,
+    lang: function () { return lang; },
+    locale: function () { return LOCALES[lang] || 'en-GB'; },
+    formatPrice: formatPrice,
+    formatAge: formatAge,
+    medicineLabel: medicineLabel,
+    stockClass: function (status) { return STOCK_CLASS[status] || STOCK_CLASS.in_stock; }
+  };
 })();

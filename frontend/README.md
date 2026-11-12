@@ -21,7 +21,8 @@ The backend address is set in `js/config.js` (`window.APEX_CONFIG.API_BASE_URL`)
 
 | Page | What it is |
 |---|---|
-| `index.html` | Landing page: medicine search (`#hero-search`), the numbers and the call to action |
+| `index.html` | Landing page: medicine search (`#hero-search`), the numbers and the call to action. `index.html?q=` repeats a search (search.html's "Back to search") |
+| `search.html` | Expanded patient search, from the homepage's **See more**: price range, location (current position, a typed place or a tap on the map), distance, sorting, then the selected pharmacy beside a map with the route and directions (`js/patient-search.js`) |
 | `how-it-works.html` | "Built for everyone in the medicine chain" and "How it works", moved from the landing page |
 | `about.html` | About ApexRX_Smart, Our Mission, Our Vision, Our Team and Our Organization. Placeholder copy (Lorem ipsum, "Team member name") to replace; see the comment at the top of the file |
 | `legal.html#privacy`, `#terms`, `#cookies` | One layout for the legal pages (`js/legal.js` shows the one in the address). Clearly marked placeholders, not approved policies |
@@ -57,7 +58,9 @@ All requests go through `js/api.js` (`window.ApexAPI`). It covers every backend 
 
 | Page / control | Endpoint |
 |---|---|
-| Homepage medicine search | `GET /search/pharmacies?q=`: availability status, price, location and freshness. Never exact quantities. |
+| Homepage medicine search | `GET /search/pharmacies?q=`: availability status, price, location and freshness. Never exact quantities. **See more** opens `search.html?q=` |
+| `search.html` results and filters | `GET /search/pharmacies?q=&min_price=&max_price=&lat=&lng=&radius_km=&sort=price\|price_desc\|distance\|freshness&record=false`. Filtering and sorting run on the server, so they combine and work on any number of results; pages of 30 with **Show more pharmacies**. `record=false` keeps refinements out of search insights (the homepage already counted the search). Branches without coordinates have no distance: they are listed last when sorting by distance and left out by a distance limit |
+| `search.html` selected pharmacy | `GET /search/pharmacies/{location_id}`: details and every medicine it lists. The map uses OpenStreetMap tiles; the route comes from FOSSGIS OSRM (`routing.openstreetmap.de`, car or foot); a typed place from Nominatim. Leaflet 1.9.4 is in `vendor/leaflet/`. If routing fails the map shows a labelled straight line. Directions buttons open Google Maps or OpenStreetMap (with the starting point when known) |
 | Homepage **Sign in** / **Get started** | Open `pharmacies.html#signin` / `pharmacies.html` |
 | Pharmacy page: *Register a pharmacy* / *Staff sign-in* tabs (`#staff`, `#signin`) | Staff sign-in is `POST /auth/login` with the person's own account, then `GET /auth/me`. Several pharmacies: a chooser, then the dashboard. **Forgot password?** opens `reset-password.html` |
 | Dashboard **Sign out**, public header **Sign out** | `POST /auth/logout`: ends this session only |
@@ -139,6 +142,7 @@ Owners manage everyone else; managers manage staff only; staff update quantities
 - **Chat:** there is no in-app messaging. Dashboard conversations are built from purchase orders, and messages open WhatsApp (or the phone), as the roles document describes.
 - **Stock batches and expiry dates:** the API stores one quantity per product and branch. The dashboards' batch and expiry fields are disabled and labelled "Not connected yet".
 - **Homepage map pins and headline numbers:** illustrative content, unchanged. No public endpoint lists every pharmacy or returns platform totals.
+- **Map services on search.html:** free OpenStreetMap community services, with usage policies and no guaranteed availability: tiles (light use, attribution required), FOSSGIS routing (fair use) and Nominatim (at most one request per second; the page searches only when the patient presses Find). Heavy traffic will need a hosted tile/routing provider, which may cost money.
 - **Patient orders and forecasting:** not in the API. The pharmacy dashboard says patient ordering is coming soon; forecasting shows example data, labelled as such.
 - **Supplier documents:** suppliers are asked for a business license and an owner ID, the generic types the admin console already knows. The project's roles document says the exact supplier document requirements are still to be confirmed. The backend accepts any document type, so adding types later is a frontend change only.
 - **Translations:** the About and Legal page bodies are English only (their header and footer are translated). The Kinyarwanda strings on the registration pages (including the email verification ones) should be reviewed by a native speaker.
