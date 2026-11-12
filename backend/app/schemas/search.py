@@ -22,7 +22,8 @@ class MedicineMatch(BaseModel):
 
 class PharmacySort(StrEnum):
     DISTANCE = "distance"
-    PRICE = "price"
+    PRICE = "price"  # lowest first
+    PRICE_DESC = "price_desc"  # highest first
     FRESHNESS = "freshness"
 
 
