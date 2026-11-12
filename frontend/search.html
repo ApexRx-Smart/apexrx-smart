@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Compare pharmacies — ApexRX Smart</title>
+<meta name="description" content="Compare the pharmacies in Kigali that have the medicine you need: prices, distance and directions.">
+<meta name="theme-color" content="#0f1a3d">
+<link rel="icon" type="image/svg+xml" href="assets/logos/logo-mark.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@400;500;600;700&family=Poppins:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/pages.css">
+<!-- Leaflet 1.9.4 (BSD-2), kept in the repository: no third-party script host, no API key. -->
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="css/patient-search.css">
+</head>
+<body data-page="search">
+
+<script src="js/site-layout.js" data-part="header"></script>
+
+<!-- Expanded patient search, opened from the homepage's "See more".
+     Data: GET /search/pharmacies (filters and sorting run on the server) and
+     GET /search/pharmacies/{location_id} (the selected pharmacy). Map: OpenStreetMap
+     tiles; route: FOSSGIS OSRM; place search: Nominatim. See js/patient-search.js. -->
+<main id="top" class="page-search">
+
+<section class="page-hero ps-hero">
+  <div class="wrap">
+    <div class="eyebrow" data-i18n="ps_eyebrow">Medicine search</div>
+    <h1 data-i18n="ps_title">Compare pharmacies</h1>
+    <p data-i18n="ps_lede">Compare prices, find a pharmacy near you and get directions.</p>
+    <form class="ps-search" id="ps-search" role="search" novalidate>
+      <label class="sr-only" for="ps-q" data-i18n="hero_search_ph">Search for a medicine, e.g. Amoxicillin 500mg</label>
+      <input type="search" id="ps-q" name="q" maxlength="100" autocomplete="off" data-i18n-placeholder="hero_search_ph" placeholder="Search for a medicine, e.g. Amoxicillin 500mg">
+      <button type="submit" class="search-btn" data-i18n="hero_search_btn">Search</button>
+    </form>
+  </div>
+</section>
+
+<section class="wrap ps-body">
+  <a class="ps-back" id="ps-back" href="index.html#hero-search" data-i18n="ps_back">← Back to search</a>
+
+  <!-- ===================== List view ===================== -->
+  <div id="ps-list-view">
+    <form class="ps-filters" id="ps-filters" novalidate aria-labelledby="ps-filters-title">
+      <h2 class="ps-filters-title" id="ps-filters-title" data-i18n="ps_filters">Filter and sort</h2>
+      <div class="ps-filter-grid">
+        <fieldset class="ps-field ps-price">
+          <legend><span data-i18n="ps_min">Min price</span> – <span data-i18n="ps_max">Max price</span> <span class="ps-cur" id="ps-cur">(RWF)</span></legend>
+          <div class="ps-price-row">
+            <label class="sr-only" for="ps-min" data-i18n="ps_min">Min price</label>
+            <input type="number" id="ps-min" name="min" min="0" step="any" inputmode="decimal" placeholder="0">
+            <span aria-hidden="true">–</span>
+            <label class="sr-only" for="ps-max" data-i18n="ps_max">Max price</label>
+            <input type="number" id="ps-max" name="max" min="0" step="any" inputmode="decimal" placeholder="∞">
+          </div>
+        </fieldset>
+        <div class="ps-field">
+          <label for="ps-sort" data-i18n="ps_sort">Sort by</label>
+          <select id="ps-sort" name="sort">
+            <option value="price" data-i18n="ps_sort_price">Lowest price</option>
+            <option value="price_desc" data-i18n="ps_sort_price_desc">Highest price</option>
+            <option value="distance" data-i18n="ps_sort_distance">Nearest first</option>
+            <option value="freshness" data-i18n="ps_sort_fresh">Recently updated</option>
+          </select>
+        </div>
+        <div class="ps-field ps-loc">
+          <span class="ps-label" id="ps-loc-label" data-i18n="ps_location">Location</span>
+          <div class="ps-loc-row">
+            <button type="button" class="ps-btn" id="ps-geo" data-i18n="ps_use_location">Use my location</button>
+            <label class="sr-only" for="ps-place" data-i18n="ps_place_ph">Or type a place, e.g. Kimironko</label>
+            <input type="text" id="ps-place" autocomplete="off" maxlength="120" data-i18n-placeholder="ps_place_ph" placeholder="Or type a place, e.g. Kimironko">
+            <button type="button" class="ps-btn" id="ps-place-go" data-i18n="ps_find">Find</button>
+          </div>
+          <p class="ps-origin" id="ps-origin" hidden><span id="ps-origin-text"></span> <button type="button" class="ps-link" id="ps-origin-clear" data-i18n="ps_clear">Clear</button></p>
+          <ul class="ps-places" id="ps-places" hidden></ul>
+          <p class="ps-msg" id="ps-loc-msg" role="status" aria-live="polite"></p>
+        </div>
+        <div class="ps-field">
+          <label for="ps-radius" data-i18n="ps_distance">Distance</label>
+          <select id="ps-radius" name="radius" disabled>
+            <option value="" data-i18n="ps_any_distance">Any distance</option>
+            <option value="1">1 km</option><option value="2">2 km</option><option value="5">5 km</option>
+            <option value="10">10 km</option><option value="20">20 km</option>
+          </select>
+          <small class="ps-hint" id="ps-radius-hint" data-i18n="ps_needs_location">Set a location to filter by distance.</small>
+        </div>
+      </div>
+      <div class="ps-filter-foot">
+        <p class="ps-error" id="ps-filter-error" role="alert"></p>
+        <button type="reset" class="ps-link" id="ps-reset" data-i18n="ps_reset">Reset filters</button>
+      </div>
+      <p class="ps-privacy" data-i18n="ps_privacy">Your location stays in this tab. It is used only to find nearby pharmacies and to calculate the route (OpenStreetMap services). ApexRX does not store it.</p>
+    </form>
+
+    <p class="ps-count" id="ps-count" role="status" aria-live="polite"></p>
+    <ol class="ps-results" id="ps-results" aria-busy="false"></ol>
+    <button type="button" class="ps-btn ps-more" id="ps-more" hidden data-i18n="ps_load_more">Show more pharmacies</button>
+  </div>
+
+  <!-- ===================== Selected pharmacy ===================== -->
+  <div id="ps-detail-view" hidden>
+    <button type="button" class="ps-link ps-back-results" id="ps-back-results" data-i18n="ps_back_results">← Back to results</button>
+    <div class="ps-detail" aria-live="polite">
+      <article class="ps-info" id="ps-info"></article>
+      <div class="ps-mapcol">
+        <div class="ps-map" id="ps-map" role="region" aria-label="Map"></div>
+        <div class="ps-route" id="ps-route">
+          <div class="ps-route-head">
+            <span class="ps-label" data-i18n="ps_start">Starting point</span>
+            <div class="ps-mode" role="group" aria-label="Travel mode">
+              <button type="button" class="ps-chip" id="ps-mode-car" aria-pressed="true" data-i18n="ps_by_car">By car</button>
+              <button type="button" class="ps-chip" id="ps-mode-foot" aria-pressed="false" data-i18n="ps_on_foot">On foot</button>
+            </div>
+          </div>
+          <div class="ps-loc-row">
+            <button type="button" class="ps-btn" id="ps-geo-2" data-i18n="ps_use_location">Use my location</button>
+            <label class="sr-only" for="ps-place-2" data-i18n="ps_place_ph">Or type a place, e.g. Kimironko</label>
+            <input type="text" id="ps-place-2" autocomplete="off" maxlength="120" data-i18n-placeholder="ps_place_ph" placeholder="Or type a place, e.g. Kimironko">
+            <button type="button" class="ps-btn" id="ps-place-go-2" data-i18n="ps_find">Find</button>
+          </div>
+          <ul class="ps-places" id="ps-places-2" hidden></ul>
+          <p class="ps-msg" id="ps-route-msg" role="status" aria-live="polite"></p>
+          <div class="ps-directions" id="ps-directions"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<script src="js/site-layout.js" data-part="footer"></script>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/script.js"></script>
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="js/patient-search.js"></script>
+</body>
+</html>

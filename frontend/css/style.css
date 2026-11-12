@@ -242,6 +242,8 @@ nav.main-nav a:hover::after{transform:scaleX(1);}
 .rstock.low{background:rgba(250,210,1,.25); color:#7d5a00;}
 .rstock.out{background:var(--tint); color:var(--text-faint);}
 .result-empty{padding:16px 14px; font-size:13px; color:var(--text-faint);}
+.result-more{display:block; padding:12px 14px; font-size:13.5px; font-weight:600; color:var(--green); text-decoration:none; background:rgba(26,148,88,.06);}
+.result-more:hover, .result-more:focus-visible{background:rgba(26,148,88,.12); text-decoration:underline;}
 
 
 .pharm-pill{
