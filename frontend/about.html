@@ -67,7 +67,7 @@
     <h2 id="for-title" data-i18n="about_for_h">One platform for the whole medicine chain</h2>
   </div>
   <div class="role-grid">
-    <article class="role-card t-blue">
+    <article class="reveal role-card t-blue">
       <div class="role-photo"><img src="assets/images/audience-patients.png" alt="Illustration: a patient uses her phone outside a Kigali pharmacy" loading="lazy" width="1536" height="1024"><span class="role-num">01</span></div>
       <div class="role-body">
         <h3 data-i18n="about_r1_h">Patients</h3>
@@ -76,7 +76,7 @@
         <a class="role-link" href="index.html#hero-search"><span data-i18n="about_r1_cta">Find a medicine</span> →</a>
       </div>
     </article>
-    <article class="role-card t-violet">
+    <article class="reveal role-card t-violet">
       <div class="role-photo"><img src="assets/images/audience-professionals.png" alt="Illustration: a doctor consults a tablet with a patient" loading="lazy" width="1536" height="1024"><span class="role-num">02</span></div>
       <div class="role-body">
         <h3 data-i18n="about_r2_h">Doctors and healthcare professionals</h3>
@@ -85,7 +85,7 @@
         <a class="role-link" href="index.html#hero-search"><span data-i18n="about_r2_cta">Check availability</span> →</a>
       </div>
     </article>
-    <article class="role-card t-green">
+    <article class="reveal role-card t-green">
       <div class="role-photo"><img src="assets/images/audience-pharmacies.png" alt="Illustration: a pharmacist scans a medicine box to manage stock" loading="lazy" width="1536" height="1024"><span class="role-num">03</span></div>
       <div class="role-body">
         <h3 data-i18n="about_r3_h">Pharmacies</h3>
@@ -94,7 +94,7 @@
         <a class="role-link" href="pharmacies.html"><span data-i18n="about_r3_cta">Register your pharmacy</span> →</a>
       </div>
     </article>
-    <article class="role-card t-amber">
+    <article class="reveal role-card t-amber">
       <div class="role-photo"><img src="assets/images/audience-suppliers.png" alt="Illustration: a supplier scans a carton of medical supplies" loading="lazy" width="1536" height="1024"><span class="role-num">04</span></div>
       <div class="role-body">
         <h3 data-i18n="about_r4_h">Medicine suppliers</h3>
@@ -106,22 +106,42 @@
   </div>
 </section>
 
-<section class="about-section flow-band" aria-labelledby="flow-title">
+<section class="about-section journey" aria-labelledby="flow-title">
   <div class="wrap">
-    <div class="eyebrow" data-i18n="about_flow">— How it connects</div>
-    <h2 id="flow-title" data-i18n="about_flow_h">From a search to a medicine in hand</h2>
-    <ol class="flow"><li class="flow-step"><span class="flow-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><span class="flow-n">01</span><h3 data-i18n="about_f1_h">Search</h3><p data-i18n="about_f1_p">A patient or a doctor looks for a medicine.</p></li><li class="flow-step"><span class="flow-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.1-7-11a7 7 0 0 1 14 0c0 4.9-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg></span><span class="flow-n">02</span><h3 data-i18n="about_f2_h">Find a pharmacy</h3><p data-i18n="about_f2_p">ApexRX shows nearby pharmacies that have it.</p></li><li class="flow-step"><span class="flow-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5 12 12l9-4.5M12 12v9"/></svg></span><span class="flow-n">03</span><h3 data-i18n="about_f3_h">Restock</h3><p data-i18n="about_f3_p">Pharmacies source what runs low from verified suppliers.</p></li><li class="flow-step"><span class="flow-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="10" rx="1.2"/><path d="M14 10h4l3.5 3.5V17h-7.5"/><circle cx="6" cy="19" r="1.8"/><circle cx="17.5" cy="19" r="1.8"/></svg></span><span class="flow-n">04</span><h3 data-i18n="about_f4_h">Deliver</h3><p data-i18n="about_f4_p">Suppliers confirm and deliver, and the medicine is back on the shelf.</p></li></ol>
+    <div class="journey-head">
+      <div class="eyebrow" data-i18n="about_flow">— How it connects</div>
+      <h2 id="flow-title" data-i18n="about_flow_h">From a search to a medicine in hand</h2>
+    </div>
+    <ol class="j-track">
+      <li class="j-line" aria-hidden="true"><span class="j-pulse"></span></li>
+      <li class="j-step t-blue reveal">
+        <div class="j-node"><span class="j-ring" aria-hidden="true"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="j-num">1</span></div>
+        <div class="j-card"><h3 data-i18n="about_f1_h">Search</h3><p data-i18n="about_f1_p">A patient or a doctor looks for a medicine.</p></div>
+      </li>
+      <li class="j-step t-violet reveal">
+        <div class="j-node"><span class="j-ring" aria-hidden="true"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.1-7-11a7 7 0 0 1 14 0c0 4.9-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg><span class="j-num">2</span></div>
+        <div class="j-card"><h3 data-i18n="about_f2_h">Find a pharmacy</h3><p data-i18n="about_f2_p">ApexRX shows nearby pharmacies that have it.</p></div>
+      </li>
+      <li class="j-step t-green reveal">
+        <div class="j-node"><span class="j-ring" aria-hidden="true"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5 12 12l9-4.5M12 12v9"/></svg><span class="j-num">3</span></div>
+        <div class="j-card"><h3 data-i18n="about_f3_h">Restock</h3><p data-i18n="about_f3_p">Pharmacies source what runs low from verified suppliers.</p></div>
+      </li>
+      <li class="j-step t-amber reveal">
+        <div class="j-node"><span class="j-ring" aria-hidden="true"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="10" rx="1.2"/><path d="M14 10h4l3.5 3.5V17h-7.5"/><circle cx="6" cy="19" r="1.8"/><circle cx="17.5" cy="19" r="1.8"/></svg><span class="j-num">4</span></div>
+        <div class="j-card"><h3 data-i18n="about_f4_h">Deliver</h3><p data-i18n="about_f4_p">Suppliers confirm and deliver, and the medicine is back on the shelf.</p></div>
+      </li>
+    </ol>
   </div>
 </section>
 
 <section class="about-section wrap" aria-label="Mission and vision">
   <div class="statement-grid">
-    <article class="statement" id="mission">
+    <article class="reveal statement" id="mission">
       <div class="eyebrow" data-i18n="about_mission_e">— Our mission</div>
       <h2 data-i18n="about_mission_h">Our Mission</h2>
       <p data-i18n="about_mission">To make medicine availability visible and reliable for everyone in the medicine chain, so that patients get the right medicine faster, healthcare professionals decide with confidence, and pharmacies and suppliers serve them better.</p>
     </article>
-    <article class="statement vision" id="vision">
+    <article class="reveal statement vision" id="vision">
       <div class="eyebrow" data-i18n="about_vision_e">— Our vision</div>
       <h2 data-i18n="about_vision_h">Our Vision</h2>
       <p data-i18n="about_vision">A Rwanda where no one goes from pharmacy to pharmacy looking for a medicine, where every prescription can be filled close to home, and where every pharmacy plans its stock with confidence.</p>
@@ -135,21 +155,10 @@
     <h2 id="values-title" data-i18n="about_values_h">Our values</h2>
   </div>
   <div class="values-grid">
-    <article class="value"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8 12l3 3 5-6"/></svg></span><h3 data-i18n="about_v1_h">Trust</h3><p data-i18n="about_v1_p">Every pharmacy and supplier is reviewed by our team, with its registration documents, before it can trade on the platform.</p></article>
-    <article class="value"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><h3 data-i18n="about_v2_h">Privacy</h3><p data-i18n="about_v2_p">Anyone can search without an account. People see whether a medicine is available, never a pharmacy’s exact quantities.</p></article>
-    <article class="value"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><h3 data-i18n="about_v3_h">Accuracy</h3><p data-i18n="about_v3_p">Every result shows when the stock was last confirmed, so people know how fresh the information is.</p></article>
-    <article class="value"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span><h3 data-i18n="about_v4_h">Access for everyone</h3><p data-i18n="about_v4_p">The platform works on a phone and is available in Kinyarwanda, English and French.</p></article>
-  </div>
-</section>
-
-<section class="about-section wrap" aria-labelledby="status-title">
-  <div class="section-head">
-    <div class="eyebrow" data-i18n="about_status">— Where we are today</div>
-    <h2 id="status-title" data-i18n="about_status_h">Built step by step</h2>
-  </div>
-  <div class="status-grid">
-    <div class="status now"><h3><span class="dot" aria-hidden="true"></span><span data-i18n="about_now_h">Available now</span></h3><ul><li data-i18n="about_now_1">Medicine search across registered pharmacies</li><li data-i18n="about_now_2">Registration and verification for pharmacies and suppliers</li><li data-i18n="about_now_3">Workspaces for stock, supplier prices and orders</li></ul></div>
-    <div class="status next"><h3><span class="dot" aria-hidden="true"></span><span data-i18n="about_next_h">In development</span></h3><ul><li data-i18n="about_next_1">Batch and expiry date tracking</li><li data-i18n="about_next_2">Medicine reservation for patients</li><li data-i18n="about_next_3">AI-assisted demand forecasting</li><li data-i18n="about_next_4">Online subscription payments</li></ul></div>
+    <article class="value reveal"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8 12l3 3 5-6"/></svg></span><h3 data-i18n="about_v1_h">Trust</h3><p data-i18n="about_v1_p">Every pharmacy and supplier is reviewed by our team, with its registration documents, before it can trade on the platform.</p></article>
+    <article class="value reveal"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><h3 data-i18n="about_v2_h">Privacy</h3><p data-i18n="about_v2_p">Anyone can search without an account. People see whether a medicine is available, never a pharmacy’s exact quantities.</p></article>
+    <article class="value reveal"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><h3 data-i18n="about_v3_h">Accuracy</h3><p data-i18n="about_v3_p">Every result shows when the stock was last confirmed, so people know how fresh the information is.</p></article>
+    <article class="value reveal"><span class="about-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span><h3 data-i18n="about_v4_h">Access for everyone</h3><p data-i18n="about_v4_p">The platform works on a phone and is available in Kinyarwanda, English and French.</p></article>
   </div>
 </section>
 
@@ -187,17 +196,6 @@
   </div>
 </section>
 
-<section class="about-section wrap" aria-labelledby="partners-title">
-  <div class="section-head">
-    <div class="eyebrow" data-i18n="about_partners">— Supported by</div>
-    <h2 id="partners-title" data-i18n="about_partners_h">Our partners</h2>
-  </div>
-  <div class="partner-row">
-    <a href="https://aims.ac.rw/" target="_blank" rel="noopener"><img src="assets/logos/partner-aims.png" alt="AIMS Rwanda, African Institute for Mathematical Sciences" loading="lazy"></a>
-    <a href="https://mastercardfdn.org/en/" target="_blank" rel="noopener"><img src="assets/logos/partner-mastercard.png" alt="Mastercard Foundation" loading="lazy"></a>
-  </div>
-</section>
-
 <section class="about-section wrap" id="organization" aria-labelledby="org-title">
   <div class="section-head">
     <div class="eyebrow" data-i18n="about_org">— Our organization</div>
@@ -207,10 +205,6 @@
     <div><h3 data-i18n="about_story_h">Our story</h3><p data-i18n="about_story_p">ApexRX_Smart started from a question every patient and every doctor in Kigali has asked: where can this medicine be found today? We are building the answer with pharmacies and suppliers, one district at a time.</p></div>
     <div><h3 data-i18n="about_where_h">Where we work</h3><p data-i18n="about_where_p">We start in Kigali, across Gasabo, Kicukiro and Nyarugenge, with the goal of serving the whole of Rwanda.</p></div>
     <div id="contact"><h3 data-i18n="about_contact_h">Get in touch</h3><p data-i18n="about_contact_p">Pharmacy owner, supplier, health professional or partner? Follow us and send us a message:</p><p class="links"><a href="https://www.linkedin.com/company/136934009/" target="_blank" rel="noopener">LinkedIn ↗</a> <a href="https://x.com/Apexrxsmar1ogc" target="_blank" rel="noopener">X ↗</a></p></div>
-  </div>
-  <div class="join-band">
-    <div><h3 data-i18n="about_join_h">Ready to make better decisions?</h3><p data-i18n="about_join_p">Search for a medicine now, or register your pharmacy or supplier business. Our team reviews every registration before it goes live.</p></div>
-    <div class="join-actions"><a class="btn btn-pill" href="index.html#hero-search" data-i18n="about_r1_cta">Find a medicine</a><a class="btn btn-ghost-light" href="pharmacies.html" data-i18n="nav_pharmacies">For Pharmacies</a><a class="btn btn-ghost-light" href="suppliers.html" data-i18n="nav_suppliers">For Suppliers</a></div>
   </div>
 </section>
 </main>

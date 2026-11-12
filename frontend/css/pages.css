@@ -70,25 +70,11 @@ nav.main-nav a[aria-current="page"]::after{transform:scaleX(1);}
 .values-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px;}
 .value{border:1px solid var(--line); border-radius:20px; padding:24px 22px; background:#fff;}
 .value .about-ic{background:var(--tint);box-shadow:none;}
-.status-grid{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px;}
-.status{border-radius:20px; padding:26px 28px; background:var(--tint);}
-.status h3{display:flex; gap:10px; align-items:center; font-size:18px; margin:0 0 12px;}
-.status .dot{width:10px; height:10px; border-radius:50%; background:var(--green); box-shadow:0 0 0 4px rgba(32,167,104,.18);}
-.status.next .dot{background:var(--rw-yellow, #e5be01); box-shadow:0 0 0 4px rgba(229,190,1,.22);}
-.status ul{margin:0; padding-left:20px; color:var(--text-dim); line-height:1.9; font-size:15px;}
-.partner-row{display:flex; flex-wrap:wrap; gap:18px; align-items:center;}
-.partner-row a{display:grid; place-items:center; background:#fff; border:1px solid var(--line); border-radius:18px; padding:18px 28px; height:96px; transition:box-shadow .25s;}
-.partner-row a:hover{box-shadow:0 12px 30px rgba(15,26,61,.10);}
-.partner-row img{max-height:58px; width:auto; max-width:220px;}
 .org-panel .links{display:flex; gap:14px; margin-top:10px;}
 .org-panel .links a{color:var(--green); font-weight:600; text-decoration:none;}
-.join-band{display:flex; justify-content:space-between; align-items:center; gap:24px; flex-wrap:wrap; margin-top:28px; padding:30px 34px; border-radius:24px; color:#fff; background:linear-gradient(120deg,#0f1a3d,#16305a);}
-.join-band h3{font-family:var(--font-display); font-size:26px; margin:0 0 6px;}
-.join-band p{color:rgba(255,255,255,.78); margin:0; max-width:560px; line-height:1.6;}
-.join-actions{display:flex; gap:10px; flex-wrap:wrap;}
 @media (max-width:1000px){ .values-grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
-@media (max-width:900px){ .status-grid{grid-template-columns:1fr;} }
-@media (max-width:560px){ .values-grid{grid-template-columns:1fr;} .join-band{padding:24px 22px;} }
+@media (max-width:900px){ }
+@media (max-width:560px){ .values-grid{grid-template-columns:1fr;}  }
 
 /* About: hero chips, "why it matters", the four roles and the flow */
 .hero-chips{list-style:none; display:flex; flex-wrap:wrap; gap:10px; margin:26px 0 0; padding:0;}
@@ -116,21 +102,41 @@ nav.main-nav a[aria-current="page"]::after{transform:scaleX(1);}
 .tick svg{width:12px; height:12px;}
 .role-link{margin-top:auto; color:var(--tone); font-weight:700; text-decoration:none; font-size:14.5px;}
 .role-link:hover{text-decoration:underline; text-underline-offset:3px;}
-.flow-band{margin-top:72px; padding-block:64px; color:#fff; background:linear-gradient(135deg,#0f1a3d,#16305a); position:relative; overflow:hidden;}
-.flow-band::before{content:""; position:absolute; inset:0; background:url("../assets/images/kigali-map-bg.jpg") center/cover; opacity:.08;}
-.flow-band .wrap{position:relative;}
-.flow-band .eyebrow{color:var(--green-bright);}
-.flow-band h2{font-family:var(--font-display); font-size:clamp(26px,3.4vw,38px); letter-spacing:-.02em; margin:8px 0 34px;}
-.flow{list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:18px; counter-reset:f;}
-.flow-step{position:relative; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); border-radius:20px; padding:24px 22px;}
-.flow-step:not(:last-child)::after{content:"→"; position:absolute; right:-16px; top:50%; transform:translateY(-50%); color:var(--green-bright); font-size:20px; font-weight:700; z-index:1;}
-.flow-ic{display:inline-grid; place-items:center; width:46px; height:46px; border-radius:14px; background:rgba(58,208,127,.16); color:var(--green-bright); margin-bottom:14px;}
-.flow-ic svg{width:22px; height:22px;}
-.flow-n{position:absolute; right:18px; top:18px; font-family:var(--font-display); font-weight:800; font-size:22px; color:rgba(255,255,255,.18);}
-.flow-step h3{font-size:18px; margin:0 0 6px;}
-.flow-step p{color:rgba(255,255,255,.75); font-size:14.5px; line-height:1.6; margin:0;}
-@media (max-width:1100px){ .role-grid{grid-template-columns:repeat(2,minmax(0,1fr));} .flow{grid-template-columns:repeat(2,minmax(0,1fr));} .flow-step:nth-child(2)::after{display:none;} }
-@media (max-width:620px){ .role-grid,.flow{grid-template-columns:1fr;} .flow-step::after{display:none;} .matters{padding:32px 22px;} .hero-chips li{font-size:13px;} }
+@media (max-width:1100px){ .role-grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
+@media (max-width:620px){ .role-grid{grid-template-columns:1fr;} .matters{padding:32px 22px;} .hero-chips li{font-size:13px;} }
+
+/* About: the journey, a light timeline with a moving pulse along the line */
+.journey{position:relative; padding-block:84px 30px; margin-top:40px; overflow:hidden;
+  background:radial-gradient(40% 60% at 8% 20%,rgba(42,120,214,.10),transparent 70%),radial-gradient(40% 60% at 92% 80%,rgba(26,148,88,.12),transparent 70%),linear-gradient(180deg,#fff,var(--tint) 50%,#fff);}
+.journey-head{text-align:center; max-width:720px; margin:0 auto 54px;}
+.journey-head h2{font-family:var(--font-display); font-size:clamp(28px,3.8vw,44px); letter-spacing:-.02em; line-height:1.1; margin:8px 0 0; text-wrap:balance;}
+.j-track{position:relative; list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:22px;}
+.j-line{position:absolute; left:12.5%; right:12.5%; top:43px; height:4px; border-radius:4px; background:linear-gradient(90deg,#2a78d6,#6d4fd8,#1a9458,#d99a16);}
+.j-pulse{position:absolute; top:50%; left:0; width:16px; height:16px; margin:-8px 0 0 -8px; border-radius:50%; background:#fff; box-shadow:0 0 0 4px rgba(26,148,88,.35),0 0 18px 4px rgba(42,120,214,.45); animation:j-run 5s cubic-bezier(.6,0,.4,1) infinite;}
+@keyframes j-run{0%{left:0;opacity:0}8%{opacity:1}92%{opacity:1}100%{left:100%;opacity:0}}
+.j-step{--tone:#2a78d6; position:relative; text-align:center;}
+.j-step.t-violet{--tone:#6d4fd8;} .j-step.t-green{--tone:#1a9458;} .j-step.t-amber{--tone:#c27f0e;}
+.j-node{position:relative; z-index:1; width:90px; height:90px; margin:0 auto 18px; display:grid; place-items:center; border-radius:50%; background:#fff; color:var(--tone); box-shadow:0 14px 34px rgba(15,26,61,.12),0 0 0 6px #fff,0 0 0 8px color-mix(in srgb,var(--tone) 35%,#fff); transition:transform .35s var(--ease);}
+.j-node svg{width:34px; height:34px;}
+.j-ring{position:absolute; inset:-8px; border-radius:50%; border:2px solid var(--tone); opacity:0; animation:j-ring 2.8s ease-out infinite;}
+.j-step:nth-child(3) .j-ring{animation-delay:.7s}.j-step:nth-child(4) .j-ring{animation-delay:1.4s}.j-step:nth-child(5) .j-ring{animation-delay:2.1s}
+@keyframes j-ring{0%{transform:scale(.9);opacity:.55}100%{transform:scale(1.35);opacity:0}}
+.j-num{position:absolute; right:-4px; top:-4px; width:28px; height:28px; display:grid; place-items:center; border-radius:50%; background:var(--tone); color:#fff; font-weight:800; font-size:13px; box-shadow:0 0 0 3px #fff;}
+.j-card{background:#fff; border:1px solid var(--line); border-radius:20px; padding:20px 18px 22px; box-shadow:0 10px 30px rgba(15,26,61,.06); transition:transform .35s var(--ease), box-shadow .35s; border-top:4px solid var(--tone);}
+.j-step:hover .j-node{transform:translateY(-4px) scale(1.04);}
+.j-step:hover .j-card{transform:translateY(-4px); box-shadow:0 22px 44px rgba(15,26,61,.12);}
+.j-card h3{font-size:18px; margin:0 0 6px;}
+.j-card p{color:var(--text-dim); font-size:14.5px; line-height:1.6; margin:0;}
+.journey + .about-section{padding-top:54px;}
+@media (max-width:900px){
+  .j-track{grid-template-columns:1fr; gap:18px; max-width:560px; margin:0 auto;}
+  .j-line{left:44px; right:auto; top:30px; bottom:30px; width:4px; height:auto; background:linear-gradient(180deg,#2a78d6,#6d4fd8,#1a9458,#d99a16);}
+  .j-pulse{left:50%; animation-name:j-run-v;}
+  .j-step{display:grid; grid-template-columns:90px 1fr; gap:18px; text-align:left; align-items:center;}
+  .j-node{margin:0;}
+}
+@keyframes j-run-v{0%{top:0;opacity:0}8%{opacity:1}92%{opacity:1}100%{top:100%;opacity:0}}
+@media (prefers-reduced-motion:reduce){ .j-pulse,.j-ring{animation:none; display:none;} }
 
 /* ---------- Legal ---------- */
 .legal-layout{display:grid; grid-template-columns:220px minmax(0,1fr); gap:48px; padding-block:64px 90px; align-items:start;}
