@@ -12,6 +12,7 @@ from app.api import (
     catalogue,
     dev,
     email_verification,
+    insights,
     inventory,
     invitations,
     orders,
@@ -126,6 +127,7 @@ app.include_router(organizations.router, prefix="/organizations", tags=["Organiz
 app.include_router(invitations.router, prefix="/organizations", tags=["Staff invitations"])
 app.include_router(invitations.public_router, prefix="/invitations", tags=["Staff invitations"])
 app.include_router(inventory.router, prefix="/organizations", tags=["Inventory"])
+app.include_router(insights.router, prefix="/organizations", tags=["Dashboard insights"])
 app.include_router(search.supplier_router, prefix="/supplier-offers", tags=["Supplier discovery"])
 app.include_router(orders.router, prefix="/purchase-orders", tags=["Purchase orders"])
 app.include_router(admin.router, prefix="/admin", tags=["Admin"])

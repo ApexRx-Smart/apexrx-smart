@@ -352,6 +352,7 @@
 ['Open order value','Valeur des commandes ouvertes','Agaciro k’amakomande afunguye'],
 ['WHAT PHARMACIES WANT','CE QUE VEULENT LES PHARMACIES','ICYO FARUMASI ZISHAKA'],
 ['Most requested medicines','Médicaments les plus demandés','Imiti isabwa cyane'],
+['These figures could not be loaded. Try again later.','Ces chiffres n’ont pas pu être chargés. Réessayez plus tard.','Iyi mibare ntiyabonetse. Ongera ugerageze nyuma.'],
 ['Supplier ID','Identifiant fournisseur','Nimero y’utanga imiti'],
 ['Forecasting','Prévisions','Iteganyabikorwa'],
 ['Forecast','Prévision','Iteganyabikorwa'],

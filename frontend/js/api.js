@@ -563,7 +563,10 @@
         return request('POST', org(id) + '/documents', { form: form });
       },
       deleteDocument: function (id, docId) { return del(org(id) + '/documents/' + enc(docId)); },
-      downloadDocument: function (id, docId) { return download(org(id) + '/documents/' + enc(docId) + '/download'); }
+      downloadDocument: function (id, docId) { return download(org(id) + '/documents/' + enc(docId) + '/download'); },
+
+      /* Dashboard charts and management figures. Owners and managers only: staff get 403. */
+      insights: function (id, params) { return get(org(id) + '/insights', params); }
     },
 
     /* Stock (any member) and offers/prices (owners and managers). */
