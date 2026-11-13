@@ -57,7 +57,7 @@
   const isPreview = !D;
   if (isPreview && params.get('preview') !== '1') { location.replace(ONBOARD + '?lang=' + lang + '#signin'); return; }
   const data = D || window.DashData.preview(ROLE);
-  const S = { view: 'home', loc: null, stock: [], orders: [], full: new Map(), drugs: [], q: '', cat: '', sort: 'price', sf: '', ovq: '', party: null, newParty: null, listOpen: false, listRows: [], imp: null, offers: [], por: isPreview && IS_PH ? samplePatientOrders() : [] };
+  const S = { view: 'home', loc: null, stock: [], orders: [], full: new Map(), drugs: [], q: '', cat: '', sort: 'price', sf: '', ovq: '', party: null, newParty: null, listOpen: false, listRows: [], imp: null, offers: [], ins: null, insErr: false, por: isPreview && IS_PH ? samplePatientOrders() : [] };
   let ctx = null; // { user, org, myRole, locations }
 
   function samplePatientOrders() {
@@ -65,6 +65,9 @@
   }
   const approved = () => ctx.org.status === 'approved';
   const canManage = () => ctx.myRole === 'owner' || ctx.myRole === 'manager';
+  // Charts, analytics and forecasting: owners and managers only. The API enforces
+  // it too (GET /organizations/{id}/insights refuses staff with 403).
+  const seesInsights = () => !!ctx && canManage();
   // Batch numbers and expiry dates: only the preview has them until the API stores batches.
   const hasBatches = () => !!data.batches;
   const ROLE_NAMES = { owner: 'Owner', manager: 'Manager', staff: 'Staff' };
@@ -110,11 +113,12 @@
   function chrome() {
     document.documentElement.lang = lang;
     document.title = t(IS_PH ? 'Pharmacy dashboard' : 'Supplier dashboard') + ' — ApexRX Smart';
-    $('#nav').innerHTML = NAV.map(([v, l]) => `<button class="nav" data-a="nav" data-v="${v}">${esc(t(l))}${v === 'prem' ? ` <span class="tag">${esc(t('Premium'))}</span>` : `<span class="badge" id="b-${v}" hidden></span>`}</button>`).join('');
+    $('#nav').innerHTML = NAV.filter(([v]) => v !== 'prem' || seesInsights()).map(([v, l]) => `<button class="nav" data-a="nav" data-v="${v}">${esc(t(l))}${v === 'prem' ? ` <span class="tag">${esc(t('Premium'))}</span>` : `<span class="badge" id="b-${v}" hidden></span>`}</button>`).join('');
     $('#nav').setAttribute('aria-label', t(IS_PH ? 'Pharmacy workspace' : 'Supplier workspace'));
     $('#p-t').textContent = t('Premium');
     $('#p-d').textContent = t(IS_PH ? 'Demand forecast and more tools, coming with Premium.' : 'Demand forecast for your catalogue.');
     $('#p-b').textContent = t('See the preview'); $('#p-b').dataset.v = 'prem';
+    $('.pcard').hidden = !seesInsights();
     $('#br-l').textContent = t(IS_PH ? 'Branch' : 'Depot');
     $('#out').textContent = isPreview ? t('Exit preview') : t('Sign out');
     $('#lang').value = lang;
@@ -150,6 +154,7 @@
     set('por', S.por.filter(o => o.st === 'New').length);
   }
   function go(v) {
+    if (!VIEWS[v] || (v === 'prem' && !seesInsights())) v = 'home';
     S.view = v;
     if (unmountForecast) { unmountForecast(); unmountForecast = null; }
     document.querySelectorAll('.nav').forEach(b => b.dataset.v === v ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
@@ -211,11 +216,6 @@ ${gone.length ? `<p class="lock">${esc(pl(gone.length, '{n} batch has expired an
   function homePharmacy() {
     const n = waiting().length, low = lowItems(), loc = curLoc(), bn = loc ? loc.name : ctx.org.name;
     const convs = threads().length, lowNames = low.slice(0, 4).map(label).join(', '), newPor = S.por.filter(o => o.st === 'New').length;
-    const counts = { in: 0, low: 0, out: 0 };
-    S.stock.forEach(x => { const q = sellable(x); counts[q <= 0 ? 'out' : q <= threshold(x) ? 'low' : 'in']++; });
-    const total = S.stock.length || 1;
-    const seg = (k, l) => counts[k] ? `<span class="h-${k}" style="flex:${counts[k]}" title="${esc(t(l))}: ${counts[k]}"></span>` : '';
-    const legend = (k, l) => `<li><i class="h-${k}"></i><span>${esc(t(l))}</span><b>${counts[k]}</b><small>${Math.round(counts[k] / total * 100)}%</small></li>`;
     const att = [
       actRow(newPor, isPreview ? pl(newPor, '{n} new patient order', '{n} new patient orders') : t('No new patient orders'), isPreview ? t('Patients order from your stock at {b}.', { b: bn }) : t('Patient ordering is coming soon.'), navBtn('por', 'View patient orders')),
       actRow(n, n ? pl(n, '{n} price offer waiting for your answer', '{n} price offers waiting for your answer') : t('No offers waiting'), n ? t('Accept or decline the offer from the supplier.') : t('Ask a supplier for a quote from Compare prices.'), navBtn('msg', 'Open messages')),
@@ -227,19 +227,17 @@ ${gone.length ? `<p class="lock">${esc(pl(gone.length, '{n} batch has expired an
 <button class="ov-card" data-a="nav" data-v="set"><span class="ov-i">◎</span><strong>${esc(t('Your pharmacy profile'))}</strong><small>${esc((loc && loc.address) || t('Review your location and details'))} →</small></button>
 <div class="ov-card" id="plan-card"><span class="ov-i">✓</span><strong>${esc(t('Plans and payments'))}</strong><small><span class="tag">${esc(t('Not live yet'))}</span> ${esc(t('ApexRX takes no payments and has no paid plans yet.'))}</small></div></div>
 <h3 class="ov-h">${esc(t('What needs your attention'))}</h3><div class="ov-actions">${att.join('')}</div>
-<div class="ov-two"><section class="ov-panel"><div class="ov-ph"><div><span class="ov-eyebrow">${esc(t('STOCK HEALTH'))}</span><h3>${esc(t('Stock at {b}', { b: bn }))}</h3></div></div>
-<div class="health" aria-hidden="true">${seg('in', 'In stock')}${seg('low', 'Low stock')}${seg('out', 'Out of stock')}</div><ul class="health-l">${legend('in', 'In stock')}${legend('low', 'Low stock')}${legend('out', 'Out of stock')}</ul></section>${expiryPanel()}</div>
+${seesInsights()
+  ? `<div class="ov-two"><section class="ov-panel ins"><div class="ov-ph"><div><span class="ov-eyebrow">${esc(t('STOCK HEALTH'))}</span><h3>${esc(t('Stock at {b}', { b: bn }))}</h3></div></div><div id="ins-health">${healthHtml()}</div></section>${expiryPanel()}</div>`
+  : expiryPanel()}
 ${conversationsPanel()}
-<section class="ov-premium"><div><span>${esc(t('MORE POSSIBILITIES'))}</span><h3>${esc(t('Think ahead.'))}<br>${esc(t('Grow with confidence.'))}</h3><p>${esc(t('AI forecasting and insurance tools.'))}</p></div>${navBtn('prem', 'Explore Premium →')}</section>`;
+${seesInsights() ? premiumBanner('AI forecasting and insurance tools.') : ''}`;
   }
 
   /* Supplier overview: the depot's sales desk. Requests moving through to delivery. */
   function homeSupplier() {
     const n = waiting().length, prep = toConfirm(), low = lowItems(), soon = expiringSoon(), loc = curLoc();
-    const convs = threads().length, count = st => S.orders.filter(o => st.includes(o.status)).length;
-    const STAGES = [['submitted', 'New requests'], ['countered', 'Offers sent'], ['accepted,processing', 'To prepare'], ['dispatched', 'Dispatched'], ['delivered', 'Delivered']];
-    const open = S.orders.filter(o => ['submitted', 'countered', 'accepted', 'processing', 'dispatched'].includes(o.status));
-    const openValue = open.reduce((v, o) => v + Number(o.confirmed_total ?? o.requested_total ?? 0), 0);
+    const convs = threads().length;
     const att = [
       actRow(n, n ? pl(n, '{n} request waiting for your offer', '{n} requests waiting for your offer') : t('No requests waiting'), t('Verified pharmacies asked for prices. Reply with an offer.'), navBtn('msg', 'Open requests')),
       actRow(prep.length, prep.length ? pl(prep.length, '{n} order to prepare', '{n} orders to prepare') : t('No orders to prepare'), t('Orders start when a pharmacy accepts your offer.'), navBtn('ord', 'View orders')),
@@ -249,27 +247,59 @@ ${conversationsPanel()}
         : actRow(0, t('Expiry tracking is not connected yet'), t(BATCHES_OFF), `<button class="ghost" disabled>${esc(t('Not connected yet'))}</button>`)
     ];
     return `<div class="ov-top"><span class="ov-eyebrow">${esc(t('SUPPLIER OVERVIEW'))}</span><p>${esc(todayText())}</p></div>${hero()}
-<section class="pipe" aria-label="${esc(t('Order pipeline'))}">${STAGES.map(([st, l], i) => `<button class="pipe-s" data-a="nav" data-v="${i < 2 ? 'msg' : 'ord'}"><b>${count(st.split(','))}</b><span>${esc(t(l))}</span></button>`).join('')}<div class="pipe-v"><small>${esc(t('Open order value'))}</small><b>${money(openValue)}</b></div></section>
+${seesInsights() ? `<section class="pipe ins" id="ins-pipe" aria-label="${esc(t('Order pipeline'))}">${pipeHtml()}</section>` : ''}
 <div class="sup-grid"><div><h3 class="ov-h">${esc(t('What needs your attention'))}</h3><div class="ov-stack">${att.join('')}</div></div>
-<div><section class="ov-panel"><div class="ov-ph"><div><span class="ov-eyebrow">${esc(t('WHAT PHARMACIES WANT'))}</span><h3>${esc(t('Most requested medicines'))}</h3></div></div><div id="toprq"><p class="empty">${esc(t('Loading…'))}</p></div></section>${expiryPanel()}</div></div>
+<div>${seesInsights() ? `<section class="ov-panel ins"><div class="ov-ph"><div><span class="ov-eyebrow">${esc(t('WHAT PHARMACIES WANT'))}</span><h3>${esc(t('Most requested medicines'))}</h3></div></div><div id="toprq">${topHtml()}</div></section>` : ''}${expiryPanel()}</div></div>
 <div class="ov-cards two"><button class="ov-card" data-a="nav" data-v="set"><span class="ov-i">◎</span><strong>${esc(t('Your supplier profile'))}</strong><small>${esc(t('Supplier ID'))} ${esc(sid())}. ${esc((loc && loc.address) || t('Review your location and details'))} →</small></button>
 <div class="ov-card" id="plan-card"><span class="ov-i">✓</span><strong>${esc(t('Plans and payments'))}</strong><small><span class="tag">${esc(t('Not live yet'))}</span> ${esc(t('ApexRX takes no payments and has no paid plans yet.'))}</small></div></div>
 ${conversationsPanel()}
-<section class="ov-premium"><div><span>${esc(t('MORE POSSIBILITIES'))}</span><h3>${esc(t('Think ahead.'))}<br>${esc(t('Grow with confidence.'))}</h3><p>${esc(t('Demand forecasting for your catalogue.'))}</p></div>${navBtn('prem', 'Explore Premium →')}</section>`;
+${seesInsights() ? premiumBanner('Demand forecasting for your catalogue.') : ''}`;
   }
-  async function topRequested() {
-    const el = $('#toprq'); if (!el) return;
-    const recent = S.orders.filter(o => o.status !== 'draft').slice(0, 15);
-    const full = await Promise.all(recent.map(async o => {
-      const c = S.full.get(o.purchase_order_id);
-      if (c && c.updated_at === o.updated_at) return c;
-      try { const f = await data.order(o.purchase_order_id); S.full.set(o.purchase_order_id, f); return f; } catch (e) { return null; }
-    }));
-    const by = new Map();
-    full.filter(Boolean).forEach(o => o.items.forEach(i => { const k = fullLabel(i); by.set(k, (by.get(k) || 0) + (i.confirmed_quantity ?? i.requested_quantity)); }));
-    const top = [...by.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5), max = top.length ? top[0][1] : 1;
-    if (!$('#toprq')) return;
-    $('#toprq').innerHTML = top.map(([k, v]) => `<div class="rq"><span>${esc(k)}</span><i><b style="width:${Math.round(v / max * 100)}%"></b></i><strong>${esc(pl(v, '{n} box', '{n} boxes'))}</strong></div>`).join('') || `<p class="empty">${esc(t('No requests yet. They appear here when a pharmacy asks you for prices.'))}</p>`;
+  const premiumBanner = text => `<section class="ov-premium"><div><span>${esc(t('MORE POSSIBILITIES'))}</span><h3>${esc(t('Think ahead.'))}<br>${esc(t('Grow with confidence.'))}</h3><p>${esc(t(text))}</p></div>${navBtn('prem', 'Explore Premium →')}</section>`;
+
+  /* Overview charts (owners and managers only): figures computed by the API.
+   * While new ones load, the last figures shown (or a loading line) stay. */
+  const insFail = () => `<p class="empty">${esc(t('These figures could not be loaded. Try again later.'))}</p>`;
+  const insLoading = () => `<p class="empty">${esc(t('Loading…'))}</p>`;
+  function healthHtml() {
+    const h = S.ins && (S.ins.location_id ?? null) === (S.loc ?? null) && S.ins.stock_health;
+    if (!h) return S.insErr ? insFail() : insLoading();
+    const counts = { in: h.in_stock, low: h.low_stock, out: h.out_of_stock }, total = h.total || 1;
+    const seg = (k, l) => counts[k] ? `<span class="h-${k}" style="flex:${counts[k]}" title="${esc(t(l))}: ${counts[k]}"></span>` : '';
+    const legend = (k, l) => `<li><i class="h-${k}"></i><span>${esc(t(l))}</span><b>${counts[k]}</b><small>${Math.round(counts[k] / total * 100)}%</small></li>`;
+    return `<div class="health" aria-hidden="true">${seg('in', 'In stock')}${seg('low', 'Low stock')}${seg('out', 'Out of stock')}</div><ul class="health-l">${legend('in', 'In stock')}${legend('low', 'Low stock')}${legend('out', 'Out of stock')}</ul>`;
+  }
+  function pipeHtml() {
+    const p = S.ins && S.ins.order_pipeline;
+    const STAGES = [['submitted', 'New requests'], ['countered', 'Offers sent'], ['accepted,processing', 'To prepare'], ['dispatched', 'Dispatched'], ['delivered', 'Delivered']];
+    const n = st => p ? st.split(',').reduce((v, k) => v + (p[k] || 0), 0) : '—';
+    const value = S.ins ? money(S.ins.open_order_value, S.ins.currency) : S.insErr ? '—' : t('Loading…');
+    return `${STAGES.map(([st, l], i) => `<button class="pipe-s" data-a="nav" data-v="${i < 2 ? 'msg' : 'ord'}"><b>${n(st)}</b><span>${esc(t(l))}</span></button>`).join('')}<div class="pipe-v"><small>${esc(t('Open order value'))}</small><b>${esc(value)}</b></div>`;
+  }
+  function topHtml() {
+    if (!S.ins) return S.insErr ? insFail() : insLoading();
+    const top = S.ins.top_requested || [], max = top.length ? top[0].quantity : 1;
+    return top.map(x => `<div class="rq"><span>${esc(fullLabel(x))}</span><i><b style="width:${Math.round(x.quantity / max * 100)}%"></b></i><strong>${esc(pl(x.quantity, '{n} box', '{n} boxes'))}</strong></div>`).join('') || `<p class="empty">${esc(t('No requests yet. They appear here when a pharmacy asks you for prices.'))}</p>`;
+  }
+  // One reload at most per refusal, so a mismatch can never loop.
+  const onceReload = () => { try { if (sessionStorage.getItem('apexrx_ins_reload')) return false; sessionStorage.setItem('apexrx_ins_reload', '1'); } catch (e) { return false; } location.reload(); return true; };
+  async function loadInsights() {
+    if (!seesInsights()) return;
+    const loc = S.loc;
+    try {
+      const ins = await data.insights(loc);
+      if (S.loc !== loc) return; // the branch changed meanwhile
+      S.ins = ins; S.insErr = false;
+      try { sessionStorage.removeItem('apexrx_ins_reload'); } catch (e) { /* storage unavailable */ }
+    } catch (err) {
+      if (err.status === 401) return; // signed out: the page goes to sign-in
+      // Refused: the role changed since this page loaded (no longer owner or
+      // manager). Reload, so the page shows what the current role allows.
+      if ((err.status === 403 || err.status === 404) && onceReload()) return;
+      S.insErr = true;
+    }
+    const paint = (id, html) => { const el = $(id); if (el) el.innerHTML = html; };
+    paint('#ins-health', healthHtml()); paint('#ins-pipe', pipeHtml()); paint('#toprq', topHtml());
   }
 
   const VIEWS = {
@@ -809,7 +839,7 @@ ${S.listOpen ? `<div class="lb"><strong>${esc(t('Order list'))}</strong><p class
 
   let unmountForecast = null;
   const AFTER = {
-    home() { ovList(); if (!IS_PH) topRequested(); },
+    home() { ovList(); loadInsights(); },
     prem() { unmountForecast = DashForecast.mount($('#fc-root'), { role: ROLE, t, locale: LOCALE }); },
     cmp() { if (S.offers.length) renderOffers(); loadOffers(); },
     msg: thread,

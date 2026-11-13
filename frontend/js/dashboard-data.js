@@ -108,6 +108,9 @@
       capabilities: () => A.auth.capabilities().catch(() => ({ invitation_emails: false })),
       documents: () => A.organizations.documents(orgId),
       uploadDocument: (type, file) => A.organizations.uploadDocument(orgId, type, file),
+      // Charts and management figures, computed by the API for owners and managers
+      // only (staff get 403 there, whatever this page shows).
+      insights: locationId => A.organizations.insights(orgId, locationId ? { location_id: locationId } : {}),
       signOut: () => A.auth.logout()
     };
     return self;
@@ -311,6 +314,23 @@
       capabilities: () => delay({ invitation_emails: false }),
       documents: () => delay(documents),
       uploadDocument(type, file) { const d = { document_id: ++seq, document_type: type, file_name: file.name, verification_status: 'pending' }; documents.push(d); return delay(d); },
+      // Same shape and rules as GET /organizations/{id}/insights, from the sample data.
+      insights(loc) {
+        const health = { in_stock: 0, low_stock: 0, out_of_stock: 0, total: 0 };
+        stock.filter(s => !loc || s.location_id === loc).forEach(s => {
+          const q = s.quantity - (s.expired_quantity || 0), thr = s.offer ? s.offer.low_stock_threshold : 5;
+          health[q <= 0 ? 'out_of_stock' : q <= thr ? 'low_stock' : 'in_stock']++; health.total++;
+        });
+        const pipeline = {};
+        ['draft', 'submitted', 'countered', 'accepted', 'rejected', 'processing', 'dispatched', 'delivered', 'cancelled'].filter(st => pharmacy || st !== 'draft').forEach(st => { pipeline[st] = orders.filter(o => o.status === st).length; });
+        const open = orders.filter(o => ['submitted', 'countered', 'accepted', 'processing', 'dispatched'].includes(o.status));
+        const by = new Map();
+        orders.filter(o => o.status !== 'draft').slice().sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 15)
+          .forEach(o => o.items.forEach(i => { const c = by.get(i.product_id) || { product_id: i.product_id, product_name: i.product_name, drug_name: i.drug_name, strength: i.strength, pack_size: i.pack_size, quantity: 0 }; c.quantity += i.confirmed_quantity ?? i.requested_quantity; by.set(i.product_id, c); }));
+        return delay({ organization_id: org.organization_id, location_id: loc || null, stock_health: health, order_pipeline: pipeline,
+          open_order_value: open.reduce((v, o) => v + Number(o.confirmed_total ?? o.requested_total ?? 0), 0), currency: 'RWF',
+          top_requested: [...by.values()].sort((a, b) => b.quantity - a.quantity || a.product_name.localeCompare(b.product_name)).slice(0, 5) });
+      },
       signOut() {}
     };
   }
