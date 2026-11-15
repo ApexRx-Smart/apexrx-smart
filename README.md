@@ -105,7 +105,7 @@ Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
   - **Resuming:** progress is read back from the backend, so signing in again continues an incomplete registration where it stopped.
   - The page always shows which account is signed in ("Signed in as … · Sign out"). There is no payment or subscription step, and phone numbers are contact details only.
 - **The pharmacy and supplier dashboards** (`pharmacy-dashboard.html`, `supplier-dashboard.html`, `js/dashboard.js`) run the business day to day, on real backend data:
-  - **Pharmacy:** overview, compare supplier prices and ask for quotes, messages with suppliers (stored in ApexRX), procurement requests and quotations, notifications, supplier orders, stock per branch, branches and team.
+  - **Pharmacy:** overview, compare supplier prices and send an order at the listed price, messages with suppliers (stored in ApexRX), procurement requests and quotations, notifications, supplier orders, stock per branch, branches and team.
   - **Supplier:** overview with the order pipeline, requests per pharmacy, orders (offer, accept, decline, prepare, dispatch), catalogue and stock per depot, depots and team.
   - **Team:** invite by email and role (no account needed; see [Staff accounts and invitations](#staff-accounts-and-invitations)), renew or revoke invitations, change roles, deactivate, remove.
   - **Organization selector:** for users who belong to several organizations; it opens the matching dashboard.

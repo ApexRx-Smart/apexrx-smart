@@ -125,6 +125,14 @@ def main():
         page = ctx.new_page()
         watch(page, errors)
         page.goto(SITE + "/index.html")
+        body = page.inner_text("body")
+        check("home: no hard-coded pharmacy pins, stock cards or numerical claims",
+              page.locator(".pin, .pin-card, #mapFx, section.stats, [data-count]").count() == 0
+              and not any(x in body for x in ("250+", "1000+", "99.5%", "All of Kigali connected", "Kacyiru Central")))
+        check("home: copy describes reported availability, not live stock",
+              page.inner_text(".live-badge") == "Availability reported by pharmacies"
+              and "Live stock" not in body and "Real-time" not in body and "last updated" in page.inner_text(".lede"))
+        check("home: the decorative Kigali map background stays", page.locator("#mapLayer img.map-bg-img").count() == 1)
         nav = page.locator("nav.main-nav a")
         labels = [a.strip() for a in nav.all_inner_texts()]
         check("nav: 'For Patients' removed from the main navigation", "For Patients" not in labels, labels)
@@ -187,8 +195,10 @@ def main():
         page.goto(SITE + "/index.html")
         page.click("footer .footer-col a:has-text('Terms of Service')")
         page.wait_for_url("**/legal.html#terms")
-        check("legal: the Terms page shows, clearly marked as a placeholder",
-              page.is_visible("#terms") and page.is_hidden("#privacy") and "Placeholder" in page.inner_text("#terms .placeholder-callout"))
+        check("legal: the Terms page shows, clearly marked as not published or approved",
+              page.is_visible("#terms") and page.is_hidden("#privacy")
+              and "not yet been published or approved" in page.inner_text("#terms .placeholder-callout"))
+        check("legal: no Lorem Ipsum on any legal page", "lorem" not in page.content().lower())
         page.click(".legal-nav a[data-doc=cookies]")
         page.wait_for_function("location.hash === '#cookies'")
         check("legal: switching between legal pages", page.is_visible("#cookies") and page.title().startswith("Cookie Policy"))

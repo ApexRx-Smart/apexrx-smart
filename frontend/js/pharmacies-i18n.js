@@ -47,7 +47,6 @@ const workflowTranslations = {
  "Document type": {"fr": "Type de document", "rw": "Ubwoko bw’inyandiko"},
  "File": {"fr": "Fichier", "rw": "Dosiye"},
  "Upload document": {"fr": "Envoyer le document", "rw": "Ohereza inyandiko"},
- "Supplier screens for stock, prices and incoming orders are not on the website yet.": {"fr": "Les écrans fournisseur pour le stock, les prix et les commandes reçues ne sont pas encore sur le site.", "rw": "Ahakorerwa abatanga imiti (ububiko, ibiciro n’ibyo batumijwe) ntiharashyirwa ku rubuga."},
  "Edit business details": {"fr": "Modifier les informations de l’entreprise", "rw": "Hindura amakuru y’ubucuruzi"},
  "Check status": {"fr": "Vérifier le statut", "rw": "Reba aho bigeze"},
  "Sign out": {"fr": "Se déconnecter", "rw": "Sohoka"},
@@ -60,7 +59,6 @@ const workflowTranslations = {
  "Your registration": {"fr": "Votre inscription", "rw": "Iyandikwa ryawe"},
  "ApexRX reviews every supplier before it can work with pharmacies.": {"fr": "ApexRX vérifie chaque fournisseur avant qu’il puisse travailler avec les pharmacies.", "rw": "ApexRX igenzura buri utanga imiti mbere y’uko akorana n’amafarumasi."},
  "Your business is awaiting verification by ApexRX.": {"fr": "Votre entreprise attend la vérification d’ApexRX.", "rw": "Ubucuruzi bwawe butegereje kugenzurwa na ApexRX."},
- "Your business is verified. It can publish stock and prices and receive orders from pharmacies.": {"fr": "Votre entreprise est vérifiée. Elle peut publier son stock et ses prix et recevoir des commandes des pharmacies.", "rw": "Ubucuruzi bwawe bwemejwe. Bushobora gutangaza ububiko n’ibiciro no kwakira ibyo amafarumasi atumiza."},
  "Your business is suspended. Contact ApexRX for help.": {"fr": "Votre entreprise est suspendue. Contactez ApexRX pour obtenir de l’aide.", "rw": "Ubucuruzi bwawe bwahagaritswe. Vugana na ApexRX ngo bagufashe."},
  "Enter your business name.": {"fr": "Saisissez le nom de votre entreprise.", "rw": "Andika izina ry’ubucuruzi bwawe."},
  "Enter a name for your warehouse.": {"fr": "Saisissez un nom pour votre entrepôt.", "rw": "Andika izina ry’ububiko bwawe."},
@@ -259,10 +257,6 @@ const workflowTranslations = {
  "Your pharmacy is awaiting verification by ApexRX. Supplier search opens once it is approved.": {
   "fr": "Votre pharmacie est en attente de vérification par ApexRX. La recherche de fournisseurs s’ouvre après validation.",
   "rw": "Farumasi yawe itegereje kwemezwa na ApexRX. Gushaka abatanga imiti bizafunguka imaze kwemezwa."
- },
- "Your pharmacy is verified. Listed medicines are visible to patients on ApexRX.": {
-  "fr": "Votre pharmacie est vérifiée. Les médicaments publiés sont visibles par les patients sur ApexRX.",
-  "rw": "Farumasi yawe yaremejwe. Imiti washyizeho igaragara ku barwayi kuri ApexRX."
  },
  "Your registration was not approved. Update your details and documents, then contact ApexRX to resubmit.": {
   "fr": "Votre inscription n’a pas été validée. Mettez à jour vos informations et documents, puis contactez ApexRX pour la soumettre à nouveau.",
@@ -746,11 +740,9 @@ Object.assign(workflowTranslations, {
  "Status updated.": {"fr": "Statut mis à jour.", "rw": "Uko bimeze byavuguruwe."},
  "Your registration is back in the ApexRX review queue.": {"fr": "Votre inscription est de nouveau dans la file de vérification d’ApexRX.", "rw": "Iyandikwa ryawe ryasubijwe ku rutonde rw’isuzuma rwa ApexRX."},
  "Your pharmacy is awaiting verification by ApexRX. Supplier search opens once it is approved.": {"fr": "Votre pharmacie attend la vérification d’ApexRX. La recherche de fournisseurs s’ouvre après approbation.", "rw": "Farumasi yawe itegereje kugenzurwa na ApexRX. Gushaka abatanga imiti bizafunguka imaze kwemezwa."},
- "Your pharmacy is verified. Listed medicines are visible to patients on ApexRX.": {"fr": "Votre pharmacie est vérifiée. Les médicaments listés sont visibles par les patients sur ApexRX.", "rw": "Farumasi yawe yemejwe. Imiti yanditswe igaragara ku barwayi kuri ApexRX."},
  "Your registration was not approved. Correct your details or documents, then resubmit it for review.": {"fr": "Votre inscription n’a pas été approuvée. Corrigez vos détails ou documents, puis soumettez-la à nouveau.", "rw": "Iyandikwa ryawe ntiryemewe. Kosora amakuru cyangwa inyandiko, hanyuma wongere uryohereze ngo risuzumwe."},
  "Your pharmacy is suspended. Contact ApexRX for help.": {"fr": "Votre pharmacie est suspendue. Contactez ApexRX pour obtenir de l’aide.", "rw": "Farumasi yawe yahagaritswe. Vugana na ApexRX ngo agufashe."},
  "Your business is awaiting verification by ApexRX.": {"fr": "Votre entreprise attend la vérification d’ApexRX.", "rw": "Ubucuruzi bwawe butegereje kugenzurwa na ApexRX."},
- "Your business is verified. It can publish stock and prices and receive orders from pharmacies.": {"fr": "Votre entreprise est vérifiée. Elle peut publier ses stocks et prix et recevoir des commandes des pharmacies.", "rw": "Ubucuruzi bwawe bwemejwe. Bushobora gutangaza ububiko n’ibiciro no kwakira ibyo amafarumasi atumiza."},
  "Your business is suspended. Contact ApexRX for help.": {"fr": "Votre entreprise est suspendue. Contactez ApexRX pour obtenir de l’aide.", "rw": "Ubucuruzi bwawe bwahagaritswe. Vugana na ApexRX ngo agufashe."},
  "Join an existing pharmacy": {"fr": "Rejoindre une pharmacie existante", "rw": "Injira muri farumasi isanzweho"},
  "Your pharmacy adds your account; you do not register a new one.": {"fr": "Votre pharmacie ajoute votre compte ; vous n’en inscrivez pas une nouvelle.", "rw": "Farumasi yawe ni yo yongeraho konti yawe; ntiwandikisha indi nshya."},
@@ -884,7 +876,12 @@ Object.assign(workflowTranslations, {
  "Copy link": {"fr": "Copier le lien", "rw": "Koporora umurongo"},
  "Copied": {"fr": "Copié", "rw": "Byakoporowe"},
  "New link": {"fr": "Nouveau lien", "rw": "Umurongo mushya"},
- "Link given by you (no email)": {"fr": "Lien remis par vous (sans e-mail)", "rw": "Umurongo watanzwe nawe (nta imeli)"}
+ "Link given by you (no email)": {"fr": "Lien remis par vous (sans e-mail)", "rw": "Umurongo watanzwe nawe (nta imeli)"},
+ "To work in an existing pharmacy, ask its owner or a manager to invite this email address from their dashboard (Invite a team member). While ApexRX cannot send emails, they must give you the single-use invitation link themselves, for example by WhatsApp. Open that link to join with your own account, then choose “Check again”. You do not need to register a pharmacy yourself.": {"fr": "Pour travailler dans une pharmacie existante, demandez à son propriétaire ou à un gérant d’inviter cette adresse e-mail depuis son tableau de bord (Inviter un membre de l’équipe). Tant qu’ApexRX ne peut pas envoyer d’e-mails, il doit vous remettre lui-même le lien d’invitation à usage unique, par exemple sur WhatsApp. Ouvrez ce lien pour rejoindre la pharmacie avec votre propre compte, puis choisissez « Vérifier à nouveau ». Vous n’avez pas besoin d’inscrire une pharmacie vous-même.", "rw": "Kugira ngo ukore muri farumasi isanzweho, saba nyirayo cyangwa umuyobozi gutumira iyi imeli avuye ku rubuga rwe (Tumira umukozi). Igihe ApexRX idashobora kohereza imeli, agomba kuguha ubwe umurongo w’ubutumire ukoreshwa rimwe, urugero kuri WhatsApp. Fungura uwo murongo winjire ukoresheje konti yawe bwite, hanyuma uhitemo “Ongera urebe”. Ntukeneye kwandikisha farumasi yawe."},
+ "You have not joined a pharmacy yet. Ask the owner or a manager to invite the email address above and to give you the invitation link, then open that link.": {"fr": "Vous n’avez pas encore rejoint de pharmacie. Demandez au propriétaire ou à un gérant d’inviter l’adresse e-mail ci-dessus et de vous remettre le lien d’invitation, puis ouvrez ce lien.", "rw": "Ntiwarinjira muri farumasi. Saba nyirayo cyangwa umuyobozi gutumira imeli iri hejuru no kuguha umurongo w’ubutumire, hanyuma uwufungure."},
+ "Check again": {"fr": "Vérifier à nouveau", "rw": "Ongera urebe"},
+ "Your pharmacy is approved by ApexRX. Listed medicines are visible to patients on ApexRX.": {"fr": "Votre pharmacie est approuvée par ApexRX. Les médicaments listés sont visibles par les patients sur ApexRX.", "rw": "Farumasi yawe yemejwe na ApexRX. Imiti yanditswe igaragara ku barwayi kuri ApexRX."},
+ "Your business is approved by ApexRX. It can publish stock and prices and receive orders from pharmacies.": {"fr": "Votre entreprise est approuvée par ApexRX. Elle peut publier ses stocks et prix et recevoir des commandes des pharmacies.", "rw": "Ubucuruzi bwawe bwemejwe na ApexRX. Bushobora gutangaza ububiko n’ibiciro no kwakira amakomande ya farumasi."}
 });
 let workflowLang='en';
 try { workflowLang=new URLSearchParams(location.search).get('lang') || localStorage.getItem('apexrx_lang') || 'en'; } catch(e) {}

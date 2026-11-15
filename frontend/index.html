@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>ApexRX Smart</title>
-<meta name="description" content="Find the medicines you need in Kigali: real-time stock from pharmacies across the city.">
+<meta name="description" content="Find medicines in Kigali: see which pharmacies report having them, their prices and when each pharmacy last updated its stock.">
 <meta name="theme-color" content="#0f1a3d">
 <link rel="icon" type="image/svg+xml" href="assets/logos/logo-mark.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,33 +18,19 @@
 <script src="js/site-layout.js" data-part="header"></script>
 
 <main id="top">
-<!-- ============ HERO: animated Kigali ============ -->
+<!-- ============ HERO: decorative Kigali map (not a live stock map) ============ -->
 <section class="hero" id="hero-search">
   <div class="map-canvas" id="mapCanvas">
     <div class="map-layer" id="mapLayer">
       <img class="map-bg-img" src="assets/images/kigali-map-bg.jpg" alt="" aria-hidden="true">
       <div class="map-overlay" aria-hidden="true"></div>
-      <canvas class="map-fx" id="mapFx" aria-hidden="true"></canvas>
-
-      <!-- Pins sit on the pharmacy icons drawn in the map (x/y in image pixels, 1672×941) -->
-      <button class="pin" data-x="1117" data-y="228"><span class="pin-card"><span class="stock in">Kacyiru Central</span><span class="med">Amlodipine 5mg</span></span></button>
-      <button class="pin low" data-x="1448" data-y="490" data-align="right"><span class="pin-card"><span class="stock low">Good Health Pharmacy</span><span class="med">Paracetamol 500mg</span></span></button>
-      <button class="pin" data-x="1082" data-y="508"><span class="pin-card"><span class="stock in">Kicukiro Family Pharmacy</span><span class="med">Vitamin D3</span></span></button>
-      <button class="pin" data-x="770"  data-y="410"><span class="pin-card"><span class="stock in">Pharmacie La Santé</span><span class="med">Amoxicillin 500mg</span></span></button>
-      <button class="pin" data-x="862"  data-y="268"><span class="pin-card"><span class="stock in">Nyarugenge Pharmacy</span><span class="med">Salbutamol Inhaler</span></span></button>
-      <button class="pin" data-x="690"  data-y="80" data-align="below"><span class="pin-card"><span class="stock in">Gasabo Health Point</span><span class="med">Ibuprofen 400mg</span></span></button>
-      <button class="pin" data-x="1322" data-y="258" data-align="right"><span class="pin-card"><span class="stock in">Airport Rd Pharmacy</span><span class="med">ORS Sachets</span></span></button>
-      <button class="pin" data-x="1210" data-y="748"><span class="pin-card"><span class="stock in">Rebero Pharmacy</span><span class="med">Cetirizine 10mg</span></span></button>
-      <button class="pin low" data-x="513" data-y="348"><span class="pin-card"><span class="stock low">Downtown Pharmacy</span><span class="med">Insulin (Rapid)</span></span></button>
-      <button class="pin" data-x="358" data-y="235" data-align="left"><span class="pin-card"><span class="stock in">Nyabugogo Pharmacy</span><span class="med">Metformin 500mg</span></span></button>
-      <button class="pin" data-x="365" data-y="700" data-align="left"><span class="pin-card"><span class="stock in">Nyamirambo Pharmacy</span><span class="med">Azithromycin 250mg</span></span></button>
     </div>
   </div>
 
   <div class="hero-inner">
-    <div class="live-badge"><span class="live-dot"></span><span data-i18n="hero_live">Live stock across Kigali</span></div>
+    <div class="live-badge"><span data-i18n="hero_live">Availability reported by pharmacies</span></div>
     <h1 class="hero-title"><span id="h1Pre">Find the medicines you need in </span><span class="accent" id="h1Accent">Kigali.</span></h1>
-    <p class="lede" data-i18n="hero_lede">Real-time information from pharmacies across Kigali, helping you access the right medicines, faster and easier.</p>
+    <p class="lede" data-i18n="hero_lede">See which pharmacies in Kigali report having a medicine, its price, and when each pharmacy last updated its stock.</p>
 <!-- Patient medicine search (js/script.js: GET /search/pharmacies). -->
 <div class="search-card">
   <form id="medicineSearchForm" role="search" aria-label="Medicine search">
@@ -86,38 +72,6 @@
     <path class="wave-back" d="M0,64 C240,16 480,16 720,64 S1200,112 1440,64 C1680,16 1920,16 2160,64 S2640,112 2880,64 L2880,120 L0,120 Z" fill="#ffffff" opacity=".35"/>
     <path class="wave-front" d="M0,88 C240,62 480,62 720,88 S1200,114 1440,88 C1680,62 1920,62 2160,88 S2640,114 2880,88 L2880,120 L0,120 Z" fill="#ffffff"/>
   </svg>
-</section>
-
-<!-- ============ STATS ============ -->
-<section class="stats" aria-label="ApexRX in numbers">
-  <div class="wrap stats-heading"><div><div class="eyebrow" data-i18n="stats_eyebrow">ApexRX in numbers</div><h2 data-i18n="stats_title">One city. Better connected.</h2></div><span class="stats-location"><span></span>Kigali, Rwanda</span></div>
-  <div class="wrap stats-grid">
-    <div class="stat stat-tile stat-tone-1">
-      <div class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10V5h16v5M3 10h18v11H3zM9 15h6M12 12v6"/></svg></div>
-      <div class="num" data-count="250" data-suffix="+">250+</div>
-      <div class="lbl" data-i18n="stat1_lbl">Pharmacies in Kigali</div>
-      <div class="sub" data-i18n="stat1_sub">and growing</div>
-    </div>
-    <div class="stat stat-tile stat-tone-2">
-      <div class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m8 16 8-8M5 19a5.7 5.7 0 0 1 0-8l6-6a5.7 5.7 0 0 1 8 8l-6 6a5.7 5.7 0 0 1-8 0Z"/></svg></div>
-      <div class="num" data-count="1000" data-suffix="+">1000+</div>
-      <div class="lbl" data-i18n="stat2_lbl">Medicines tracked</div>
-      <div class="sub" data-i18n="stat2_sub">in real time</div>
-    </div>
-    <div class="stat stat-tile stat-tone-3">
-      <div class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8 12l3 3 5-6"/></svg></div>
-      <div class="num" data-count="99.5" data-decimals="1" data-suffix="%">99.5%</div>
-      <div class="lbl" data-i18n="stat3_lbl">Availability accuracy</div>
-      <div class="sub" data-i18n="stat3_sub">Trusted data</div>
-    </div>
-    <div class="stat stat-tile stat-tone-4">
-      <div class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><path d="m10 8-4 8m8-8 4 8M8 19h8"/></svg></div>
-      <div class="num" data-count="3">3</div>
-      <div class="stat-unit" data-i18n="stat_districts">districts</div>
-      <div class="lbl" data-i18n="stat4_lbl">Gasabo · Kicukiro · Nyarugenge</div>
-      <div class="sub" data-i18n="stat4_sub">All of Kigali connected</div>
-    </div>
-  </div>
 </section>
 
 <!-- "Built for everyone in the medicine chain" and "How it works" moved to how-it-works.html -->

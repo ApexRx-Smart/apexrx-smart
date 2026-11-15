@@ -135,7 +135,7 @@
       $('#br').value = S.loc ?? '';
       const st = ctx.org.status, ver = $('#ver');
       ver.className = 'ver' + (st === 'approved' ? '' : st === 'pending' ? ' wait' : ' bad');
-      ver.textContent = st === 'approved' ? '✓ ' + t(IS_PH ? 'NPC verified' : 'Licence verified') : t({ pending: 'Pending verification', rejected: 'Not approved', suspended: 'Suspended' }[st] || st);
+      ver.textContent = st === 'approved' ? '✓ ' + t('Approved by ApexRX') : t({ pending: 'Pending verification', rejected: 'Not approved', suspended: 'Suspended' }[st] || st);
     }
   }
   function paintTheme() {
@@ -857,7 +857,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
       const c = cls(o.drug_id), best = Number(o.unit_price) === min[o.product_id] && count[o.product_id] > 1;
       const head = c !== last ? `<tr class="grp"><td colspan="6">${esc(c)}<small>${esc(pl(groups[c].n, '{n} offer', '{n} offers'))}</small></td></tr>` : ''; last = c;
       const dir = maps(o);
-      return head + `<tr class="${best ? 'best' : ''}"><td><strong>${esc(fullLabel(o))}</strong></td><td><strong>${esc(o.supplier_name)}</strong><small>${esc([o.location_name, o.city].filter(Boolean).join(', '))}</small>${dir ? `<small><a href="${dir}" target="_blank" rel="noopener">${esc(t('Directions'))}</a></small>` : ''}</td><td>${o.distance_km != null ? o.distance_km.toFixed(1) + ' km' : '—'}</td><td><strong>${money(o.unit_price, o.currency)}</strong>${best ? ` <span class="tag good">${esc(t('Best price'))}</span>` : ''}</td><td>${esc(pl(o.quantity, '{n} box', '{n} boxes'))}</td><td class="act"><button class="ghost" data-a="chat" data-i="${o.offer_id}">${esc(t('Message'))}</button><button class="solid" data-a="quote" data-i="${o.offer_id}">${esc(t('Ask for quote'))}</button></td></tr>`;
+      return head + `<tr class="${best ? 'best' : ''}"><td><strong>${esc(fullLabel(o))}</strong></td><td><strong>${esc(o.supplier_name)}</strong><small>${esc([o.location_name, o.city].filter(Boolean).join(', '))}</small>${dir ? `<small><a href="${dir}" target="_blank" rel="noopener">${esc(t('Directions'))}</a></small>` : ''}</td><td>${o.distance_km != null ? o.distance_km.toFixed(1) + ' km' : '—'}</td><td><strong>${money(o.unit_price, o.currency)}</strong>${best ? ` <span class="tag good">${esc(t('Best price'))}</span>` : ''}</td><td>${esc(pl(o.quantity, '{n} box', '{n} boxes'))}</td><td class="act"><button class="ghost" data-a="chat" data-i="${o.offer_id}">${esc(t('Message'))}</button><button class="solid" data-a="quote" data-i="${o.offer_id}">${esc(t('Send order'))}</button></td></tr>`;
     }).join('') || `<tr><td colspan="6" class="empty">${esc(t(S.q ? 'No supplier lists this medicine. Try another name.' : 'No supplier offers yet.'))}</td></tr>`;
   }
 
@@ -1086,11 +1086,13 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
   // Staff prepare orders; an owner or manager sends them. Nothing was sent to the supplier.
   const draftText = o => t('Saved as draft #{id}. It was not sent: an owner or manager must send it from Supplier orders.', { id: o.purchase_order_id });
   async function requestQuote(offer) {
-    const fd = await ask(t('Ask for quote'), `<p class="muted" style="margin:0">${esc(fullLabel(offer))}<br>${esc(offer.supplier_name)} · ${money(offer.unit_price, offer.currency)}</p><label>${esc(t('Boxes'))}<input name="qty" type="number" min="1" step="1" value="20" required></label><label>${esc(t('Note (optional)'))}<textarea name="note" rows="2" maxlength="1000"></textarea></label>`, t('Send request'));
+    // Creates and submits a purchase order at the listed price; it is not a quotation
+    // request (those are Procurement requests). Staff orders stay drafts (see draftText).
+    const fd = await ask(t('Send order'), `<p class="muted" style="margin:0">${esc(fullLabel(offer))}<br>${esc(offer.supplier_name)} · ${money(offer.unit_price, offer.currency)}</p><p class="note" style="margin:0">${esc(t('This creates a purchase order at the price this supplier lists now. To ask a supplier for a quotation instead, use Procurement requests.'))}${canManage() ? '' : ' ' + esc(t('As staff, your order is saved as a draft. An owner or manager sends it from Supplier orders.'))}</p><label>${esc(t('Boxes'))}<input name="qty" type="number" min="1" step="1" value="20" required></label><label>${esc(t('Note (optional)'))}<textarea name="note" rows="2" maxlength="1000"></textarea></label>`, t(canManage() ? 'Send order' : 'Save draft'));
     if (!fd) return;
     try {
       const o = await data.sendOrder({ supplierId: offer.supplier_organization_id, supplierLocationId: offer.supplier_location_id, locationId: S.loc, items: [{ product_id: offer.product_id, quantity: +fd.get('qty') }], notes: fd.get('note').trim() });
-      toast(o.draft ? draftText(o) : t('Request sent to {s}.', { s: offer.supplier_name }));
+      toast(o.draft ? draftText(o) : t('Order sent to {s}.', { s: offer.supplier_name }));
       S.party = offer.supplier_organization_id; S.newParty = null;
       await reload('msg');
     } catch (err) { fail(err); }

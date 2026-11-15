@@ -462,6 +462,8 @@ def main():
                              files=[{"name": f"supplier-license-{RUN}.pdf", "mimeType": "application/pdf", "buffer": PDF}])
         page.click("#documents-submit")
         visible(page, "#review")
+        check("supplier: the review no longer says supplier screens are missing from the website",
+              "not on the website" not in page.inner_text("#review"))
         orgs = find_org(supplier)
         check("supplier: stored with organization type 'supplier'", len(orgs) == 1 and orgs[0]["type"] == "supplier", orgs)
         check("supplier: not registered as a pharmacy", find_org(supplier, "pharmacy") == [])

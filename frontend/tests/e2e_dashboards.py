@@ -193,7 +193,8 @@ def main():
         check("owner signs in on pharmacies.html and lands on the pharmacy dashboard",
               owner.url.split("?")[0].endswith("/pharmacy-dashboard.html") and owner.inner_text("#title") == "Overview")
         check("top bar: organization, verification and the signed-in user with their role",
-              owner.inner_text("#me-name") == f"Kigali Care {RUN}" and "NPC verified" in owner.inner_text("#ver")
+              owner.inner_text("#me-name") == f"Kigali Care {RUN}" and "Approved by ApexRX" in owner.inner_text("#ver")
+              and "NPC" not in owner.inner_text("#ver")
               and owner.inner_text("#dash-user") == f"{w['owner_email']} · Owner" and owner.is_hidden("#org"))
         home = owner.inner_text("#view")
         check("overview: live data, no sample strip, patient ordering and expiry shown as not live",
@@ -316,9 +317,16 @@ def main():
         open_view(mgr, "cmp")
         mgr.fill("#q", f"dbtestamol {RUN}")
         mgr.wait_for_selector(f"#rows >> text=Rwanda Distributors {RUN}")
+        check("compare prices: the action says it sends an order, not a quote request",
+              mgr.inner_text("#rows [data-a=quote]") == "Send order")
         mgr.click("#rows [data-a=quote]")
+        mgr.wait_for_selector("#dlg[open]")
+        dlg = mgr.inner_text("#dlg")
+        check("compare prices: the dialog says the order uses the listed price and points to Procurement requests",
+              "purchase order at the price this supplier lists now" in dlg and "Procurement requests" in dlg
+              and mgr.inner_text("#dlg h2") == "Send order" and mgr.inner_text("#dlg button.solid") == "Send order", dlg)
         confirm(mgr, {"qty": "20"})
-        wait_text(mgr, "#toast", f"Request sent to Rwanda Distributors {RUN}")
+        wait_text(mgr, "#toast", f"Order sent to Rwanda Distributors {RUN}")
         o1 = orders_of(w)[0]
         check("compare prices: the manager's quote request is a submitted order from Remera",
               o1["status"] == "submitted" and o1["pharmacy"]["location_name"] == "Remera Branch"
@@ -328,6 +336,9 @@ def main():
         staff.fill("#q", f"dbtestamol {RUN}")
         staff.wait_for_selector(f"#rows >> text=Rwanda Distributors {RUN}")
         staff.click("#rows [data-a=quote]")
+        staff.wait_for_selector("#dlg[open]")
+        check("compare prices: staff are told the order is saved as a draft",
+              "saved as a draft" in staff.inner_text("#dlg") and staff.inner_text("#dlg button.solid") == "Save draft")
         confirm(staff, {"qty": "5"})
         wait_text(staff, "#toast", "Saved as draft")
         draft = orders_of(w)[0]
@@ -386,7 +397,7 @@ def main():
         sign_in(sup, w["sup_email"], kind="supplier")
         check("supplier signs in on suppliers.html and lands on the supplier dashboard",
               sup.url.split("?")[0].endswith("/supplier-dashboard.html") and sup.inner_text("#me-name") == f"Rwanda Distributors {RUN}"
-              and "Licence verified" in sup.inner_text("#ver"))
+              and "Approved by ApexRX" in sup.inner_text("#ver") and "Licence" not in sup.inner_text("#ver"))
         home = sup.inner_text("#view")
         check("supplier overview: pipeline, open value and requests from real orders",
               "SUPPLIER OVERVIEW" in home and "New requests" in home and "1 request waiting for your offer" in home)
@@ -465,6 +476,13 @@ def main():
         sign_in(joiner, email)
         joiner.click("#join-existing")
         joiner.wait_for_selector("#join-wait:not([hidden])")
+        jw = joiner.inner_text("#join-wait")
+        check("joining: the instructions say the owner or manager shares the invitation link (no email promised)",
+              "give you the single-use invitation link themselves" in jw and "You will receive an email" not in jw, jw)
+        joiner.click("#join-check")
+        wait_text(joiner, "#join-status", "give you the invitation link")
+        check("joining: the not-joined-yet status does not mention an email",
+              "their email" not in joiner.inner_text("#join-status"))
         call("POST", f"/organizations/{w['org']}/invitations", {"email": email, "role": "staff"}, w["owner"])
         link_token = call("GET", "/dev/email/latest-to?" + urllib.parse.urlencode({"to": email}))["token"]
         call("POST", "/invitations/accept", {"token": link_token}, call("POST", "/auth/login", {"email": email, "password": PW})["access_token"])

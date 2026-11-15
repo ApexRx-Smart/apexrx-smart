@@ -52,7 +52,7 @@
       geoNote: 'Use your device’s location while you are at the pharmacy, or enter the coordinates. You can leave them empty and add them later.',
       status: {
         pending: 'Your pharmacy is awaiting verification by ApexRX. Supplier search opens once it is approved.',
-        approved: 'Your pharmacy is verified. Listed medicines are visible to patients on ApexRX.',
+        approved: 'Your pharmacy is approved by ApexRX. Listed medicines are visible to patients on ApexRX.',
         rejected: 'Your registration was not approved. Correct your details or documents, then resubmit it for review.',
         suspended: 'Your pharmacy is suspended. Contact ApexRX for help.'
       }
@@ -70,7 +70,7 @@
       geoNote: 'Use your device’s location while you are at the warehouse, or enter the coordinates. You can leave them empty and add them later.',
       status: {
         pending: 'Your business is awaiting verification by ApexRX.',
-        approved: 'Your business is verified. It can publish stock and prices and receive orders from pharmacies.',
+        approved: 'Your business is approved by ApexRX. It can publish stock and prices and receive orders from pharmacies.',
         rejected: 'Your registration was not approved. Correct your details or documents, then resubmit it for review.',
         suspended: 'Your business is suspended. Contact ApexRX for help.'
       }
@@ -150,7 +150,6 @@
       <label>File<input type="file" id="upload-file" accept=".pdf,.png,.jpg,.jpeg"></label>
       <button type="button" class="secondary" id="upload-button">Upload document</button>
     </div>
-    ${ROLE === 'supplier' ? '<p class="note">Supplier screens for stock, prices and incoming orders are not on the website yet.</p>' : ''}
   </div>
   <label id="org-pick-label" class="org-pick" hidden>${T.type}<select id="org-pick"></select></label>
   <div class="actions">
@@ -173,7 +172,7 @@
 
 ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
   <p>Your ApexRX account <strong id="join-email"></strong> is ready.</p>
-  <p class="note">To work in an existing pharmacy, ask its owner or a manager to invite this email address (Employees → Invite an employee). You will receive an email with a link to join; open it, then choose “Check again”. You do not need to register a pharmacy yourself.</p>
+  <p class="note">To work in an existing pharmacy, ask its owner or a manager to invite this email address from their dashboard (Invite a team member). While ApexRX cannot send emails, they must give you the single-use invitation link themselves, for example by WhatsApp. Open that link to join with your own account, then choose “Check again”. You do not need to register a pharmacy yourself.</p>
   <p id="join-status" role="status" class="note"></p>
   <div class="actions"><button type="button" class="primary" id="join-check">Check again</button><button type="button" class="secondary" id="join-register">Register a new pharmacy instead</button></div>
 </div>
@@ -968,7 +967,7 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
       $('#join-status').textContent = 'Checking…';
       await load();
       if (reg.membership) { $('#join-status').textContent = ''; await route(); notice(`Welcome to ${reg.org.name}.`); return; }
-      $('#join-status').textContent = 'You have not joined a pharmacy yet. Ask the owner or a manager to invite ' + reg.me.email + ', then open the link in their email.';
+      $('#join-status').textContent = 'You have not joined a pharmacy yet. Ask the owner or a manager to invite the email address above and to give you the invitation link, then open that link.';
     }));
     $('#join-register').addEventListener('click', reviewAction($('#join-register'), () => route()));
   }
