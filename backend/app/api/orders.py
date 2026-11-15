@@ -75,6 +75,8 @@ def _summary_fields(db: Session, order: PurchaseOrder) -> dict:
     return dict(
         purchase_order_id=order.purchase_order_id,
         status=order.status,
+        procurement_request_id=order.procurement_request_id,
+        quotation_id=order.quotation_id,
         currency=order.currency,
         pharmacy=_party(db, order.pharmacy_organization_id, order.pharmacy_location_id),
         supplier=_party(db, order.supplier_organization_id, order.supplier_location_id),
@@ -100,16 +102,16 @@ def order_response(db: Session, order: PurchaseOrder, sides: set[Side], user) ->
     }
     items = []
     for i in order.items:
-        product, drug = products[i.product_id]
+        product, drug = products.get(i.product_id, (None, None))
         items.append(
             OrderItemResponse(
                 purchase_order_item_id=i.purchase_order_item_id,
                 product_id=i.product_id,
-                product_name=product.product_name,
-                drug_name=drug.name,
-                strength=product.strength,
-                dosage_form=product.dosage_form,
-                pack_size=product.pack_size,
+                product_name=product.product_name if product else i.item_description,
+                drug_name=drug.name if drug else i.item_description,
+                strength=product.strength if product else None,
+                dosage_form=product.dosage_form if product else None,
+                pack_size=product.pack_size if product else None,
                 requested_quantity=i.requested_quantity,
                 requested_unit_price=i.requested_unit_price,
                 confirmed_quantity=i.confirmed_quantity,

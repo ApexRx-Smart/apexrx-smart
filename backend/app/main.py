@@ -15,9 +15,11 @@ from app.api import (
     insights,
     inventory,
     invitations,
+    messaging,
     orders,
     organizations,
     password_reset,
+    procurement,
     search,
 )
 from app.core import schema
@@ -130,6 +132,9 @@ app.include_router(inventory.router, prefix="/organizations", tags=["Inventory"]
 app.include_router(insights.router, prefix="/organizations", tags=["Dashboard insights"])
 app.include_router(search.supplier_router, prefix="/supplier-offers", tags=["Supplier discovery"])
 app.include_router(orders.router, prefix="/purchase-orders", tags=["Purchase orders"])
+app.include_router(procurement.router, prefix="/procurement-requests", tags=["Procurement requests"])
+app.include_router(messaging.router, prefix="/conversations", tags=["Messaging"])
+app.include_router(messaging.notifications_router, prefix="/notifications", tags=["Notifications"])
 app.include_router(admin.router, prefix="/admin", tags=["Admin"])
 app.include_router(search.legacy_router, tags=["Search"])
 if not settings.is_production:

@@ -74,7 +74,9 @@ class NoteRequest(BaseModel):
 
 class OrderItemResponse(BaseModel):
     purchase_order_item_id: int
-    product_id: int
+    # None for a medicine outside the catalogue (orders from a quotation);
+    # product_name and drug_name then carry its description.
+    product_id: int | None
     product_name: str
     drug_name: str
     strength: str | None
@@ -110,6 +112,9 @@ class OrderPartyResponse(BaseModel):
 class PurchaseOrderSummary(BaseModel):
     purchase_order_id: int
     status: OrderStatus
+    # Set when the order was created from an accepted quotation.
+    procurement_request_id: int | None = None
+    quotation_id: int | None = None
     currency: str
     pharmacy: OrderPartyResponse
     supplier: OrderPartyResponse

@@ -9,10 +9,23 @@ from app.models.identity import (
     User,
 )
 from app.models.inventory import ProductOffer, SearchEvent, Stock, StockAdjustment
+from app.models.messaging import (
+    ChatMessage,
+    Conversation,
+    ConversationRead,
+    Notification,
+    NotificationRead,
+)
 from app.models.orders import (
     PurchaseOrder,
     PurchaseOrderItem,
     PurchaseOrderStatusHistory,
+)
+from app.models.procurement import (
+    ProcurementRequest,
+    ProcurementRequestItem,
+    Quotation,
+    QuotationItem,
 )
 from app.models.verification import EmailVerification
 from app.models.views import patient_availability, supplier_listing
@@ -22,6 +35,15 @@ __all__ = [
     "OrganizationInvitation",
     "PasswordReset",
     "Base",
+    "ChatMessage",
+    "Conversation",
+    "ConversationRead",
+    "Notification",
+    "NotificationRead",
+    "ProcurementRequest",
+    "ProcurementRequestItem",
+    "Quotation",
+    "QuotationItem",
     "Drug",
     "EmailVerification",
     "Location",
