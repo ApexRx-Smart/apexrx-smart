@@ -612,6 +612,43 @@
       transition: function (id, action, body) { return post(po(id) + '/' + action, body || {}); }
     },
 
+    /* In-platform messaging: one conversation per pharmacy and supplier pair,
+     * shared by both organizations' members. Delivery is by polling (after_id);
+     * pass opts {quiet: true} for background polls (no progress bar). */
+    conversations: {
+      list: function (orgId, opts) { return get('/conversations', { organization_id: orgId }, opts); },
+      // Returns the existing conversation if the two already have one.
+      start: function (orgId, otherId) { return post('/conversations', { organization_id: orgId, counterpart_organization_id: otherId }); },
+      contacts: function (orgId, q) { return get('/conversations/contacts', { organization_id: orgId, q: q || undefined }); },
+      get: function (id, orgId) { return get('/conversations/' + enc(id), { organization_id: orgId }); },
+      // params: {after_id?, before_id?, limit?}
+      messages: function (id, orgId, params, opts) { return get('/conversations/' + enc(id) + '/messages', Object.assign({ organization_id: orgId }, params), opts); },
+      send: function (id, orgId, body) { return post('/conversations/' + enc(id) + '/messages?organization_id=' + enc(orgId), { body: body }); },
+      read: function (id, orgId, lastId) { return post('/conversations/' + enc(id) + '/read?organization_id=' + enc(orgId), { last_message_id: lastId }); }
+    },
+
+    /* Procurement requests and quotations. Each request carries `allowed_actions`. */
+    procurement: {
+      list: function (params, opts) { return get('/procurement-requests', params, opts); },
+      // data: {pharmacy_organization_id, supplier_organization_id, pharmacy_location_id, notes?, needed_by?,
+      //        items: [{product_id} or {medicine_name, strength?, dosage_form?, pack_size?}, + quantity, notes?]}
+      create: function (data) { return post('/procurement-requests', data); },
+      get: function (id) { return get('/procurement-requests/' + enc(id)); },
+      viewed: function (id) { return post('/procurement-requests/' + enc(id) + '/viewed'); },
+      // data: {items: [{procurement_request_item_id, available, quantity?, unit_price?, note?}], note?, estimated_days?, submit}
+      quote: function (id, data) { return post('/procurement-requests/' + enc(id) + '/quotation', data); },
+      decline: function (id, reason) { return post('/procurement-requests/' + enc(id) + '/decline', { reason: reason }); },
+      cancel: function (id, reason) { return post('/procurement-requests/' + enc(id) + '/cancel', { reason: reason }); },
+      // action: request-revision {note?} | accept {note?} | reject {reason}
+      answer: function (id, quotationId, action, body) { return post('/procurement-requests/' + enc(id) + '/quotations/' + enc(quotationId) + '/' + action, body || {}); },
+      convert: function (id, data) { return post('/procurement-requests/' + enc(id) + '/convert', data || {}); }
+    },
+
+    notifications: {
+      list: function (orgId, params, opts) { return get('/notifications', Object.assign({ organization_id: orgId }, params), opts); },
+      read: function (orgId, ids) { return post('/notifications/read', ids ? { organization_id: orgId, notification_ids: ids } : { organization_id: orgId, all: true }); }
+    },
+
     admin: {
       organizations: function (params) { return get('/admin/organizations', params); },
       organizationCounts: function () { return get('/admin/organizations/counts'); },

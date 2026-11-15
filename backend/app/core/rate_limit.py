@@ -133,3 +133,38 @@ class LoginRateLimiter:
 
 
 login_limiter = LoginRateLimiter()
+
+
+class ActionRateLimiter:
+    """Caps how often one subject (e.g. a user) may perform an action, such as
+    sending chat messages or procurement requests. Same store as the login
+    limiter; fails open if the store is down."""
+
+    def __init__(self, name: str, limit: int, window_seconds: int) -> None:
+        self.name, self.limit, self.window_seconds = name, limit, window_seconds
+        self.configure()
+
+    def configure(self) -> None:
+        self._storage = storage_from_string(settings.rate_limit_storage_uri)
+        self._limiter = MovingWindowRateLimiter(self._storage)
+        self._item = RateLimitItemPerSecond(self.limit, self.window_seconds)
+
+    def hit(self, subject: str) -> int | None:
+        """Count one action. Returns the seconds to wait if it is over the
+        limit (the action must then be refused), otherwise None."""
+        try:
+            if self._limiter.hit(self._item, self.name, subject):
+                return None
+            reset_time = self._limiter.get_window_stats(self._item, self.name, subject).reset_time
+            return max(1, math.ceil(reset_time - time.time()))
+        except Exception as exc:  # pragma: no cover - storage outage
+            logger.error("%s rate-limit check failed (allowing it): %s", self.name, type(exc).__name__)
+            return None
+
+    def reset(self) -> None:
+        self._storage.reset()
+
+
+# Chat: 30 messages a minute per user. Procurement requests: 30 an hour per user.
+message_limiter = ActionRateLimiter("chat-message", 30, 60)
+procurement_limiter = ActionRateLimiter("procurement-request", 30, 3600)

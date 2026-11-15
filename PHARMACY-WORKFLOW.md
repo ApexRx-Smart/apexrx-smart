@@ -11,7 +11,7 @@ The workflow is connected to the backend API (see [frontend/README.md](frontend/
 - **Details and documents:** create the pharmacy organization and its main branch (province, district, sector, cell, village, street, optional coordinates), and upload the verification documents for ApexRX to review.
 - **Review:** the real status, ApexRX's note after a rejection, resubmission, and more uploads. Signing in again resumes an incomplete registration.
 - **Workspace:** shows the live profile and document review status, suppliers from the pharmacy's purchase orders, and supplier stock search. Search works only once ApexRX has approved the pharmacy.
-- **Supplier contact:** **Open chat** opens the supplier's WhatsApp or phone.
+- **Supplier contact:** **Open chat** opens the conversation with the supplier in ApexRX (Messages); **Call** dials the supplier.
 
 The access token is kept in `sessionStorage`, so a refresh resumes the session and closing the tab signs out. Passwords are never stored in the browser. **Restart demo** signs out. "Preview the workspace" and "Just exploring?" still show sample data without an account.
 

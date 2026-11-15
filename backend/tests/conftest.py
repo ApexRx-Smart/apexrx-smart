@@ -52,6 +52,8 @@ from app.core.database import engine  # noqa: E402
 from app.main import app  # noqa: E402
 
 TABLES = (
+    "notification_read, notification, conversation_read, message, quotation_item, quotation, "
+    "procurement_request_item, procurement_request, conversation, "
     "auth_session, organization_invitation, password_reset, email_verification, phone_verification, search_event, purchase_order_status_history, purchase_order_item, purchase_order, "
     "stock_adjustment, product_offer, stock, product, drug, organization_document, "
     "location, membership, organization, app_user"
@@ -70,12 +72,13 @@ def _schema():
 
 @pytest.fixture(autouse=True)
 def _clean():
-    from app.core.rate_limit import login_limiter
+    from app.core.rate_limit import login_limiter, message_limiter, procurement_limiter
     from app.services.email import set_email_provider
     from app.services.email.mock import mock_provider
     from app.services.password_reset import limiter as reset_limiter
 
-    for reset in (login_limiter.reset, mock_provider.reset, reset_limiter.reset):
+    for reset in (login_limiter.reset, mock_provider.reset, reset_limiter.reset,
+                  message_limiter.reset, procurement_limiter.reset):
         reset()
     yield
     for reset in (login_limiter.reset, mock_provider.reset, reset_limiter.reset):

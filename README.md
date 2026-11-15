@@ -105,7 +105,7 @@ Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
   - **Resuming:** progress is read back from the backend, so signing in again continues an incomplete registration where it stopped.
   - The page always shows which account is signed in ("Signed in as … · Sign out"). There is no payment or subscription step, and phone numbers are contact details only.
 - **The pharmacy and supplier dashboards** (`pharmacy-dashboard.html`, `supplier-dashboard.html`, `js/dashboard.js`) run the business day to day, on real backend data:
-  - **Pharmacy:** overview, compare supplier prices and ask for quotes, conversations per supplier (built from orders; messages go through WhatsApp), supplier orders, stock per branch, branches and team.
+  - **Pharmacy:** overview, compare supplier prices and ask for quotes, messages with suppliers (stored in ApexRX), procurement requests and quotations, notifications, supplier orders, stock per branch, branches and team.
   - **Supplier:** overview with the order pipeline, requests per pharmacy, orders (offer, accept, decline, prepare, dispatch), catalogue and stock per depot, depots and team.
   - **Team:** invite by email and role (no account needed; see [Staff accounts and invitations](#staff-accounts-and-invitations)), renew or revoke invitations, change roles, deactivate, remove.
   - **Organization selector:** for users who belong to several organizations; it opens the matching dashboard.
@@ -121,7 +121,7 @@ Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
 
 - **The admin dashboard** (`ops-console-7f3k9q.html`) lets ApexRX staff review registrations. See [Admin dashboard](#admin-dashboard).
 
-Not connected yet, and shown as such on the dashboards: stock batch numbers and expiry dates (no API), patient orders, forecasting (example data), plans and payments, and in-app chat (conversations are built from orders; messages go through WhatsApp). There is no subscription or payment anywhere.
+Not connected yet, and shown as such on the dashboards: stock batch numbers and expiry dates (no API), patient orders, forecasting (example data), and plans and payments. There is no subscription or payment anywhere.
 
 ### Verify frontend changes
 
@@ -477,12 +477,23 @@ Authenticated endpoints need `Authorization: Bearer <token>`. List endpoints ret
 | Inventory | `GET /organizations/{id}/inventory`; per location: `PUT/GET/DELETE .../locations/{loc}/stock/{product_id}`, `PUT/DELETE .../stock/{product_id}/offer`, `GET .../stock/{product_id}/adjustments`, `POST .../locations/{loc}/stock/confirm` |
 | Supplier discovery | `GET /supplier-offers?pharmacy_organization_id=&q=&lat=&lng=&min_quantity=&sort=price\|distance\|quantity\|freshness` |
 | Purchase orders | `POST/GET /purchase-orders`, `GET/PATCH/DELETE /purchase-orders/{id}`, items `POST/PATCH/DELETE .../items[/{item_id}]`, `POST .../reprice`, transitions `POST .../submit\|accept\|counter\|reject\|accept-counter\|start-processing\|dispatch\|mark-delivered\|cancel` |
+| Messaging | `GET/POST /conversations` (one conversation per pharmacy and supplier pair; POST returns the existing one), `GET /conversations/contacts?q=`, `GET /conversations/{id}`, `GET/POST /conversations/{id}/messages` (`after_id` to poll; 30 messages a minute per user), `POST /conversations/{id}/read`. Members of the two organizations only (others 404) |
+| Procurement requests | `POST/GET /procurement-requests`, `GET /procurement-requests/{id}`, supplier `POST .../viewed\|quotation\|decline`, pharmacy `POST .../cancel`, `POST .../quotations/{qid}/request-revision\|accept\|reject`, `POST .../convert` (creates the supplier order once; repeating returns the same order) |
+| Notifications | `GET /notifications?organization_id=`, `POST /notifications/read` |
 | Admin | `GET /admin/organizations`, `GET /admin/organizations/counts`, `GET /admin/organizations/{id}`, `POST .../review`, `GET /admin/documents`, `GET .../download`, `POST .../review`, `GET/PATCH /admin/users`, `GET /admin/insights/searches` |
 | Legacy (deprecated) | `GET /medicines/availability`: no longer used by the frontend. Kept for older clients, without quantities |
 
 Each purchase order includes `allowed_actions`, the actions the current user may take next, so the UI can show only the valid buttons.
 
 ### Roles and rules
+
+**Messaging and procurement requests** (migration `b7c3e9d1f4a6`):
+- A conversation belongs to a pharmacy and a supplier organization, not to users: every active member of either can read and write in it; nobody else can see it exists (404), platform admins included. Messages are never edited or deleted (database trigger). Both organizations must be approved to send.
+- A procurement request asks one supplier for prices on several medicines. Items are catalogue products or medicines described in words (name, strength, dosage form, pack size), so the supplier does not need to list them and the central catalogue is never changed.
+- Request statuses: submitted, viewed, quoted, negotiation, accepted, rejected, cancelled, converted. Quotation statuses: draft, submitted, revision_requested, accepted, rejected, superseded. Every change goes through an action route that checks side, role and current status. A sent quotation is never changed (database trigger): a revision is a new numbered quotation and the previous one becomes superseded.
+- Pharmacy owners and managers accept, reject, cancel and convert; staff create requests and ask for revisions. Every supplier role can quote and decline (as with counteroffers on orders).
+- Converting creates the order through the existing purchase-order workflow (inserted as a draft, then submitted and accepted at the quoted quantities and prices), with `procurement_request_id` and `quotation_id` on the order. Both are unique, and the request row is locked during conversion, so a repeated or concurrent call returns the same order. Order lines for medicines outside the catalogue have no `product_id` and carry `item_description`.
+- Delivery is by polling (the open conversation every 5 seconds, lists and notifications every 20); no paid real-time service. Notifications are stored per organization, with read state per user.
 
 | | Owner | Manager | Staff |
 |---|---|---|---|
@@ -618,4 +629,4 @@ Patient search shows only **approved** pharmacies, **active** locations and **li
 - Re-enable email with a provider (verification, password reset, invitation emails), and an admin tool to help users who forget their password.
 - Subscription plans and Mobile Money payments (not part of registration today).
 - PostGIS for distance search at scale (bounding-box and haversine search is used today).
-- Notifications (email/WhatsApp) for order status changes.
+- Email or SMS copies of in-app notifications, and real-time delivery (WebSockets) instead of polling if message volume grows.

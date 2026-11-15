@@ -66,6 +66,13 @@ class PurchaseOrder(Base):
     )
     currency: Mapped[str] = mapped_column(CHAR(3), nullable=False, server_default=text("'RWF'"))
     notes: Mapped[str | None] = mapped_column(Text)
+    # Set when the order was created from an accepted quotation (each unique).
+    procurement_request_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("procurement_request.procurement_request_id"), unique=True
+    )
+    quotation_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("quotation.quotation_id"), unique=True
+    )
     rejection_reason: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[int] = _trigger_column(
         BigInteger, ForeignKey("app_user.user_id"), nullable=False
@@ -137,7 +144,10 @@ class PurchaseOrderItem(Base):
         ForeignKey("purchase_order.purchase_order_id", ondelete="CASCADE"),
         nullable=False,
     )
-    product_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("product.product_id"), nullable=False)
+    # A catalogue product, or (orders from a quotation only) a medicine outside
+    # the catalogue described by item_description.
+    product_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("product.product_id"))
+    item_description: Mapped[str | None] = mapped_column(String(255))
     requested_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     # Supplier price the pharmacy saw when ordering (snapshot).
     requested_unit_price: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
