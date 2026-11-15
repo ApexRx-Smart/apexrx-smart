@@ -19,7 +19,6 @@
 ['All categories','Toutes les catégories','Ibyiciro byose'],
 ['Approved','Approuvé','Byemejwe'],
 ['Ask a supplier for a quote from Compare prices.','Demandez un devis depuis Comparer les prix.','Saba igiciro uhereye kuri Gereranya ibiciro.'],
-['Ask for quote','Demander un devis','Saba igiciro'],
 ['BUILD YOUR CONNECTIONS','DÉVELOPPEZ VOS RELATIONS','KOMEZA IMIKORANIRE'],
 ['Being prepared','En préparation','Biri gutegurwa'],
 ['Best price','Meilleur prix','Igiciro cyiza'],
@@ -85,7 +84,6 @@
 ['Item saved.','Article enregistré.','Umuti wabitswe.'],
 ['Items','Articles','Imiti'],
 ['Last confirmed','Dernière confirmation','Biheruka kwemezwa'],
-['Licence verified','Licence vérifiée','Uruhushya rwemejwe'],
 ['Licensing documents','Documents d’agrément','Inyandiko z’impushya'],
 ['List sent.','Liste envoyée.','Urutonde rwoherejwe.'],
 ['Listed','Publié','Bigaragara'],
@@ -105,7 +103,6 @@
 ['My catalogue','Mon catalogue','Urutonde rwanjye'],
 ['My stock','Mon stock','Ububiko bwanjye'],
 ['NPC Number','Numéro NPC','Nimero ya NPC'],
-['NPC verified','NPC vérifié','NPC yemejwe'],
 ['Name','Nom','Izina'],
 ['Nearest first','Le plus proche d’abord','Hafi mbere'],
 ['New','Nouvelle','Nshya'],
@@ -183,7 +180,6 @@
 ['Recent supplier conversations','Conversations récentes avec les fournisseurs','Ibiganiro biheruka n’abatanga imiti'],
 ['Remove','Retirer','Kuraho'],
 ['Remove this item?','Retirer cet article ?','Ukureho uyu muti?'],
-['Request sent to {s}.','Demande envoyée à {s}.','Icyifuzo cyoherejwe kuri {s}.'],
 ['Requests and chat','Demandes et discussions','Ibyifuzo n’ibiganiro'],
 ['Review your location and details','Vérifiez votre emplacement et vos informations','Reba aho uherereye n’amakuru yawe'],
 ['Role','Rôle','Inshingano'],
@@ -652,6 +648,11 @@
 ['{o} rejected your quotation.','{o} a refusé votre devis.','{o} yanze igiciro cyawe.'],
 ['{o} sent you a procurement request.','{o} vous a envoyé une demande d’approvisionnement.','{o} yakoherereje icyifuzo cyo kurangura.'],
 ['{o} sent you a quotation.','{o} vous a envoyé un devis.','{o} yakoherereje igiciro.'],
+// Consolidation pass: accurate approval badge and Compare prices order wording.
+['Approved by ApexRX','Approuvé par ApexRX','Byemejwe na ApexRX'],
+['Order sent to {s}.','Commande envoyée à {s}.','Ikomande yoherejwe kuri {s}.'],
+['This creates a purchase order at the price this supplier lists now. To ask a supplier for a quotation instead, use Procurement requests.','Cela crée un bon de commande au prix affiché actuellement par ce fournisseur. Pour demander plutôt un devis à un fournisseur, utilisez les demandes d’approvisionnement.','Ibi bikora ikomande ku giciro uyu mutanga imiti agaragaza ubu. Niba ushaka gusaba utanga imiti igiciro, koresha Ibyifuzo byo kurangura.'],
+['As staff, your order is saved as a draft. An owner or manager sends it from Supplier orders.','En tant que membre du personnel, votre commande est enregistrée comme brouillon. Un propriétaire ou un gérant l’envoie depuis Commandes fournisseurs.','Nk’umukozi, ikomande yawe ibikwa nk’umushinga. Nyirabyo cyangwa umuyobozi ayohereza avuye mu Makomande ku batanga imiti.'],
   ];
   const fr = {}, rw = {};
   rows.forEach(([en, f, r]) => { fr[en] = f; rw[en] = r; });
