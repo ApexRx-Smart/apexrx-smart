@@ -28,6 +28,9 @@
   const savedOrg = r => { try { return sessionStorage.getItem(ORG_KEYS[r]); } catch (e) { return null; } };
   const rememberOrg = (r, id) => { try { sessionStorage.setItem(ORG_KEYS[r], String(id)); } catch (e) { /* storage unavailable */ } };
 
+  // Background polls: no progress bar.
+  const QUIET = { quiet: true };
+
   function live(role) {
     const A = global.ApexAPI;
     let orgId = null;
@@ -111,6 +114,32 @@
       // Charts and management figures, computed by the API for owners and managers
       // only (staff get 403 there, whatever this page shows).
       insights: locationId => A.organizations.insights(orgId, locationId ? { location_id: locationId } : {}),
+
+      // Messaging (stored in ApexRX; the page polls for new messages).
+      orgId: () => orgId,
+      conversations: quiet => A.conversations.list(orgId, quiet ? QUIET : undefined),
+      startConversation: otherId => A.conversations.start(orgId, otherId),
+      contacts: q => A.conversations.contacts(orgId, q),
+      messages: (cid, params, quiet) => A.conversations.messages(cid, orgId, params, quiet ? QUIET : undefined),
+      sendMessage: (cid, body) => A.conversations.send(cid, orgId, body),
+      markRead: (cid, lastId) => A.conversations.read(cid, orgId, lastId),
+      // Procurement requests and quotations.
+      requests: quiet => A.procurement.list({ organization_id: orgId, limit: 100 }, quiet ? QUIET : undefined).then(r => r.items),
+      request: id => A.procurement.get(id),
+      createRequest: ({ supplierId, locationId, notes, neededBy, items }) => A.procurement.create({
+        pharmacy_organization_id: orgId, supplier_organization_id: supplierId, pharmacy_location_id: locationId,
+        notes: notes || null, needed_by: neededBy || null, items
+      }),
+      viewedRequest: id => A.procurement.viewed(id),
+      quote: (id, body) => A.procurement.quote(id, body),
+      requestAct(id, action, body, quotationId) {
+        if (action === 'decline') return A.procurement.decline(id, body.reason);
+        if (action === 'cancel') return A.procurement.cancel(id, body.reason);
+        if (action === 'convert') return A.procurement.convert(id, body);
+        return A.procurement.answer(id, quotationId, action.replace(/_/g, '-'), body);
+      },
+      notifications: quiet => A.notifications.list(orgId, { limit: 30 }, quiet ? QUIET : undefined),
+      readNotifications: ids => A.notifications.read(orgId, ids),
       signOut: () => A.auth.logout()
     };
     return self;
@@ -209,6 +238,54 @@
       ? [makeOrder(1001, 'countered', 4, 1, [[1,200,3100,200,2900],[3,100,1700,100,1650],[5,50,2400,50,2300]], 6, [{ history_id: 1, from_status: 'submitted', to_status: 'countered', changed_by_name: 'Diane', changed_at: iso(-.2), note: 'Better price for this volume. Valid for 7 days.' }])]
       : [makeOrder(2001, 'submitted', 4, 1, [[1,200,3100],[3,100,1700],[5,50,2400]], 3), makeOrder(2002, 'submitted', 4, 2, [[3,300,1700]], 5)];
 
+    /* Messaging and procurement in the preview: the same shapes and rules as
+     * the API, held in memory. The sample counterpart never answers by itself. */
+    const other = pharmacy
+      ? { organization_id: 4, name: SUPPLIERS[4].name, type: 'supplier', city: SUPPLIERS[4].city, phone: SUPPLIERS[4].phone }
+      : { organization_id: 1, name: PHARMACIES[1].name, type: 'pharmacy', city: 'Gasabo', phone: PHARMACIES[1].phone };
+    const contactList = pharmacy
+      ? Object.entries(SUPPLIERS).map(([id, x]) => ({ organization_id: +id, name: x.name, type: 'supplier', city: x.city, phone: x.phone }))
+      : Object.entries(PHARMACIES).map(([id, x]) => ({ organization_id: +id, name: x.name, type: 'pharmacy', city: 'Gasabo', phone: x.phone }));
+    const convs = [{ conversation_id: 1, organization_id: org.organization_id, counterpart: other, created_at: iso(-2), last_message_at: iso(-0.05) }];
+    const msgs = [
+      { message_id: 1, conversation_id: 1, sender_organization_id: 1, sender_name: 'Alice', body: 'Hello, do you have Amoxicillin 500mg for next week?', created_at: iso(-0.1) },
+      { message_id: 2, conversation_id: 1, sender_organization_id: 4, sender_name: 'Diane', body: 'Yes, we have it. Send us a request with the quantities and we will quote.', created_at: iso(-0.05) }
+    ];
+    const reads = { 1: pharmacy ? 1 : 2 };
+    const msgOut = m => ({ ...m, sender_user_id: null, mine: m.sender_organization_id === org.organization_id });
+    const convOut = c => {
+      const list = msgs.filter(m => m.conversation_id === c.conversation_id), last = list[list.length - 1];
+      const unread = list.filter(m => !msgOut(m).mine && m.message_id > (reads[c.conversation_id] || 0)).length;
+      return { ...c, last_message: last ? msgOut(last) : null, unread_count: unread };
+    };
+    const ph1 = { organization_id: 1, name: PHARMACIES[1].name, location_id: 11, location_name: PHARMACIES[1].location };
+    const sup4 = { organization_id: 4, name: SUPPLIERS[4].name, location_id: null, location_name: null };
+    const reqItem = (id, line, name, extra, qty, pid) => ({ procurement_request_item_id: id, line_no: line, product_id: pid || null, in_catalogue: !!pid, medicine_name: name, strength: extra[0] || null, dosage_form: extra[1] || null, pack_size: extra[2] || null, quantity: qty, notes: null });
+    const requests = [{
+      procurement_request_id: 501, status: pharmacy ? 'quoted' : 'submitted', pharmacy: ph1, supplier: sup4, conversation_id: 1, currency: 'RWF',
+      notes: 'For the Kacyiru branch. Delivery before Friday if possible.', needed_by: day(7), status_reason: null, created_by_name: 'Alice', viewed_at: null,
+      created_at: iso(-1), updated_at: iso(-0.5), purchase_order_id: null,
+      items: [reqItem(5011, 1, 'Amoxicillin 500mg', ['500mg', null, 'B/20 Capsules'], 100, 1), reqItem(5012, 2, 'Artemether/Lumefantrine suspension', ['180/1080mg', 'suspension', '60ml'], 30)],
+      quotations: pharmacy ? [{ quotation_id: 601, revision: 1, status: 'submitted', currency: 'RWF', note: 'Prices valid for 7 days.', estimated_days: 2, submitted_by_name: 'Diane', submitted_at: iso(-0.5), responded_by_name: null, responded_at: null, response_note: null, updated_at: iso(-0.5),
+        items: [{ quotation_item_id: 6011, procurement_request_item_id: 5011, available: true, quantity: 100, unit_price: 3000, note: null }, { quotation_item_id: 6012, procurement_request_item_id: 5012, available: false, quantity: null, unit_price: null, note: 'Back in stock next month' }] }] : []
+    }];
+    const qTotal = q => q.items.filter(i => i.available).reduce((t, i) => t + i.quantity * i.unit_price, 0);
+    const reqOut = r => {
+      const shown = r.quotations.filter(q => !pharmacy || q.status !== 'draft'), latest = shown[shown.length - 1];
+      const st = r.status, acts = [];
+      if (!pharmacy) { if (['submitted', 'viewed', 'quoted', 'negotiation'].includes(st)) acts.push('quote'); if (['submitted', 'viewed', 'negotiation'].includes(st)) acts.push('decline'); }
+      else {
+        if (st === 'quoted' && latest && latest.status === 'submitted') acts.push('request_revision', 'accept', 'reject');
+        if (st === 'accepted') acts.push('convert');
+        if (['submitted', 'viewed', 'quoted', 'negotiation', 'accepted'].includes(st)) acts.push('cancel');
+      }
+      return { ...r, item_count: r.items.length, latest_quotation_status: latest ? latest.status : null, latest_quotation_total: latest ? qTotal(latest) : null,
+        needs_my_action: pharmacy ? ['quoted', 'accepted'].includes(st) : ['submitted', 'viewed', 'negotiation'].includes(st),
+        quotations: shown.map(q => ({ ...q, total: qTotal(q), items: q.items.map(i => ({ ...i, line_total: i.available ? i.quantity * i.unit_price : null })) })), allowed_actions: acts };
+    };
+    const findReq = id => requests.find(r => r.procurement_request_id === +id);
+    const notes = [{ notification_id: 1, kind: pharmacy ? 'quotation_submitted' : 'request_submitted', from_organization_id: other.organization_id, from_organization_name: other.name, conversation_id: 1, procurement_request_id: 501, quotation_id: pharmacy ? 601 : null, purchase_order_id: null, created_at: iso(-0.5), read: false }];
+    const touch = r => { r.updated_at = iso(); };
     const delay = v => new Promise(r => setTimeout(() => r(typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v))), 60));
     const find = id => orders.find(o => o.purchase_order_id === +id);
     const members = [{ membership_id: 1, user_id: 0, name: 'Alice', email: 'alice@example.com', role: 'owner', is_active: true }, { membership_id: 2, user_id: 2, name: 'Eric', email: 'eric@example.com', role: 'manager', is_active: true }, { membership_id: 3, user_id: 3, name: 'Grace', email: 'grace@example.com', role: 'staff', is_active: true }];
@@ -331,6 +408,69 @@
           open_order_value: open.reduce((v, o) => v + Number(o.confirmed_total ?? o.requested_total ?? 0), 0), currency: 'RWF',
           top_requested: [...by.values()].sort((a, b) => b.quantity - a.quantity || a.product_name.localeCompare(b.product_name)).slice(0, 5) });
       },
+      conversations: () => delay({ items: convs.map(convOut).sort((a, b) => (b.last_message_at || b.created_at).localeCompare(a.last_message_at || a.created_at)), unread_total: convs.map(convOut).reduce((n, c) => n + c.unread_count, 0) }),
+      startConversation(otherId) {
+        let c = convs.find(x => x.counterpart.organization_id === +otherId);
+        if (!c) { c = { conversation_id: ++seq, organization_id: org.organization_id, counterpart: contactList.find(x => x.organization_id === +otherId), created_at: iso(), last_message_at: null }; convs.push(c); }
+        return delay(convOut(c));
+      },
+      contacts: q => delay(contactList.filter(c => !q || c.name.toLowerCase().includes(q.toLowerCase()))),
+      messages(cid, params = {}) {
+        const list = msgs.filter(m => m.conversation_id === +cid && (!params.after_id || m.message_id > params.after_id));
+        return delay({ items: list.map(msgOut), has_more: false, last_read_message_id: reads[cid] || null });
+      },
+      sendMessage(cid, body) {
+        const m = { message_id: ++seq, conversation_id: +cid, sender_organization_id: org.organization_id, sender_name: 'Alice', body: body.trim(), created_at: iso() };
+        msgs.push(m); reads[cid] = m.message_id; convs.find(c => c.conversation_id === +cid).last_message_at = m.created_at;
+        return delay(msgOut(m));
+      },
+      markRead(cid, lastId) { reads[cid] = Math.max(reads[cid] || 0, lastId); notes.filter(n => n.kind === 'message' && n.conversation_id === +cid).forEach(n => { n.read = true; }); return delay(null); },
+      requests: () => delay(requests.map(reqOut).sort((a, b) => b.created_at.localeCompare(a.created_at))),
+      request: id => delay(reqOut(findReq(id))),
+      createRequest({ supplierId, notes: text, neededBy, items, locationId }) {
+        const sup = contactList.find(c => c.organization_id === +supplierId) || other;
+        let c = convs.find(x => x.counterpart.organization_id === sup.organization_id);
+        if (!c) { c = { conversation_id: ++seq, organization_id: org.organization_id, counterpart: sup, created_at: iso(), last_message_at: null }; convs.push(c); }
+        const r = { procurement_request_id: ++seq, status: 'submitted', pharmacy: { ...ph1, location_id: locationId }, supplier: { organization_id: sup.organization_id, name: sup.name, location_id: null, location_name: null }, conversation_id: c.conversation_id, currency: 'RWF', notes: text || null, needed_by: neededBy || null, status_reason: null, created_by_name: 'Alice', viewed_at: null, created_at: iso(), updated_at: iso(), purchase_order_id: null,
+          items: items.map((i, n) => { const p = i.product_id ? P(i.product_id) : null; return reqItem(++seq, n + 1, p ? p.product_name : i.medicine_name, p ? [p.strength, null, p.pack_size] : [i.strength, i.dosage_form, i.pack_size], i.quantity, i.product_id); }), quotations: [] };
+        requests.unshift(r);
+        return delay(reqOut(r));
+      },
+      viewedRequest(id) { const r = findReq(id); if (!pharmacy && r.status === 'submitted') { r.status = 'viewed'; r.viewed_at = iso(); } return delay(reqOut(r)); },
+      quote(id, body) {
+        const r = findReq(id);
+        let q = r.quotations.find(x => x.status === 'draft');
+        if (!q) { q = { quotation_id: ++seq, revision: r.quotations.length + 1, status: 'draft', currency: 'RWF', submitted_by_name: null, submitted_at: null, responded_by_name: null, responded_at: null, response_note: null }; r.quotations.push(q); }
+        Object.assign(q, { note: body.note || null, estimated_days: body.estimated_days ?? null, updated_at: iso(), items: body.items.map(i => ({ quotation_item_id: ++seq, ...i, quantity: i.available ? i.quantity : null, unit_price: i.available ? i.unit_price : null })) });
+        if (body.submit) {
+          r.quotations.forEach(x => { if (x !== q && ['submitted', 'revision_requested'].includes(x.status)) x.status = 'superseded'; });
+          Object.assign(q, { status: 'submitted', submitted_by_name: 'Alice', submitted_at: iso() }); r.status = 'quoted';
+        }
+        touch(r);
+        return delay(reqOut(r));
+      },
+      requestAct(id, action, body = {}, qid) {
+        const r = findReq(id), q = r.quotations.find(x => x.quotation_id === +qid);
+        const answer = st => Object.assign(q, { status: st, responded_by_name: 'Alice', responded_at: iso(), response_note: body.note || body.reason || null });
+        if (action === 'request_revision') { answer('revision_requested'); r.status = 'negotiation'; }
+        if (action === 'accept') { answer('accepted'); r.status = 'accepted'; }
+        if (action === 'reject') { answer('rejected'); r.status = 'rejected'; r.status_reason = body.reason; }
+        if (action === 'decline' || action === 'cancel') { r.status = action === 'decline' ? 'rejected' : 'cancelled'; r.status_reason = body.reason; }
+        touch(r);
+        if (action === 'convert') {
+          // The sample order mirrors what the API creates: accepted, at the quoted terms.
+          const acc = r.quotations.find(x => x.status === 'accepted');
+          const lines = acc.items.filter(i => i.available).map(i => { const it = r.items.find(x => x.procurement_request_item_id === i.procurement_request_item_id); return [it.product_id || 3, i.quantity, i.unit_price, i.quantity, i.unit_price]; });
+          const o = makeOrder(++seq, 'accepted', r.supplier.organization_id, 1, lines, 0);
+          o.procurement_request_id = r.procurement_request_id; o.quotation_id = acc.quotation_id;
+          orders.unshift(o); r.status = 'converted'; r.purchase_order_id = o.purchase_order_id;
+          return delay({ purchase_order_id: o.purchase_order_id, created: true, request: reqOut(r) });
+        }
+        return delay(reqOut(r));
+      },
+      notifications: () => delay({ items: notes.slice(), unread_count: notes.filter(n => !n.read).length }),
+      readNotifications(ids) { notes.filter(n => !ids || ids.includes(n.notification_id)).forEach(n => { n.read = true; }); return delay(null); },
+      orgId: () => org.organization_id,
       signOut() {}
     };
   }
