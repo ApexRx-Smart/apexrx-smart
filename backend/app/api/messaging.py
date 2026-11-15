@@ -11,7 +11,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import func, literal, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import distinct_on, insert
 from sqlalchemy.orm import Session
 
 from app.api.catalogue import contains
@@ -60,7 +60,7 @@ def counterparts(db: Session, organization_ids: set[int]) -> dict[int, Counterpa
             select(Location.organization_id, Location.city)
             .where(Location.organization_id.in_(organization_ids), Location.is_active.is_(True),
                    Location.city.isnot(None))
-            .distinct(Location.organization_id)
+            .ext(distinct_on(Location.organization_id))
             .order_by(Location.organization_id, Location.location_id)
         ).all()
     )
@@ -102,7 +102,7 @@ def conversations_out(db: Session, user: User, convs: list[Conversation], my_org
     last_rows = db.scalars(
         select(ChatMessage)
         .where(ChatMessage.conversation_id.in_(ids))
-        .distinct(ChatMessage.conversation_id)
+        .ext(distinct_on(ChatMessage.conversation_id))
         .order_by(ChatMessage.conversation_id, ChatMessage.message_id.desc())
     ).all()
     last = {m.conversation_id: m for m in messages_out(db, last_rows, my_org_id)}
