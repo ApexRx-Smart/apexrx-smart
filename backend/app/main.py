@@ -20,6 +20,7 @@ from app.api import (
     organizations,
     password_reset,
     procurement,
+    reservations,
     search,
 )
 from app.core import schema
@@ -55,6 +56,9 @@ app = FastAPI(
         {"name": "Inventory", "description": "Stock and offers per location"},
         {"name": "Supplier discovery", "description": "Pharmacies search supplier stock"},
         {"name": "Purchase orders", "description": "Pharmacy to supplier ordering"},
+        {"name": "Patient reservations", "description": "Patients reserve one medicine at one branch"},
+        {"name": "Pharmacy reservations", "description": "Pharmacies confirm, decline, cancel and collect"},
+        {"name": "Reservation settings", "description": "Medicine classification and branch unit acknowledgement"},
         {"name": "Admin", "description": "Platform administration"},
     ],
 )
@@ -135,6 +139,9 @@ app.include_router(orders.router, prefix="/purchase-orders", tags=["Purchase ord
 app.include_router(procurement.router, prefix="/procurement-requests", tags=["Procurement requests"])
 app.include_router(messaging.router, prefix="/conversations", tags=["Messaging"])
 app.include_router(messaging.notifications_router, prefix="/notifications", tags=["Notifications"])
+app.include_router(reservations.patient_router, prefix="/reservations", tags=["Patient reservations"])
+app.include_router(reservations.pharmacy_router, prefix="/organizations", tags=["Pharmacy reservations"])
+app.include_router(reservations.settings_router, prefix="/catalogue", tags=["Reservation settings"])
 app.include_router(admin.router, prefix="/admin", tags=["Admin"])
 app.include_router(search.legacy_router, tags=["Search"])
 if not settings.is_production:

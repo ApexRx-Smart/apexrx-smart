@@ -346,6 +346,10 @@ def main():
         mbox = page.locator("#ps-map").bounding_box(); ibox = page.locator("#ps-info").bounding_box()
         check("mobile: no sideways scroll; the map comes first, full width, above the details",
               list_ok and not wide() and mbox["height"] >= 250 and mbox["width"] >= 330 and mbox["y"] < ibox["y"], (mbox, ibox))
+        # Measure once the page has stopped scrolling (opening a pharmacy scrolls smoothly
+        # to it; measuring mid-scroll made this check depend on the machine's speed).
+        page.wait_for_function("""() => new Promise(done => { const y = scrollY;
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => done(scrollY === y), 150))); })""")
         covered = page.evaluate("""() => { const b = document.querySelector('#ps-back-results').getBoundingClientRect();
           const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
           return !(hit && (hit.id === 'ps-back-results' || hit.closest('#ps-back-results'))); }""")

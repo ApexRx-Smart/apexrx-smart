@@ -5,8 +5,8 @@ either one can read it and write in it. There is one conversation per
 pharmacy and supplier pair; procurement requests and orders between the
 two are shown alongside its messages.
 
-Notifications are rows per organization (every active member sees them);
-read state is kept per user.
+Notifications are rows per organization (every active member sees them) or,
+for patient reservations, per user; read state is kept per user.
 """
 
 from sqlalchemy import and_, func, literal, or_, select
@@ -117,6 +117,37 @@ def notify(db: Session, organization_id: int, kind: str, from_organization_id: i
             **refs,
         )
     )
+
+
+def notify_reservation(
+    db: Session,
+    kind: str,
+    reservation_id: int,
+    *,
+    organization_id: int | None = None,
+    recipient_user_id: int | None = None,
+    from_organization_id: int | None = None,
+) -> bool:
+    """A reservation event for one pharmacy organization or one patient
+    (exactly one of the two). Recorded at most once per event and recipient
+    (uq_notification_reservation_event), so a retried transition cannot
+    notify twice. Rows carry ids only, never patient details. Returns whether
+    a notification was created (False: it already existed)."""
+    if (organization_id is None) == (recipient_user_id is None):
+        raise ValueError("A notification has exactly one recipient.")
+    result = db.execute(
+        insert(Notification)
+        .values(
+            kind=kind,
+            reservation_id=reservation_id,
+            organization_id=organization_id,
+            recipient_user_id=recipient_user_id,
+            from_organization_id=from_organization_id,
+        )
+        .on_conflict_do_nothing()
+        .returning(Notification.notification_id)
+    )
+    return result.first() is not None
 
 
 def add_message(db: Session, conv: Conversation, my_org_id: int, user: User, body: str) -> ChatMessage:

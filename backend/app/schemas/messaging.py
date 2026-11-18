@@ -69,6 +69,7 @@ class NotificationResponse(BaseModel):
     procurement_request_id: int | None
     quotation_id: int | None
     purchase_order_id: int | None
+    reservation_reference: str | None = None
     created_at: datetime
     read: bool
 
@@ -79,6 +80,6 @@ class NotificationList(BaseModel):
 
 
 class NotificationReadRequest(BaseModel):
-    organization_id: int
+    organization_id: int | None = None  # omit for your personal notifications
     notification_ids: list[int] | None = None
     all: bool = False

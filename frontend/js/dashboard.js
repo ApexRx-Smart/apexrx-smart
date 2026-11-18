@@ -56,12 +56,9 @@
   const isPreview = !D;
   if (isPreview && params.get('preview') !== '1') { location.replace(ONBOARD + '?lang=' + lang + '#signin'); return; }
   const data = D || window.DashData.preview(ROLE);
-  const S = { view: 'home', loc: null, stock: [], orders: [], full: new Map(), drugs: [], q: '', cat: '', sort: 'price', sf: '', ovq: '', party: null, newParty: null, listOpen: false, listRows: [], imp: null, offers: [], ins: null, insErr: false, convs: [], unread: 0, chat: null, reqs: [], rq: null, rqOpen: null, rqNew: null, notes: { items: [], unread_count: 0 }, por: isPreview && IS_PH ? samplePatientOrders() : [] };
+  const S = { view: 'home', loc: null, stock: [], orders: [], full: new Map(), drugs: [], q: '', cat: '', sort: 'price', sf: '', ovq: '', party: null, newParty: null, listOpen: false, listRows: [], imp: null, offers: [], ins: null, insErr: false, convs: [], unread: 0, chat: null, reqs: [], rq: null, rqOpen: null, rqNew: null, notes: { items: [], unread_count: 0 }, resNew: 0 };
   let ctx = null; // { user, org, myRole, locations }
 
-  function samplePatientOrders() {
-    return [{ id: 'P-1041', who: 'Aline', m: 'Amlodipine 5mg B/30 Tablets', n: 2, st: 'New', pid: 7 }, { id: 'P-1042', who: 'Jean', m: 'Amoxicillin 500mg B/20 Capsules', n: 1, st: 'New', pid: 1 }];
-  }
   const approved = () => ctx.org.status === 'approved';
   const canManage = () => ctx.myRole === 'owner' || ctx.myRole === 'manager';
   // Charts, analytics and forecasting: owners and managers only. The API enforces
@@ -105,9 +102,9 @@
 
   /* ---------------------------------------------------------- navigation */
   const NAV = IS_PH
-    ? [['home', 'Overview'], ['cmp', 'Compare prices'], ['msg', 'Messages'], ['rq', 'Procurement requests'], ['ord', 'Supplier orders'], ['stk', 'My stock'], ['por', 'Patient orders'], ['prem', 'Forecasting'], ['set', 'Branches and team']]
+    ? [['home', 'Overview'], ['cmp', 'Compare prices'], ['msg', 'Messages'], ['rq', 'Procurement requests'], ['ord', 'Supplier orders'], ['stk', 'My stock'], ['res', 'Reservations'], ['prem', 'Forecasting'], ['set', 'Branches and team']]
     : [['home', 'Overview'], ['msg', 'Messages'], ['rq', 'Procurement requests'], ['ord', 'Orders'], ['stk', 'My catalogue'], ['prem', 'Demand forecast'], ['set', 'Depots and team']];
-  const TITLES = { home: 'Overview', cmp: 'Compare prices', msg: 'Messages', rq: 'Procurement requests', ord: IS_PH ? 'Supplier orders' : 'Orders', stk: IS_PH ? 'My stock' : 'My catalogue', por: 'Patient orders', set: IS_PH ? 'Branches and team' : 'Depots and team', prem: IS_PH ? 'Forecasting' : 'Demand forecast' };
+  const TITLES = { home: 'Overview', cmp: 'Compare prices', msg: 'Messages', rq: 'Procurement requests', ord: IS_PH ? 'Supplier orders' : 'Orders', stk: IS_PH ? 'My stock' : 'My catalogue', res: 'Reservations', set: IS_PH ? 'Branches and team' : 'Depots and team', prem: IS_PH ? 'Forecasting' : 'Demand forecast' };
 
   function chrome() {
     document.documentElement.lang = lang;
@@ -151,7 +148,7 @@
     set('msg', S.unread + waiting().length);
     set('rq', S.reqs.filter(r => r.needs_my_action).length);
     set('ord', IS_PH ? 0 : toConfirm().length);
-    set('por', S.por.filter(o => o.st === 'New').length);
+    set('res', S.resNew);
   }
   function go(v) {
     if (!VIEWS[v] || (v === 'prem' && !seesInsights())) v = 'home';
@@ -215,9 +212,9 @@ ${gone.length ? `<p class="lock">${esc(pl(gone.length, '{n} batch has expired an
   /* Pharmacy overview: the counter's day. Patients, stock health and reorders. */
   function homePharmacy() {
     const n = waiting().length, low = lowItems(), loc = curLoc(), bn = loc ? loc.name : ctx.org.name;
-    const convs = threads().length, lowNames = low.slice(0, 4).map(label).join(', '), newPor = S.por.filter(o => o.st === 'New').length;
+    const convs = threads().length, lowNames = low.slice(0, 4).map(label).join(', '), newRes = S.resNew;
     const att = [
-      actRow(newPor, isPreview ? pl(newPor, '{n} new patient order', '{n} new patient orders') : t('No new patient orders'), isPreview ? t('Patients order from your stock at {b}.', { b: bn }) : t('Patient ordering is coming soon.'), navBtn('por', 'View patient orders')),
+      actRow(newRes, newRes ? pl(newRes, '{n} reservation request waiting for an answer', '{n} reservation requests waiting for an answer') : t('No reservation requests waiting'), isPreview ? t('Patient reservations appear in your live workspace.') : t('Patients reserve medicines at your branches. Answer each request within 24 hours.'), navBtn('res', 'Open reservations')),
       actRow(n, n ? pl(n, '{n} price offer waiting for your answer', '{n} price offers waiting for your answer') : t('No offers waiting'), n ? t('Accept or decline the offer from the supplier.') : t('Ask a supplier for a quote from Compare prices.'), navBtn('msg', 'Open messages')),
       actRow(low.length, low.length ? pl(low.length, '{n} item is running low', '{n} items are running low') : t('Your stock looks healthy'), low.length ? lowNames : t('Nothing to reorder right now.'), low.length ? `<button class="solid" data-a="compare" data-m="${esc(low[0].drug_name)}">${esc(t('Compare prices'))}</button>` : navBtn('cmp', 'Compare prices', true)),
       actRow(S.orders.length, S.orders.length ? pl(S.orders.length, '{n} order sent to suppliers', '{n} orders sent to suppliers') : t('No supplier orders yet'), t('Follow each order from request to delivery.'), navBtn('ord', 'View orders'))
@@ -343,13 +340,11 @@ ${writable && canManage() ? `<div class="up"><div class="row"><strong>${esc(t('U
 <p class="note" style="margin:8px 0 0">${esc(t('Columns: Item description, Pack size, Batch number, Unit price, Total price, Expiry date (YYYY-MM-DD), Quantity. Total price is the price of one box. Quantity is the number of boxes. Each row must match a medicine in the ApexRX catalogue.'))}${b ? '' : ' ' + esc(t('Batch number and expiry date are optional for now and are not saved.'))}</p><div id="imp"></div></div>
 <form id="addf" class="up"><div class="addf"><label>${esc(t('Item description'))}<input id="a-s" type="search" placeholder="${esc(t('Type to search'))}" autocomplete="off"><select id="a-p" aria-label="${esc(t('Choose the medicine'))}" required><option value="">${esc(t('Choose the medicine'))}</option></select></label><label>${esc(t('Batch number'))}<input id="a-b" maxlength="60"${off}></label><label>${esc(t('Unit price'))}<input id="a-unit" type="number" min="0" step="any"></label><label>${esc(t('Total price'))}<input id="a-u" type="number" min="0" step="any"></label><label>${esc(t('Expiry date'))}<input id="a-e" type="date"${off}></label><label>${esc(t('Quantity'))}<input id="a-q" type="number" min="0" step="1" required></label><label>${esc(t('Low stock alert'))}<input id="a-t" type="number" min="0" step="1" value="${IS_PH ? 10 : 100}" required></label><button class="solid">${esc(t('Add item'))}</button></div></form>` : ''}
 <div class="bar"><label class="grow"><span class="sr">${esc(t('Filter your stock'))}</span><input id="sf" type="search" value="${esc(S.sf)}" placeholder="${esc(t('Filter by item or batch number'))}" autocomplete="off"></label>${writable ? `<button class="solid" data-a="conf">${esc(t('Confirm all as still correct'))}</button>` : ''}</div>
-<div class="tbl"><table class="stock"><thead><tr><th>${esc(t('Item description'))}</th><th>${esc(t('Pack size'))}</th><th>${esc(t('Batch number'))}</th><th>${esc(t('Unit price'))}</th><th>${esc(t('Total price'))}</th><th>${esc(t('Expiry date'))}</th><th>${esc(t('Quantity'))}</th><th>${esc(t('Low stock alert'))}</th><th>${esc(t('Listed'))}</th><th>${esc(t(IS_PH ? 'What patients see' : 'What pharmacies see'))}<small>${esc(t('Last confirmed'))}</small></th><th></th></tr></thead><tbody id="srows"></tbody></table></div>
-<p class="note">${esc(t(IS_PH ? 'Patients see availability and price, never exact quantities. Expired batches are hidden from patients.' : 'Verified pharmacies see your price and quantity. Other suppliers never do. Expired batches are hidden.'))}</p>`;
+<div class="tbl"><table class="stock"><thead><tr><th>${esc(t('Item description'))}</th><th>${esc(t('Pack size'))}</th><th>${esc(t('Batch number'))}</th><th>${esc(t('Unit price'))}</th><th>${esc(t('Total price'))}</th><th>${esc(t('Expiry date'))}</th><th>${esc(t('Quantity'))}${IS_PH ? `<small>${esc(t('Recorded · reserved · free'))}</small>` : ''}</th><th>${esc(t('Low stock alert'))}</th><th>${esc(t('Listed'))}</th><th>${esc(t(IS_PH ? 'What patients see' : 'What pharmacies see'))}<small>${esc(t('Last confirmed'))}</small></th><th></th></tr></thead><tbody id="srows"></tbody></table></div>
+<p class="note">${esc(t(IS_PH ? 'Patients see availability and price, never exact quantities. Expired batches are hidden from patients.' : 'Verified pharmacies see your price and quantity. Other suppliers never do. Expired batches are hidden.'))}</p>
+${IS_PH ? `<p class="note">${esc(t('Quantity is the stock on your shelf as recorded. Reserved is held for patients by confirmed reservations; free is what patients can still reserve. Collecting a reservation reduces the recorded stock.'))}</p>` : ''}`;
     },
-    por() {
-      if (!isPreview) return `<div class="panel"><h2>${esc(t('Patient ordering is coming soon'))}</h2><p class="muted" style="margin:0">${esc(t('Patients can already find the medicines you list, with their availability and price. Ordering from the app is not live yet, so no patient orders can arrive here.'))}</p></div>`;
-      return `<p class="muted">${esc(t('Sample orders. Accept an order to prepare it for pickup, or decline it.'))}</p><div class="tbl"><table><thead><tr><th>${esc(t('Order'))}</th><th>${esc(t('Item'))}</th><th>${esc(t('Boxes'))}</th><th>${esc(t('Status'))}</th><th></th></tr></thead><tbody>${S.por.map((o, i) => `<tr><td><strong>${esc(o.id)}</strong><small>${esc(o.who)}</small></td><td>${esc(o.m)}</td><td>${o.n}</td><td><span class="tag ${o.st === 'New' ? 'low' : o.st === 'Declined' ? 'out' : 'good'}">${esc(t(o.st))}</span></td><td class="act">${o.st === 'New' ? `<button class="solid" data-a="pya" data-i="${i}">${esc(t('Accept'))}</button><button class="ghost" data-a="pno" data-i="${i}">${esc(t('Decline'))}</button>` : o.st === 'Ready for pickup' ? `<button class="solid" data-a="pdone" data-i="${i}">${esc(t('Mark as collected'))}</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
-    },
+    res() { return RES ? RES.view() : ''; },
     set() {
       const ids = licenceRows();
       const rows = [[t('Name'), ctx.org.name], ...(IS_PH ? [] : [[t('Supplier ID'), sid()]]), [t('Phone'), ctx.org.phone], [t('Email'), ctx.org.email], ...ids];
@@ -799,7 +794,10 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
   const NOTE_TEXT = {
     request_submitted: '{o} sent you a procurement request.', request_cancelled: '{o} cancelled a procurement request.', request_declined: '{o} declined your procurement request.',
     quotation_submitted: '{o} sent you a quotation.', revision_requested: '{o} asked for a revised quotation.', quotation_accepted: '{o} accepted your quotation.',
-    quotation_rejected: '{o} rejected your quotation.', order_created: '{o} created an order from your quotation.', message: 'New message from {o}.'
+    quotation_rejected: '{o} rejected your quotation.', order_created: '{o} created an order from your quotation.', message: 'New message from {o}.',
+    reservation_requested: 'New reservation request {r}.', reservation_cancelled_patient: 'The patient cancelled reservation {r}.',
+    reservation_request_lapsed: 'Reservation request {r} expired without an answer.',
+    reservation_expired: 'Reservation {r} was not collected before its deadline. The stock it held is free again.'
   };
   function paintBell() {
     const b = $('#bell'); if (!b) return;
@@ -812,7 +810,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
   function paintPanel() {
     const items = S.notes.items || [];
     $('#npanel').innerHTML = `<div class="np-h"><strong>${esc(t('Notifications'))}</strong>${S.notes.unread_count ? `<button class="linkish" data-a="nall">${esc(t('Mark all as read'))}</button>` : ''}</div>`
-      + (items.map(x => `<button class="np-i${x.read ? '' : ' new'}" data-a="nopen" data-n="${x.notification_id}"><span>${esc(t(NOTE_TEXT[x.kind] || x.kind, { o: x.from_organization_name || '' }))}</span><small>${esc(ago(x.created_at))}</small></button>`).join('')
+      + (items.map(x => `<button class="np-i${x.read ? '' : ' new'}" data-a="nopen" data-n="${x.notification_id}"><span>${esc(t(NOTE_TEXT[x.kind] || x.kind, { o: x.from_organization_name || '', r: x.reservation_reference || '' }))}</span><small>${esc(ago(x.created_at))}</small></button>`).join('')
       || `<p class="empty">${esc(t('No notifications yet.'))}</p>`);
   }
   function togglePanel(open) {
@@ -862,6 +860,35 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
   }
 
   /* ----------------------------------------------------------------- stock */
+  // Opening My stock re-reads the branch from the API: reservations confirmed or
+  // collected since the dashboard loaded change the reserved and free figures.
+  async function freshStock() {
+    if (!S.loc || isPreview) return;
+    const loc = S.loc;
+    try {
+      const next = await data.stock(loc);
+      if (S.view !== 'stk' || S.loc !== loc) return;
+      S.stock = next;
+      const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest('#srows');
+      if (!typing && !$('#dlg').open) stockRows();
+    } catch (err) { /* the cached list stays on screen */ }
+  }
+  // Reservation figures from the inventory API (never computed here).
+  function reservedInfo(x) {
+    if (!IS_PH || x.allocated_quantity == null) return '';
+    const short = x.reservation_shortfall || 0;
+    return `<small class="rsv">${esc(t('Reserved {a} · free {f}', { a: x.allocated_quantity, f: x.available_to_reserve }))}</small>`
+      + (short ? `<small><span class="tag out">${esc(t('{s} short of confirmed reservations', { s: short }))}</span></small>` : '');
+  }
+  // Before saving a recorded quantity below what confirmed reservations hold.
+  async function belowReserved(items) {
+    const list = items.filter(i => IS_PH && i.x && i.qty < (i.x.allocated_quantity || 0));
+    if (!list.length) return true;
+    const form = await ask(t('Stock below confirmed reservations'), `<p>${esc(t('Confirmed reservations are commitments to patients. With these quantities the recorded stock is lower than what they hold:'))}</p>
+<ul>${list.map(i => `<li><strong>${esc(label(i.x))}</strong>: ${esc(t('{q} recorded, {a} reserved ({s} short)', { q: i.qty, a: i.x.allocated_quantity, s: i.x.allocated_quantity - i.qty }))}</li>`).join('')}</ul>
+<p>${esc(t('Save only if this is the real count. Nothing is cancelled automatically: the Reservations screen will show the shortfall, and an owner or manager decides what to do with the affected reservations.'))}</p>`, t('Save anyway'));
+    return !!form;
+  }
   function stockRows() {
     const el = $('#srows'); if (!el) return;
     const f = S.sf.toLowerCase(), edit = approved(), mgr = edit && canManage();
@@ -884,7 +911,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
         const exp = b ? `<td class="exp-c"><input type="date" value="${esc(b.expiry_date)}" data-f="bexp" data-p="${id}" data-b="${b.batch_id}" aria-label="${esc(t('Expiry date'))}: ${esc(b.batch_number)}"${edit ? '' : ' disabled'}>${flag}</td>` : '<td>—</td>';
         const qty = b
           ? `<td><div class="qty-c"><input class="qty" type="number" min="0" step="1" value="${b.quantity}" data-f="bqty" data-p="${id}" data-b="${b.batch_id}" aria-label="${esc(t('Quantity'))}: ${esc(b.batch_number)}"${edit ? '' : ' disabled'}>${edit ? `<button class="x" data-a="rmbatch" data-p="${id}" data-b="${b.batch_id}" title="${esc(t('Remove batch'))}" aria-label="${esc(t('Remove batch'))}: ${esc(b.batch_number)}">×</button>` : ''}</div></td>`
-          : `<td><input class="qty" type="number" min="0" step="1" value="${x.quantity}" data-f="qty" data-p="${id}" aria-label="${esc(t('Quantity'))}: ${esc(label(x))}"${edit ? '' : ' disabled'}></td>`;
+          : `<td><input class="qty" type="number" min="0" step="1" value="${x.quantity}" data-f="qty" data-p="${id}" aria-label="${esc(t('Quantity'))}: ${esc(label(x))}"${edit ? '' : ' disabled'}>${reservedInfo(x)}</td>`;
         return i === 0 ? `<tr data-product="${id}">${lead}${num_}${priceCells}${exp}${qty}${tail}</tr>` : `<tr class="more">${num_}${exp}${qty}</tr>`;
       }).join('');
     }).join('') || `<tr><td colspan="11" class="empty">${esc(t(S.stock.length ? 'No item matches.' : 'No stock yet. Add your first item above.'))}</td></tr>`;
@@ -900,7 +927,9 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
         Object.assign(x, next);
       } else if (f === 'qty') {
         const q = Math.max(0, parseInt(input.value, 10) || 0);
-        await data.setQuantity(S.loc, pid, q); x.quantity = q;
+        if (!(await belowReserved([{ x, qty: q }]))) { stockRows(); return; }
+        const next = await data.setQuantity(S.loc, pid, q);
+        if (next && next.quantity != null) Object.assign(x, next); else x.quantity = q;
       } else {
         const o = x.offer || { unit_price: 0, low_stock_threshold: 5, is_listed: true };
         const next = { unit_price: Number(o.unit_price), low_stock_threshold: o.low_stock_threshold, is_listed: o.is_listed };
@@ -1004,10 +1033,19 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
     const el = $('#imp'); if (!el) return;
     if (!S.imp) { el.innerHTML = ''; return; }
     const ok = S.imp.rows.filter(r => !r.e);
-    el.innerHTML = `<div class="tbl" style="margin-top:12px"><table style="min-width:520px"><thead><tr><th>${esc(t('Row'))}</th><th>${esc(t('Item'))}</th><th>${esc(t('Batch number'))}</th><th>${esc(t('Check'))}</th></tr></thead><tbody>${S.imp.rows.slice(0, 50).map(r => `<tr><td>${r.n}</td><td>${esc(r.product ? fullLabel(r.product) : r.d)}</td><td>${esc(r.batch || '')}</td><td>${r.e ? `<span class="tag out">${esc(r.e)}</span>` : r.warn ? `<span class="tag low">${esc(r.warn)}</span>` : '<span class="tag good">OK</span>'}</td></tr>`).join('')}</tbody></table></div>
+    el.innerHTML = `<div class="tbl" style="margin-top:12px"><table style="min-width:520px"><thead><tr><th>${esc(t('Row'))}</th><th>${esc(t('Item'))}</th><th>${esc(t('Batch number'))}</th><th>${esc(t('Check'))}</th></tr></thead><tbody>${S.imp.rows.slice(0, 50).map(r => `<tr><td>${r.n}</td><td>${esc(r.product ? fullLabel(r.product) : r.d)}</td><td>${esc(r.batch || '')}</td><td>${r.e ? `<span class="tag out">${esc(r.e)}</span>` : r.warn ? `<span class="tag low">${esc(r.warn)}</span>` : '<span class="tag good">OK</span>'}${!r.e && shortOf(r) ? ` <span class="tag out">${esc(t('Below reserved ({a})', { a: shortOf(r) }))}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>
 <div class="qa"><button class="solid" data-a="doimp"${ok.length ? '' : ' disabled'}>${esc(pl(ok.length, 'Import {n} valid row', 'Import {n} valid rows'))}</button><button class="ghost" data-a="noimp">${esc(t('Cancel'))}</button><span class="note" style="margin:0">${esc(t('{n} row(s) with errors will be skipped.', { n: S.imp.rows.length - ok.length }))}</span></div>`;
   }
+  // Reserved quantity of an import row's product at this branch, when the row would go below it.
+  function shortOf(r) {
+    if (!IS_PH || !r.product) return 0;
+    const x = S.stock.find(s => s.product_id === r.product.product_id);
+    return x && r.qty < (x.allocated_quantity || 0) ? x.allocated_quantity : 0;
+  }
   async function doImport(btn) {
+    const rows = S.imp.rows.filter(row => !row.e && row.product);
+    const ok = await belowReserved(rows.map(r => ({ x: S.stock.find(s => s.product_id === r.product.product_id), qty: r.qty })));
+    if (!ok) return;
     btn.disabled = true;
     let done = 0;
     try {
@@ -1207,9 +1245,43 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
     msg: thread,
     rq() { if (S.rqOpen) loadRequest(S.rqOpen); else if (S.rqNew) paintNewReq(); else loadRequests(); },
     ord: orderRows,
-    stk() { stockRows(); renderImp(); },
+    stk() { stockRows(); renderImp(); freshStock(); },
+    res() { if (RES) RES.after(); },
     set: loadTeam
   };
+
+  /* --------------------------------------------------------- reservations */
+  // Patient reservations: js/dashboard-reservations.js (pharmacies only).
+  const RES = IS_PH && window.DashReservations ? window.DashReservations({
+    data: () => data, ctx: () => ctx, isPreview: () => isPreview,
+    t, esc, fmtTime, ask, toast, errorText, canManage,
+    go: () => go('res'),
+    currentLocation: () => S.loc,
+    badge: n => { if (n != null) { S.resNew = n; badges(); } },
+    // A dialog is open or the user is typing: background refreshes wait.
+    busy: () => $('#dlg').open || ['INPUT', 'TEXTAREA', 'SELECT'].includes((document.activeElement || {}).tagName),
+    // Opening or handling a reservation marks ITS notifications read (only those).
+    markRead(reference) {
+      const ids = (S.notes.items || []).filter(n => n.reservation_reference === reference && !n.read).map(n => n.notification_id);
+      if (!ids.length) return;
+      S.notes.items.forEach(n => { if (ids.includes(n.notification_id)) n.read = true; });
+      S.notes.unread_count = Math.max(0, (S.notes.unread_count || 0) - ids.length);
+      paintBell();
+      data.readNotifications(ids).catch(() => {});
+    },
+    // A shortfall: open My stock at that branch, filtered to the medicine.
+    async openStock(locationId, name) {
+      if (activeLocations().some(l => l.location_id === locationId) && S.loc !== locationId) {
+        S.loc = locationId; $('#br').value = String(locationId);
+        try { S.stock = await data.stock(S.loc); } catch (err) { fail(err); }
+      }
+      S.sf = name || ''; go('stk');
+    }
+  }) : null;
+  async function refreshReservations(quiet) {
+    if (!RES) return;
+    S.resNew = await RES.newRequests(quiet); badges();
+  }
 
   /* ---------------------------------------------------------------- events */
   const ACT = {
@@ -1268,6 +1340,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
       if (!n.read) { n.read = true; S.notes.unread_count = Math.max(0, S.notes.unread_count - 1); paintBell(); data.readNotifications([n.notification_id]).catch(() => {}); }
       if (n.kind === 'message') { S.party = n.from_organization_id; S.listOpen = false; go('msg'); }
       else if (n.procurement_request_id) { S.rqOpen = n.procurement_request_id; S.rqNew = null; S.rq = null; go('rq'); }
+      else if (n.reservation_reference && RES) RES.openRef(n.reservation_reference);
     },
     chat: d => {
       const o = offerById(d.i); if (!o) return;
@@ -1289,6 +1362,8 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
       } catch (err) { fail(err); }
     },
     async conf() {
+      const short = IS_PH ? S.stock.filter(x => x.reservation_shortfall > 0) : [];
+      if (short.length && !(await ask(t('Confirm all as still correct'), `<p>${esc(t('These items have less recorded stock than their confirmed reservations hold. Confirming says the counts are correct; the reservations stay commitments.'))}</p><ul>${short.map(x => `<li><strong>${esc(label(x))}</strong>: ${esc(t('{q} recorded, {a} reserved ({s} short)', { q: x.quantity, a: x.allocated_quantity, s: x.reservation_shortfall }))}</li>`).join('')}</ul>`, t('Confirm all')))) return;
       try { await data.confirmStock(S.loc); S.stock = await data.stock(S.loc); toast(t('Stock confirmed for today.')); stay('stk'); } catch (err) { fail(err); }
     },
     addbatch: d => { const x = S.stock.find(s => s.product_id === +d.p); if (x) addBatch(x); },
@@ -1347,11 +1422,9 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
     async resubmit() {
       try { ctx.org = await data.resubmit(); chrome(); go(S.view); toast(t('Sent for review.')); } catch (err) { fail(err); }
     },
-    pya: d => { S.por[+d.i].st = 'Ready for pickup'; go('por'); },
-    pno: d => { S.por[+d.i].st = 'Declined'; go('por'); },
-    pdone: d => { S.por[+d.i].st = 'Collected'; go('por'); },
     retry: () => start()
   };
+  if (RES) Object.assign(ACT, RES.actions);
   document.addEventListener('click', e => {
     const b = e.target.closest('[data-a]');
     if (b && ACT[b.dataset.a] && ctx || (b && b.dataset.a === 'retry')) ACT[b.dataset.a](b.dataset, b);
@@ -1451,6 +1524,8 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
       const [cv, nt, rq] = await Promise.allSettled([data.conversations(true), data.notifications(true), data.requests(true)]);
       if (cv.status === 'fulfilled') { S.convs = cv.value.items; S.unread = cv.value.unread_total; }
       if (nt.status === 'fulfilled') { S.notes = nt.value; paintBell(); }
+      refreshReservations(true).catch(() => {});
+      if (RES && S.view === 'res') RES.poll();
       let changed = false;
       if (rq.status === 'fulfilled') {
         const sig = l => l.map(r => r.procurement_request_id + r.status + r.updated_at).join();
@@ -1495,6 +1570,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
       if (convs.status === 'fulfilled') { S.convs = convs.value.items; S.unread = convs.value.unread_total; }
       if (reqs.status === 'fulfilled') S.reqs = reqs.value;
       if (notes.status === 'fulfilled') S.notes = notes.value;
+      await refreshReservations(true);
       chrome(); paintBell(); go('home');
       setInterval(poll, 45000);
       // Messages arrive by polling (no paid real-time service): the open

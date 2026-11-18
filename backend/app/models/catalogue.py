@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, String, func, text
+from sqlalchemy import BigInteger, Boolean, FetchedValue, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, created_at_column, identity_pk
@@ -37,6 +37,25 @@ class Product(Base):
         Boolean, nullable=False, server_default=text("true"), default=True
     )
     created_at: Mapped[datetime] = created_at_column()
+
+    # Patient reservations (migration c8e5a1f7d2b9). Unclassified products and
+    # products with an unknown stock unit can never be reserved.
+    dispensing_class: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'unclassified'"), default="unclassified"
+    )
+    # What one stock count means: a 'pack' (contents in pack_size) or a single 'unit'.
+    stock_unit: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default=text("'unknown'"), default="unknown"
+    )
+    unit_label: Mapped[str | None] = mapped_column(String(60))  # e.g. "box", "tablet", "vial"
+    # Bumped by a trigger whenever the meaning of a stock count changes.
+    unit_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=FetchedValue(), server_onupdate=FetchedValue()
+    )
+    max_reservation_quantity: Mapped[int | None] = mapped_column(Integer)
+    reservation_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false"), default=False
+    )
 
     drug: Mapped[Drug] = relationship(back_populates="products", lazy="joined")
 

@@ -18,6 +18,7 @@ from app.schemas.catalogue import (
     ProductUpdate,
 )
 from app.schemas.common import Page
+from app.services import reservations
 
 router = APIRouter()
 
@@ -200,10 +201,22 @@ def create_product(payload: ProductCreate, _: AdminUser, db: DbSession):
 def update_product(product_id: int, payload: ProductUpdate, _: AdminUser, db: DbSession):
     """Edit a catalogue product. Set ``is_active: false`` to retire it; retired
     products disappear from patient and supplier search."""
-    product = db.get(Product, product_id)
+    # Locked (reservation lock order L3) so a pack-size change and a
+    # reservation for this product cannot pass each other.
+    product = reservations.lock_product(db, product_id)
     if product is None:
         raise NotFound("Product not found.")
     data = payload.model_dump(exclude_unset=True)
+    if (
+        "pack_size" in data
+        and data["pack_size"] != product.pack_size
+        and product.stock_unit == "pack"
+        and reservations.product_has_open_reservations(db, product_id)
+    ):
+        raise Conflict(
+            "This medicine has open reservations; its pack size cannot change until they are resolved.",
+            extra={"code": "open_reservations"},
+        )
     for required in ("drug_id", "product_name", "is_active"):
         if required in data and data[required] is None:
             raise AppError(f"{required} cannot be null.")

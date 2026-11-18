@@ -47,7 +47,14 @@ class InventoryItem(BaseModel):
     strength: str | None
     dosage_form: str | None
     pack_size: str | None
-    quantity: int
+    quantity: int = Field(description="Physical stock on record.")
+    allocated_quantity: int = Field(
+        default=0, description="Held by confirmed, unexpired patient reservations (pharmacies only)."
+    )
+    available_to_reserve: int = Field(default=0, description="Recorded stock minus allocated (never negative).")
+    reservation_shortfall: int = Field(
+        default=0, description="Allocated beyond the recorded stock, after a stock correction."
+    )
     last_updated: datetime
     updated_by: int | None
     offer: OfferResponse | None

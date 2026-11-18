@@ -34,7 +34,7 @@ from app.schemas.organizations import (
     OrganizationResponse,
     OrganizationUpdate,
 )
-from app.services import storage
+from app.services import reservations, storage
 from app.services.phone import PhoneNumberError, normalize_phone
 
 router = APIRouter()
@@ -313,13 +313,23 @@ def update_location(
     db: DbSession,
 ):
     """Update a location. Set ``is_active: false`` to close it: its offers stop
-    appearing in search, while its stock history and orders are preserved."""
+    appearing in search, while its stock history and orders are preserved.
+    A branch with open patient reservations cannot be closed until they are
+    resolved (the row is locked so that no reservation is submitted meanwhile)."""
     get_org_access(db, user, organization_id, roles=MANAGERS)
-    location = get_org_location(db, organization_id, location_id)
+    get_org_location(db, organization_id, location_id)
+    location = reservations.lock_location(db, location_id)
     data = payload.model_dump(exclude_unset=True)
     for required in ("name", "is_active"):
         if required in data and data[required] is None:
             raise AppError(f"{required} cannot be null.")
+    if data.get("is_active") is False and location.is_active:
+        open_ids = reservations.open_reservation_ids(db, location_id=location_id)
+        if open_ids:
+            raise Conflict(
+                "This branch has open patient reservations. Resolve them before closing the branch.",
+                extra={"code": "open_reservations", "reservation_ids": open_ids},
+            )
     for field, value in data.items():
         setattr(location, field, value)
     db.commit()

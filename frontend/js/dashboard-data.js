@@ -138,6 +138,13 @@
         if (action === 'convert') return A.procurement.convert(id, body);
         return A.procurement.answer(id, quotationId, action.replace(/_/g, '-'), body);
       },
+      // Patient reservations (pharmacies; js/dashboard-reservations.js).
+      reservations: (params, quiet) => A.pharmacyReservations.list(orgId, params, quiet ? QUIET : undefined),
+      reservation: (ref, quiet) => A.pharmacyReservations.get(orgId, ref, quiet ? QUIET : undefined),
+      reservationAct: (ref, action, body) => A.pharmacyReservations.act(orgId, ref, action, body),
+      reservationUnits: (loc, params) => A.pharmacyReservations.units(orgId, loc, params),
+      acknowledgeUnit: (loc, product, shown) => A.pharmacyReservations.acknowledge(orgId, loc, product, shown),
+      reservationSettings: product => A.pharmacyReservations.settings(product),
       notifications: quiet => A.notifications.list(orgId, { limit: 30 }, quiet ? QUIET : undefined),
       readNotifications: ids => A.notifications.read(orgId, ids),
       signOut: () => A.auth.logout()

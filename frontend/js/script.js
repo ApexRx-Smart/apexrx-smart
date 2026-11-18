@@ -6,7 +6,7 @@
     en: {
       motion_pause:'Pause image motion', motion_resume:'Resume image motion',
       community_tag:'Closer to care.', community_caption:'Connecting people, pharmacies and possibilities.', how_map_label:'One city. A connected medicine network.', footer_invite:'Better access starts with connection.', footer_connect:'Connect with us ↗',
-      nav_patients:'For Patients', nav_pharmacies:'For Pharmacies', nav_suppliers:'For Suppliers', nav_how:'How it works', nav_about:'About',
+      nav_patients:'For Patients', nav_pharmacies:'For Pharmacies', nav_suppliers:'For Suppliers', nav_how:'How it works', nav_about:'About', nav_reservations:'My reservations',
       btn_signin:'Sign in', btn_start:'Get started', btn_signout:'Sign out', signed_in_as:'Signed in as',
       h1_pre:'Find the medicines you need in ', h1_accent:'Kigali.',
       hero_lede:'See which pharmacies in Kigali report having a medicine, its price, and when each pharmacy last updated its stock.',
@@ -110,7 +110,7 @@
     fr: {
       motion_pause:'Mettre les images en pause', motion_resume:'Animer les images',
       community_tag:'Plus près des soins.', community_caption:'Relier les habitants, les pharmacies et les possibilités.', how_map_label:'Une ville. Un réseau de pharmacies connecté.', footer_invite:'Un meilleur accès commence par un lien.', footer_connect:'Restons en contact ↗',
-      nav_patients:'Patients', nav_pharmacies:'Pharmacies', nav_suppliers:'Fournisseurs', nav_how:'Comment ça marche', nav_about:'À propos',
+      nav_patients:'Patients', nav_pharmacies:'Pharmacies', nav_suppliers:'Fournisseurs', nav_how:'Comment ça marche', nav_about:'À propos', nav_reservations:'Mes réservations',
       btn_signin:'Se connecter', btn_start:'Commencer', btn_signout:'Se déconnecter', signed_in_as:'Connecté en tant que',
       h1_pre:'Trouvez les médicaments dont vous avez besoin à ', h1_accent:'Kigali.',
       hero_lede:'Voyez quelles pharmacies de Kigali déclarent avoir un médicament, à quel prix, et quand chaque pharmacie a mis à jour son stock pour la dernière fois.',
@@ -215,7 +215,7 @@
     rw: {
       motion_pause:'Hagarika amashusho', motion_resume:'Komeza amashusho',
       community_tag:'Hafi y’ubuvuzi.', community_caption:'Guhuza abantu na farumasi.', how_map_label:'Umujyi umwe. Farumasi zihujwe.', footer_invite:'Guhuzwa bituma kubona imiti byoroha.', footer_connect:'Tuvugishe ↗',
-      nav_patients:'Abarwayi', nav_pharmacies:'Farumasi', nav_suppliers:'Abatanga imiti', nav_how:'Uko bikora', nav_about:'Abo turi bo',
+      nav_patients:'Abarwayi', nav_pharmacies:'Farumasi', nav_suppliers:'Abatanga imiti', nav_how:'Uko bikora', nav_about:'Abo turi bo', nav_reservations:'Ibyo nabikishije',
       btn_signin:'Injira', btn_start:'Tangira', btn_signout:'Sohoka', signed_in_as:'Winjiye nka',
       h1_pre:'Shaka imiti ukeneye i ', h1_accent:'Kigali.',
       hero_lede:'Reba farumasi zo muri Kigali zivuga ko zifite umuti, igiciro cyawo, n’igihe buri farumasi iheruka kuvugurura ububiko bwayo.',
@@ -317,6 +317,13 @@
       ps_call:'Hamagara'
     }
   };
+  // Strings from page bundles loaded before this script (js/reservations-i18n.js
+  // sets window.APEX_I18N_EXTRA); they never replace the keys above.
+  var EXTRA = window.APEX_I18N_EXTRA || {};
+  Object.keys(EXTRA).forEach(function(l){
+    if (!STRINGS[l]) return;
+    Object.keys(EXTRA[l]).forEach(function(k){ if (!(k in STRINGS[l])) STRINGS[l][k] = EXTRA[l][k]; });
+  });
   var lang = 'en';
   function t(key){ return (STRINGS[lang] && STRINGS[lang][key]) || STRINGS.en[key] || key; }
 
@@ -343,7 +350,19 @@
   function openAccountFlow(hash){ location.href = 'pharmacies.html?lang=' + encodeURIComponent(lang) + hash; }
   ['signInBtn','signInBtnMobile'].forEach(function(id){
     document.getElementById(id).addEventListener('click', function(){
-      openAccountFlow(window.ApexAPI && ApexAPI.session.isSignedIn() ? '' : '#signin');
+      // On the patient reservations page the account is the patient's: stay there.
+      var mine = 'reservations.html?lang=' + encodeURIComponent(lang);
+      if (document.body.getAttribute('data-page') === 'reservations') { location.href = mine; return; }
+      if (!(window.ApexAPI && ApexAPI.session.isSignedIn())) { openAccountFlow('#signin'); return; }
+      // Signed in: the account's own place. Pharmacy and supplier members go to their
+      // workspace (as before); an account with no organization is a patient, whose
+      // place is their reservations, never the pharmacy onboarding.
+      ApexAPI.auth.me().then(function(me){
+        var types = (me.memberships || []).map(function(m){ return m.organization_type; });
+        if (types.indexOf('pharmacy') !== -1 || me.is_platform_admin) openAccountFlow('');
+        else if (types.indexOf('supplier') !== -1) location.href = 'suppliers.html?lang=' + encodeURIComponent(lang);
+        else location.href = mine;
+      }, function(err){ if (!err || err.status !== 401) location.href = mine; });
     });
   });
   ['getStartedBtn','getStartedBtnMobile'].forEach(function(id){
@@ -408,6 +427,7 @@
     if(h1Pre && h1Accent){ h1Pre.textContent = t('h1_pre'); h1Accent.textContent = t('h1_accent'); }
     document.querySelectorAll('[data-i18n]').forEach(function(el){ el.textContent = t(el.getAttribute('data-i18n')); });
     document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el){ el.setAttribute('placeholder', t(el.getAttribute('data-i18n-placeholder'))); });
+    document.querySelectorAll('[data-i18n-aria]').forEach(function(el){ el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria'))); });
     document.documentElement.lang = lang === 'rw' ? 'rw' : lang;
     try{ localStorage.setItem('apexrx_lang', lang); }catch(e){}
     // Carry the language to the registration pages, keeping any #signin.

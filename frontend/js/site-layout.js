@@ -91,6 +91,7 @@
     '          <div class="footer-col">' +
     '            <h4 data-i18n="f_product">Product</h4>' +
     '            <a href="' + searchHref + '" data-i18n="nav_patients">For Patients</a>' +
+    '            <a href="reservations.html" data-i18n="nav_reservations">My reservations</a>' +
     '            <a href="pharmacies.html" data-i18n="nav_pharmacies">For Pharmacies</a>' +
     '            <a href="suppliers.html" data-i18n="nav_suppliers">For Suppliers</a>' +
     '            <a href="how-it-works.html" data-i18n="nav_how">How it works</a>' +

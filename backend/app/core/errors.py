@@ -6,6 +6,7 @@ of them fires anyway, the handlers below return a 409 instead of a 500.
 """
 
 import logging
+import traceback
 
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
@@ -63,6 +64,25 @@ def _pg_message(exc: DBAPIError) -> tuple[str | None, str]:
     return sqlstate, message
 
 
+def describe_db_error(exc: DBAPIError) -> str:
+    """A log line for an unexpected database error that cannot leak data.
+
+    PostgreSQL's own message and detail may quote values ("value ... is out of
+    range", "Failing row contains (...)"), and SQLAlchemy's text includes the
+    statement; neither is logged. Only the SQLSTATE, the driver error class,
+    the table and the constraint are, plus the stack frames as
+    file, line and function (no source text, no values)."""
+    orig = getattr(exc, "orig", None)
+    diag = getattr(orig, "diag", None)
+    # Where it happened: file, line and function only (no source text, no values).
+    frames = "\n".join(f"  {f.filename}:{f.lineno} in {f.name}" for f in traceback.extract_tb(exc.__traceback__))
+    return (
+        f"Database error {getattr(orig, 'sqlstate', None)} ({type(orig).__name__ if orig else type(exc).__name__}) "
+        f"table={getattr(diag, 'table_name', None)} constraint={getattr(diag, 'constraint_name', None)}"
+        + ("\n" + frames if frames else "")
+    )
+
+
 def _safe_validation_errors(exc: RequestValidationError) -> list[dict]:
     """Validation errors without the submitted values.
 
@@ -118,7 +138,7 @@ def register_error_handlers(app: FastAPI) -> None:
                 status_code=status.HTTP_409_CONFLICT,
                 content={"detail": message},
             )
-        logger.exception("Database error %s", sqlstate)
+        logger.error(describe_db_error(exc))
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={"detail": "A database error occurred. Please try again."},

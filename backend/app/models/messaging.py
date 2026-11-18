@@ -57,9 +57,12 @@ class Notification(Base):
     __tablename__ = "notification"
 
     notification_id: Mapped[int] = identity_pk()
-    organization_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("organization.organization_id"), nullable=False
+    # Exactly one recipient: an organization (every active member sees it) or,
+    # for patient reservations, one user (notification_recipient_check).
+    organization_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("organization.organization_id")
     )
+    recipient_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.user_id"))
     kind: Mapped[str] = mapped_column(String(30), nullable=False)
     from_organization_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("organization.organization_id")
@@ -74,6 +77,7 @@ class Notification(Base):
     purchase_order_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("purchase_order.purchase_order_id")
     )
+    reservation_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("reservation.reservation_id"))
     created_at: Mapped[datetime] = created_at_column()
 
 

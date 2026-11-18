@@ -30,6 +30,7 @@ from app.schemas.organizations import (
     LocationResponse,
     OrganizationResponse,
 )
+from app.services import reservations
 
 router = APIRouter()
 
@@ -120,9 +121,18 @@ def review_organization(
     organization_id: int, payload: OrganizationReview, admin: AdminUser, db: DbSession
 ):
     """Approve, reject or suspend an organization. Only approved organizations
-    can publish stock/offers, search suppliers and send or receive orders."""
+    can publish stock/offers, search suppliers and send or receive orders.
+
+    Suspending a pharmacy closes its open patient reservations in the same
+    transaction (cancelled as a system action, patients notified). The row is
+    locked FOR NO KEY UPDATE, the first level of the reservation lock order
+    (app/services/reservations.py), so reservation submissions, confirmations
+    and collections in progress finish first, and later ones see the new status."""
     organization = db.scalar(
-        select(Organization).where(Organization.organization_id == organization_id).with_for_update()
+        select(Organization)
+        .where(Organization.organization_id == organization_id)
+        .with_for_update(key_share=True)
+        .execution_options(populate_existing=True)
     )
     if organization is None:
         raise NotFound("Organization not found.")
@@ -146,6 +156,12 @@ def review_organization(
     organization.reviewed_at = _now()
     organization.reviewed_by = admin.user_id
     organization.review_notes = payload.notes
+    if (
+        payload.decision == OrganizationDecision.SUSPENDED
+        and organization.type == OrganizationType.PHARMACY
+    ):
+        db.flush()  # the reservation trigger checks the suspended status
+        reservations.cancel_for_suspension(db, organization_id)
     db.commit()
     return _organization_detail(db, organization)
 
