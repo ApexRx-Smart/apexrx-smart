@@ -27,6 +27,14 @@ from app.models.procurement import (
     Quotation,
     QuotationItem,
 )
+from app.models.reservations import (
+    OfferUnitAcknowledgement,
+    ProductReservationHistory,
+    Reservation,
+    ReservationCollection,
+    ReservationStatus,
+    ReservationStatusHistory,
+)
 from app.models.verification import EmailVerification
 from app.models.views import patient_availability, supplier_listing
 
@@ -44,6 +52,12 @@ __all__ = [
     "ProcurementRequestItem",
     "Quotation",
     "QuotationItem",
+    "OfferUnitAcknowledgement",
+    "ProductReservationHistory",
+    "Reservation",
+    "ReservationCollection",
+    "ReservationStatus",
+    "ReservationStatusHistory",
     "Drug",
     "EmailVerification",
     "Location",

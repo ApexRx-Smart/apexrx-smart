@@ -10,7 +10,7 @@ than the last one they have (``after_id``).
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Response, status
-from sqlalchemy import func, literal, select
+from sqlalchemy import func, literal, or_, select
 from sqlalchemy.dialects.postgresql import distinct_on, insert
 from sqlalchemy.orm import Session
 
@@ -26,6 +26,7 @@ from app.models import (
     Notification,
     NotificationRead,
     Organization,
+    Reservation,
     User,
 )
 from app.models.enums import OrganizationStatus, OrganizationType
@@ -43,6 +44,7 @@ from app.schemas.messaging import (
     ReadRequest,
 )
 from app.services import messaging as svc
+from app.services.reservations import open_clause
 
 router = APIRouter()
 notifications_router = APIRouter()
@@ -270,32 +272,59 @@ def mark_read(conversation_id: int, payload: ReadRequest, user: CurrentUser, db:
 # Notifications
 # ---------------------------------------------------------------------------
 def _is_read(user: User):
-    return (
-        select(NotificationRead.notification_id)
-        .where(NotificationRead.notification_id == Notification.notification_id, NotificationRead.user_id == user.user_id)
+    """Read by this user, or a reservation request that no longer needs an answer
+    (confirmed, declined, cancelled or past its response deadline): "New
+    reservation request" must not stay unread for every member once someone has
+    handled it. Read state is per user, so this is decided when listing."""
+    handled_request = (Notification.kind == "reservation_requested") & ~(
+        select(Reservation.reservation_id)
+        .where(Reservation.reservation_id == Notification.reservation_id, Reservation.status == "requested", open_clause())
         .exists()
     )
+    return or_(
+        select(NotificationRead.notification_id)
+        .where(NotificationRead.notification_id == Notification.notification_id, NotificationRead.user_id == user.user_id)
+        .exists(),
+        handled_request,
+    )
+
+
+def _audience(db: Session, user: User, organization_id: int | None):
+    """An organization's notifications (any active member), or without an
+    organization the caller's personal ones (e.g. a patient's reservations)."""
+    if organization_id is None:
+        return Notification.recipient_user_id == user.user_id
+    get_org_access(db, user, organization_id)
+    return Notification.organization_id == organization_id
 
 
 @notifications_router.get("", response_model=NotificationList)
 def list_notifications(
     user: CurrentUser,
     db: DbSession,
-    organization_id: int,
+    organization_id: Annotated[
+        int | None, Query(description="Your organization; omit for your personal notifications.")
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 30,
 ):
     """The organization's latest notifications (visible to all its active
-    members), each marked read or unread for this user."""
-    get_org_access(db, user, organization_id)
+    members), or without ``organization_id`` your personal notifications, each
+    marked read or unread for this user."""
+    audience = _audience(db, user, organization_id)
     read = _is_read(user)
     rows = db.execute(
         select(Notification, read.label("read"))
-        .where(Notification.organization_id == organization_id)
+        .where(audience)
         .order_by(Notification.notification_id.desc())
         .limit(limit)
     ).all()
-    unread = db.scalar(
-        select(func.count()).select_from(Notification).where(Notification.organization_id == organization_id, ~read)
+    unread = db.scalar(select(func.count()).select_from(Notification).where(audience, ~read))
+    references = dict(
+        db.execute(
+            select(Reservation.reservation_id, Reservation.reference).where(
+                Reservation.reservation_id.in_({n.reservation_id for n, _ in rows if n.reservation_id})
+            )
+        ).all()
     )
     names = dict(
         db.execute(
@@ -315,6 +344,7 @@ def list_notifications(
                 procurement_request_id=n.procurement_request_id,
                 quotation_id=n.quotation_id,
                 purchase_order_id=n.purchase_order_id,
+                reservation_reference=references.get(n.reservation_id),
                 created_at=n.created_at,
                 read=is_read,
             )
@@ -327,11 +357,10 @@ def list_notifications(
 @notifications_router.post("/read", status_code=status.HTTP_204_NO_CONTENT)
 def read_notifications(payload: NotificationReadRequest, user: CurrentUser, db: DbSession):
     """Mark some (``notification_ids``) or all (``all``) of the organization's
-    notifications as read for this user."""
-    get_org_access(db, user, payload.organization_id)
-    stmt = select(Notification.notification_id, literal(user.user_id)).where(
-        Notification.organization_id == payload.organization_id
-    )
+    notifications (or, without ``organization_id``, your personal ones) as read
+    for this user."""
+    audience = _audience(db, user, payload.organization_id)
+    stmt = select(Notification.notification_id, literal(user.user_id)).where(audience)
     if not payload.all:
         stmt = stmt.where(Notification.notification_id.in_(payload.notification_ids or []))
     db.execute(insert(NotificationRead).from_select(["notification_id", "user_id"], stmt).on_conflict_do_nothing())

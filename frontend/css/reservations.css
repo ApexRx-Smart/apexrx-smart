@@ -1,0 +1,107 @@
+/* Patient reservations (reservations.html) and the Reserve block on search.html.
+   Built on css/style.css tokens (--ink, --green, --tint, --line, ...). Mobile first:
+   nothing has a fixed width, long text wraps, so 390px phones never scroll sideways. */
+.sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap;}
+.page-reservations [hidden], .rs-reserve-box [hidden]{display:none !important;}
+
+.rs-hero{padding-block:calc(130px + env(safe-area-inset-top,0px)) 40px;}
+.rs-hero h1{font-size:clamp(30px,4.4vw,48px);}
+@media (max-width:720px){ .rs-hero{padding-block:calc(110px + env(safe-area-inset-top,0px)) 30px;} }
+
+.rs-body{padding-block:22px 80px; display:flex; flex-direction:column; gap:16px; min-width:0;}
+.rs-panel{background:#fff; border:1px solid var(--line); border-radius:18px; padding:22px; min-width:0; overflow-wrap:anywhere;}
+.rs-panel h2{font-family:var(--font-display); font-size:22px; margin:0 0 10px; color:var(--ink);}
+.rs-panel h3{font-size:16px; margin:20px 0 8px; color:var(--ink);}
+.rs-panel :focus-visible, .rs-reserve-box :focus-visible{outline:3px solid var(--rw-blue); outline-offset:2px;}
+.rs-panel h2:focus{outline:none;}
+@media (max-width:480px){ .rs-panel{padding:16px; border-radius:14px;} }
+
+.rs-row{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px;}
+.rs-muted{color:var(--text-dim); margin:4px 0;}
+.rs-small{font-size:13px;}
+.rs-account{margin:0; display:flex; flex-wrap:wrap; gap:10px; align-items:center; font-size:14px; color:var(--text-dim);}
+
+/* Buttons and links */
+.rs-btn{display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:44px; font:inherit; font-size:15px; font-weight:600;
+  border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:12px; padding:10px 16px; cursor:pointer; text-decoration:none; text-align:center;}
+.rs-btn:hover{border-color:var(--green); color:var(--green);}
+.rs-btn.primary{background:var(--green); border-color:var(--green); color:#fff;}
+.rs-btn.primary:hover{background:var(--green-hover); color:#fff;}
+.rs-btn.danger{border-color:#b42318; color:#b42318;}
+.rs-btn.danger:hover{background:#b42318; color:#fff;}
+.rs-btn:disabled{opacity:.6; cursor:not-allowed;}
+.rs-link{font:inherit; font-size:14px; font-weight:600; color:var(--green); background:none; border:0; padding:4px 0; cursor:pointer; text-decoration:underline; text-underline-offset:3px;}
+.rs-find{align-self:flex-start; margin-top:14px;}
+.rs-actions{display:flex; flex-wrap:wrap; gap:10px;}
+
+/* Forms */
+.rs-tabs{display:flex; flex-wrap:wrap; gap:8px; margin:14px 0;}
+.rs-tab{font:inherit; font-weight:600; min-height:44px; padding:8px 16px; border-radius:999px; border:1px solid var(--line); background:var(--tint); color:var(--ink); cursor:pointer;}
+.rs-tab[aria-pressed="true"]{background:var(--ink); border-color:var(--ink); color:#fff;}
+.rs-form{display:flex; flex-direction:column; gap:14px; max-width:560px;}
+.rs-field{display:flex; flex-direction:column; gap:6px;}
+.rs-field label{font-weight:600; font-size:14px;}
+.rs-field input, .rs-field textarea, .rs-filter select{font:inherit; font-size:16px; padding:11px 12px; border:1px solid rgba(15,26,61,.25); border-radius:10px; background:#fff; color:var(--text); width:100%; max-width:100%;}
+.rs-field textarea{resize:vertical;}
+.rs-hint{color:var(--text-dim); font-size:13px;}
+.rs-error{color:#b42318; font-weight:600; margin:0; min-height:0;}
+.rs-error:empty{display:none;}
+.rs-notice{background:#fff7e0; border:1px solid #f0c75e; border-radius:12px; padding:12px 14px; margin:0 0 12px; font-weight:600;}
+.rs-explain{background:var(--tint); border-radius:12px; padding:12px 14px; margin:12px 0;}
+.rs-context{font-weight:600; margin:6px 0;}
+.rs-flash{border-radius:12px; padding:12px 14px; background:var(--tint); font-weight:600;}
+.rs-flash.ok{background:rgba(26,148,88,.12); color:#11683d;}
+
+/* Facts */
+.rs-facts{display:grid; grid-template-columns:minmax(0,190px) minmax(0,1fr); gap:8px 16px; margin:12px 0;}
+.rs-facts dt{color:var(--text-dim); font-size:14px;}
+.rs-facts dd{margin:0; min-width:0;}
+@media (max-width:560px){ .rs-facts{grid-template-columns:minmax(0,1fr);} .rs-facts dd{margin-bottom:6px;} }
+
+/* Status badges: a symbol and text as well as colour */
+.rs-badge{display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:700; padding:4px 10px; border-radius:999px; border:1px solid transparent; white-space:normal;}
+.rs-badge.requested{background:#fff4d6; color:#7a5200; border-color:#f0c75e;}
+.rs-badge.confirmed{background:rgba(26,148,88,.12); color:#11683d; border-color:rgba(26,148,88,.35);}
+.rs-badge.collected{background:#e7eef8; color:var(--ink); border-color:rgba(15,26,61,.2);}
+.rs-badge.declined, .rs-badge.cancelled{background:#fdecea; color:#912018; border-color:#f4b4ae;}
+.rs-badge.expired{background:#f1f1f1; color:#4a4a4a; border-color:#d0d0d0;}
+
+/* List */
+.rs-filter{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.rs-filter label{font-weight:600; font-size:14px;}
+.rs-filter select{width:auto; min-height:44px;}
+.rs-cards{list-style:none; margin:12px 0 0; padding:0; display:flex; flex-direction:column; gap:12px;}
+.rs-card{border:1px solid var(--line); border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:6px; min-width:0;}
+.rs-card-top{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px;}
+.rs-ref{font-family:ui-monospace,Menlo,Consolas,monospace; font-weight:700; font-size:16px; color:var(--ink);}
+.rs-card-med{margin:0;}
+.rs-card .rs-btn{align-self:flex-start;}
+.rs-dates{display:flex; flex-wrap:wrap; gap:6px 18px; margin:0; font-size:14px;}
+.rs-dates dt{color:var(--text-dim);}
+.rs-dates dd{margin:0; font-weight:600;}
+.rs-empty{padding:18px; border:1px dashed var(--line); border-radius:14px; color:var(--text-dim);}
+.rs-pager{display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:12px; margin-top:14px;}
+.rs-count{display:inline-block; font-size:13px; font-family:var(--font-body); background:var(--green); color:#fff; border-radius:999px; padding:2px 10px; vertical-align:middle;}
+.rs-notes{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px;}
+.rs-notes li{display:flex; flex-wrap:wrap; gap:4px 10px; align-items:baseline; padding:8px 0; border-bottom:1px solid var(--line);}
+.rs-notes li:last-child{border-bottom:0;}
+.rs-notes li.unread a{font-weight:700;}
+.rs-notes a{color:var(--ink);}
+.rs-new{font-size:12px; font-weight:700; color:#fff; background:var(--ink); border-radius:999px; padding:1px 8px;}
+
+/* Detail */
+.rs-detail-head{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-top:10px;}
+.rs-detail-head h2{margin:0;}
+.rs-reference{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:clamp(22px,5vw,30px); font-weight:700; letter-spacing:.04em; color:var(--ink); margin:0;}
+.rs-next{background:var(--tint); border-left:4px solid var(--green); border-radius:10px; padding:10px 14px; margin:14px 0;}
+.rs-next h3{margin:0 0 4px;}
+.rs-next p{margin:0;}
+.rs-history{margin:0; padding-left:20px; display:flex; flex-direction:column; gap:8px;}
+.rs-history time{font-weight:600;}
+.rs-cancel{margin-top:20px; padding-top:16px; border-top:1px solid var(--line);}
+.rs-success .rs-reference{margin:4px 0 10px;}
+
+/* Reserve block on search.html (patient-search.js) */
+.rs-reserve-box{margin-top:12px; padding-top:12px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:8px;}
+.rs-reserve-box .rs-btn{align-self:flex-start;}
+.rs-reserve-box p{margin:0; font-size:14px;}

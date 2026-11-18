@@ -1,4 +1,9 @@
 -- ApexRx MVP target schema (v6: v5 schema with the v6 patch merged in)
+-- Covers migration a6f0c2d9e1b4 only. Later migrations (sessions, email
+-- verification, messaging, procurement, notifications, patient reservations
+-- c8e5a1f7d2b9, which also redefines stock_log_adjustment and the
+-- patient_availability view) live in backend/alembic/versions. Build real
+-- databases with `alembic upgrade head`.
 -- PostgreSQL 13+. Target schema reference, NOT an automatically applied migration.
 -- Review against the live database before generating/running Alembic migrations.
 -- This file is standalone: run it on an empty scratch database. Do NOT run the

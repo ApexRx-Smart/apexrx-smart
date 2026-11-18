@@ -81,3 +81,40 @@ def test_x_forwarded_for_is_refused_as_trusted_header():
     assert "must not be X-Forwarded-For" in str(info.value)
     blank = build(jwt_secret_key=secrets.token_urlsafe(48), trusted_client_ip_header="  ")
     assert blank.trusted_client_ip_header is None
+
+
+def test_database_errors_never_carry_statement_parameters():
+    """Unexpected database errors are logged with their stack trace
+    (app/core/errors.py); the engine hides bound parameters so personal data
+    such as a patient's phone number can never reach the logs."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+
+    from app.core.database import engine
+    from app.core.errors import describe_db_error
+
+    phone = "+250788999111"
+    with engine.connect() as conn, pytest.raises(DBAPIError) as info:
+        conn.execute(text("SELECT CAST(:value AS integer)"), {"value": phone})
+    # SQLAlchemy's own text no longer lists the parameters...
+    assert "[SQL parameters hidden due to hide_parameters=True]" in str(info.value)
+    # ...but PostgreSQL's message can still quote the value, so the API logs a
+    # description built only from safe fields.
+    logged = describe_db_error(info.value)
+    assert phone not in logged and "788999111" not in logged
+    assert "22003" in logged and "NumericValueOutOfRange" in logged
+
+
+def test_constraint_failures_are_logged_without_the_failing_row():
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+
+    from app.core.database import engine
+    from app.core.errors import describe_db_error
+
+    with engine.connect() as conn, pytest.raises(DBAPIError) as info:
+        conn.execute(text("CREATE TEMP TABLE t (phone text CHECK (phone LIKE '0%'))"))
+        conn.execute(text("INSERT INTO t VALUES ('+250788777666')"))
+    assert "+250788777666" in str(info.value)  # PostgreSQL's detail quotes the row...
+    logged = describe_db_error(info.value)
+    assert "+250788777666" not in logged and "constraint=t_phone_check" in logged  # ...the log does not

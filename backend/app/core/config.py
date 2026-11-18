@@ -85,6 +85,11 @@ class Settings(BaseSettings):
 
     # Default currency for offers and purchase orders (ISO 4217).
     default_currency: str = "RWF"
+    # Patient reservations: open (pending or confirmed) reservations one patient
+    # may hold at once, a spam control. The value awaits product-owner approval.
+    reservation_max_open_per_patient: int = Field(default=3, ge=1, le=50)
+    # Reservations recorded as expired per transaction by app/scripts/expire_reservations.py.
+    reservation_expiry_batch_size: int = Field(default=200, ge=1, le=1000)
 
     # Email delivery is temporarily disabled (no real provider is integrated;
     # see app/services/email/__init__.py). Email verification is therefore not

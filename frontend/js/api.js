@@ -646,7 +646,49 @@
 
     notifications: {
       list: function (orgId, params, opts) { return get('/notifications', Object.assign({ organization_id: orgId }, params), opts); },
-      read: function (orgId, ids) { return post('/notifications/read', ids ? { organization_id: orgId, notification_ids: ids } : { organization_id: orgId, all: true }); }
+      read: function (orgId, ids) { return post('/notifications/read', ids ? { organization_id: orgId, notification_ids: ids } : { organization_id: orgId, all: true }); },
+      // The signed-in person's own notifications (a patient's reservation updates).
+      personal: function (params, opts) { return get('/notifications', params, opts); },
+      readPersonal: function (ids) { return post('/notifications/read', ids ? { notification_ids: ids } : { all: true }); }
+    },
+
+    /* A pharmacy's reservations (members of that pharmacy; actions per role, see
+     * the root README). Reservations are addressed by reference (RX-…). */
+    pharmacyReservations: {
+      // params: {location_id?, status?, submitted_from?, submitted_to?, reference?, sort: newest|deadline, limit, offset}
+      list: function (orgId, params, opts) { return get(org(orgId) + '/reservations', params, opts); },
+      get: function (orgId, reference, opts) { return get(org(orgId) + '/reservations/' + enc(reference), null, opts); },
+      // action: confirm | decline {reason} | cancel {reason} | collect {override?}
+      act: function (orgId, reference, action, body) {
+        return post(org(orgId) + '/reservations/' + enc(reference) + '/' + action, body || undefined);
+      },
+      units: function (orgId, locId, params) { return get(org(orgId) + '/locations/' + enc(locId) + '/reservation-units', params); },
+      unit: function (orgId, locId, productId) {
+        return get(org(orgId) + '/locations/' + enc(locId) + '/products/' + enc(productId) + '/unit-acknowledgement');
+      },
+      // shown: {unit_version, stock_unit, unit_label, pack_size} exactly as the API returned them
+      acknowledge: function (orgId, locId, productId, shown) {
+        return post(org(orgId) + '/locations/' + enc(locId) + '/products/' + enc(productId) + '/unit-acknowledgement', shown);
+      },
+      // Read-only for pharmacies: the shared catalogue settings and why reservations cannot be enabled.
+      settings: function (productId) { return get('/catalogue/products/' + enc(productId) + '/reservation-settings'); }
+    },
+
+    /* Patient reservations (one medicine at one pharmacy branch). The server
+     * decides price, unit, deadlines and status; see the root README. */
+    reservations: {
+      // Public: works signed out; signed in it also says "own_pharmacy".
+      options: function (locationId, productId, opts) {
+        return get('/reservations/options', { location_id: locationId, product_id: productId }, opts);
+      },
+      // data: {location_id, product_id, quantity, unit_version, client_request_id, contact_phone?, note?}
+      submit: function (data) { return post('/reservations', data); },
+      // params: {status?, limit?, offset?}
+      list: function (params, opts) { return get('/reservations', params, opts); },
+      get: function (reference, opts) { return get('/reservations/' + enc(reference), null, opts); },
+      cancel: function (reference, reason) {
+        return post('/reservations/' + enc(reference) + '/cancel', reason ? { reason: reason } : {});
+      }
     },
 
     admin: {

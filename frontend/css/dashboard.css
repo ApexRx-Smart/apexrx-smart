@@ -237,3 +237,41 @@ background:radial-gradient(70% 50% at 100% 0,#0da7de1f,transparent 70%),var(--bg
 #dlg .picklist{min-width:min(420px,80vw)}
 @media (max-width:720px){.npanel{position:fixed;left:16px;right:16px;top:64px;width:auto}.qft{min-width:640px}}
 .clist{grid-template-columns:minmax(0,1fr);min-width:0}.citem{overflow:hidden}
+
+/* Reservations workspace (js/dashboard-reservations.js). Cards rather than wide
+   tables, so the workspace never scrolls sideways on a 390px phone. */
+.rv-intro{margin:0 0 12px}
+.rv-n{display:inline-block;min-width:20px;margin-left:4px;padding:0 6px;border-radius:10px;background:var(--surface-2);color:var(--ink);font-size:12px;font-weight:700}
+.chip.on .rv-n{background:#ffffff33;color:inherit}
+.rv-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px 14px;align-items:end;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+.rv-filters label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;min-width:0}
+.rv-filters input,.rv-filters select{width:100%;min-width:0}
+.rv-fa{display:flex;gap:8px;flex-wrap:wrap}
+.rv-ferr{grid-column:1/-1;margin:0;color:var(--red);font-weight:600}.rv-ferr:empty{display:none}
+.rv-cards{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.rv-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0;overflow-wrap:anywhere}
+.rv-card .kv{margin:4px 0}
+.rv-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.rv-ref{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-size:15px}
+.rv-refbig{font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:.03em;margin:0}
+.rv-med,.rv-meta{margin:0}
+.rv-dl{font-size:13px}
+.rv-go{align-self:flex-start}
+.rv-pager{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;margin-top:14px}
+.rv-kind{border-radius:10px;padding:10px 14px;margin:12px 0;font-weight:600;border-left:4px solid}
+.rv-kind.req{background:var(--amber-soft);color:var(--amber);border-color:var(--amber)}
+.rv-kind.com{background:var(--soft);color:var(--soft-ink);border-color:var(--accent)}
+.rv-kind.closed{background:var(--surface-2);color:var(--muted);border-color:var(--line)}
+.rv-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.rv-actions button,.rv-pager button{min-height:40px}
+.ghost.danger{color:var(--red);border-color:var(--red)}
+.rv-ovnote{margin:12px 0 0}
+.rv-bad{color:var(--red)}
+.rv-short{flex-direction:column;align-items:flex-start}
+.rv-problem{margin:12px 0}
+.rv-hist{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.rv-check{display:flex!important;gap:8px;align-items:flex-start;font-weight:600}
+.rv-check input{margin-top:3px}
+.rv-dlg{margin:8px 0 12px}
+.rv-inline{display:inline-flex;gap:8px;align-items:center;font-weight:600;margin-bottom:8px;flex-wrap:wrap}
+@media(max-width:860px){.rv-filters{grid-template-columns:1fr}.rv-card .kv{grid-template-columns:1fr}}

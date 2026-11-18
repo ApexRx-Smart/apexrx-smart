@@ -32,6 +32,8 @@ from app.models import (
     Location,
     Product,
     ProductOffer,
+    Reservation,
+    ReservationStatus,
     Stock,
     StockAdjustment,
     User,
@@ -45,14 +47,17 @@ from app.schemas.inventory import (
     StockAdjustmentResponse,
     StockUpsert,
 )
+from app.services import reservations
 
 router = APIRouter()
 
 
-def availability_for(quantity: int, offer: ProductOffer | None) -> AvailabilityStatus | None:
-    """Same rule as the patient_availability view."""
+def availability_for(quantity: int, offer: ProductOffer | None, allocated: int = 0) -> AvailabilityStatus | None:
+    """Same rule as the patient_availability view: physical stock minus
+    confirmed, unexpired patient reservations."""
     if offer is None or not offer.is_listed:
         return None
+    quantity -= allocated
     if quantity <= 0:
         return AvailabilityStatus.UNAVAILABLE
     if quantity <= offer.low_stock_threshold:
@@ -61,7 +66,7 @@ def availability_for(quantity: int, offer: ProductOffer | None) -> AvailabilityS
 
 
 def _inventory_item(
-    stock: Stock, offer: ProductOffer | None, product: Product, drug: Drug, location: Location
+    stock: Stock, offer: ProductOffer | None, product: Product, drug: Drug, location: Location, allocated: int = 0
 ) -> InventoryItem:
     return InventoryItem(
         stock_id=stock.stock_id,
@@ -76,6 +81,9 @@ def _inventory_item(
         dosage_form=product.dosage_form,
         pack_size=product.pack_size,
         quantity=stock.quantity,
+        allocated_quantity=allocated,
+        available_to_reserve=max(0, stock.quantity - allocated),
+        reservation_shortfall=max(0, allocated - stock.quantity),
         last_updated=stock.last_updated,
         updated_by=stock.updated_by,
         offer=(
@@ -91,13 +99,28 @@ def _inventory_item(
             if offer
             else None
         ),
-        availability_status=availability_for(stock.quantity, offer),
+        availability_status=availability_for(stock.quantity, offer, allocated),
+    )
+
+
+def _allocated():
+    """Confirmed, unexpired reservations of the stock row in the outer query."""
+    return (
+        select(func.coalesce(func.sum(Reservation.quantity), 0))
+        .where(
+            Reservation.location_id == Stock.location_id,
+            Reservation.product_id == Stock.product_id,
+            Reservation.status == ReservationStatus.CONFIRMED,
+            Reservation.expires_at > func.clock_timestamp(),
+        )
+        .correlate(Stock)
+        .scalar_subquery()
     )
 
 
 def _inventory_query():
     return (
-        select(Stock, ProductOffer, Product, Drug, Location)
+        select(Stock, ProductOffer, Product, Drug, Location, _allocated().label("allocated"))
         .join(Location, Location.location_id == Stock.location_id)
         .join(Product, Product.product_id == Stock.product_id)
         .join(Drug, Drug.drug_id == Product.drug_id)
@@ -168,13 +191,16 @@ def list_inventory(
     elif listed is False:
         stmt = stmt.where(or_(ProductOffer.offer_id.is_(None), ProductOffer.is_listed.is_(False)))
     if availability is not None:
+        # Same rule as availability_for and the patient_availability view:
+        # recorded stock minus confirmed, unexpired reservations.
+        unreserved = Stock.quantity - _allocated()
         stmt = stmt.where(ProductOffer.is_listed.is_(True))
         if availability == AvailabilityStatus.UNAVAILABLE:
-            stmt = stmt.where(Stock.quantity <= 0)
+            stmt = stmt.where(unreserved <= 0)
         elif availability == AvailabilityStatus.LOW_STOCK:
-            stmt = stmt.where(Stock.quantity > 0, Stock.quantity <= ProductOffer.low_stock_threshold)
+            stmt = stmt.where(unreserved > 0, unreserved <= ProductOffer.low_stock_threshold)
         else:
-            stmt = stmt.where(Stock.quantity > ProductOffer.low_stock_threshold)
+            stmt = stmt.where(unreserved > ProductOffer.low_stock_threshold)
 
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
     rows = db.execute(
@@ -295,9 +321,19 @@ def delete_stock(
     organization_id: int, location_id: int, product_id: int, user: CurrentUser, db: DbSession
 ):
     """Stop tracking a product at this location. Also removes its offer. The
-    deletion is recorded in the audit trail."""
+    deletion is recorded in the audit trail. Refused while patient
+    reservations for it are open (to set the stock to zero, update it)."""
     _writable_location(db, user, organization_id, location_id, roles=MANAGERS)
-    db.delete(_get_stock(db, location_id, product_id))
+    stock = reservations.lock_stock(db, location_id, product_id)
+    if stock is None:
+        raise NotFound("This product has no stock record at this location.")
+    open_ids = reservations.open_reservation_ids(db, location_id=location_id, product_id=product_id)
+    if open_ids:
+        raise Conflict(
+            "This product has open patient reservations at this location. Resolve them first.",
+            extra={"code": "open_reservations", "reservation_ids": open_ids},
+        )
+    db.delete(stock)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

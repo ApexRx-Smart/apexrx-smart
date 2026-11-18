@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>My reservations — ApexRX Smart</title>
+<meta name="description" content="Reserve a medicine at a pharmacy in Kigali and follow your requests.">
+<!-- Private, signed-in content: keep it out of search engines. -->
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0f1a3d">
+<link rel="icon" type="image/svg+xml" href="assets/logos/logo-mark.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@400;500;600;700&family=Poppins:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/pages.css">
+<link rel="stylesheet" href="css/reservations.css">
+</head>
+<body data-page="reservations">
+
+<script src="js/site-layout.js" data-part="header"></script>
+
+<!-- Patient reservations (js/reservations.js), on the reservation API:
+       reservations.html                        your reservations and updates
+       reservations.html?ref=RX-…               one reservation, its history, cancel
+       reservations.html?location=…&product=…   reserve this medicine at this branch
+     Signed out, every view first shows the sign-in / create-account panel and then
+     continues where the patient was. Only public ids (branch, product, reference)
+     are ever in the address; the phone and note stay in this tab. -->
+<main id="top" class="page-reservations">
+
+<section class="page-hero rs-hero">
+  <div class="wrap">
+    <div class="eyebrow" data-i18n="rs_eyebrow">Medicine reservations</div>
+    <h1 data-i18n="rs_title">My reservations</h1>
+    <p data-i18n="rs_lede">Reserve a medicine at a pharmacy, then follow your requests here.</p>
+  </div>
+</section>
+
+<section class="wrap rs-body">
+  <p class="rs-account" id="rs-account" hidden>
+    <span id="rs-account-text"></span>
+    <button type="button" class="rs-link" id="rs-signout" data-i18n="rs_signout">Sign out</button>
+  </p>
+  <div class="rs-flash" id="rs-flash" role="status" aria-live="polite" hidden></div>
+
+  <!-- ===================== Sign in / create account ===================== -->
+  <section class="rs-panel" id="rs-auth" hidden aria-labelledby="rs-auth-title">
+    <h2 id="rs-auth-title" tabindex="-1" data-i18n="rs_auth_title_list">Sign in to see your reservations</h2>
+    <p class="rs-context" id="rs-auth-context" hidden></p>
+    <p class="rs-muted" data-i18n="rs_auth_lede">Use your ApexRX account, or create one. Your reservations are private to you.</p>
+    <div class="rs-tabs" role="group" aria-label="Account">
+      <button type="button" class="rs-tab" id="rs-tab-signin" aria-pressed="true" data-i18n="rs_tab_signin">Sign in</button>
+      <button type="button" class="rs-tab" id="rs-tab-create" aria-pressed="false" data-i18n="rs_tab_create">Create an account</button>
+    </div>
+    <form class="rs-form" id="rs-auth-form" novalidate>
+      <div class="rs-field" id="rs-name-field" hidden>
+        <label for="rs-name" data-i18n="rs_name">Your name</label>
+        <input id="rs-name" name="name" type="text" autocomplete="name" maxlength="150">
+      </div>
+      <div class="rs-field">
+        <label for="rs-email" data-i18n="rs_email">Email</label>
+        <input id="rs-email" name="email" type="email" autocomplete="email" maxlength="255" required>
+      </div>
+      <div class="rs-field">
+        <label for="rs-password" data-i18n="rs_password">Password</label>
+        <input id="rs-password" name="password" type="password" autocomplete="current-password" minlength="8" required aria-describedby="rs-password-hint">
+        <small class="rs-hint" id="rs-password-hint" data-i18n="rs_password_hint">At least 8 characters.</small>
+      </div>
+      <p class="rs-error" id="rs-auth-error" role="alert"></p>
+      <button type="submit" class="rs-btn primary" id="rs-auth-submit" data-i18n="rs_signin_btn">Sign in</button>
+    </form>
+  </section>
+
+  <!-- ===================== Reserve ===================== -->
+  <section class="rs-panel" id="rs-reserve" hidden aria-labelledby="rs-form-title">
+    <h2 id="rs-form-title" tabindex="-1" data-i18n="rs_form_title">Reserve a medicine</h2>
+    <div id="rs-reserve-body"></div>
+  </section>
+
+  <!-- ===================== Request sent ===================== -->
+  <section class="rs-panel rs-success" id="rs-success" hidden aria-labelledby="rs-success-title">
+    <h2 id="rs-success-title" tabindex="-1" data-i18n="rs_success_title">Request sent</h2>
+    <div id="rs-success-body"></div>
+  </section>
+
+  <!-- ===================== List and updates ===================== -->
+  <div id="rs-list" hidden>
+    <section class="rs-panel rs-updates" aria-labelledby="rs-updates-title">
+      <div class="rs-row">
+        <h2 id="rs-updates-title"><span data-i18n="rs_updates">Updates</span> <span class="rs-count" id="rs-unread" hidden></span></h2>
+        <button type="button" class="rs-link" id="rs-mark-read" hidden data-i18n="rs_mark_read">Mark all as read</button>
+      </div>
+      <ul class="rs-notes" id="rs-notes" aria-live="polite"></ul>
+    </section>
+
+    <section class="rs-panel" aria-labelledby="rs-list-title">
+      <div class="rs-row">
+        <h2 id="rs-list-title" tabindex="-1" data-i18n="rs_title">My reservations</h2>
+        <div class="rs-filter">
+          <label for="rs-status" data-i18n="rs_filter">Show</label>
+          <select id="rs-status">
+            <option value="" data-i18n="rs_all">All</option>
+            <option value="requested" data-i18n="rs_st_requested">Awaiting confirmation</option>
+            <option value="confirmed" data-i18n="rs_st_confirmed">Confirmed: ready to collect</option>
+            <option value="collected" data-i18n="rs_st_collected">Collected</option>
+            <option value="declined" data-i18n="rs_st_declined">Declined</option>
+            <option value="cancelled" data-i18n="rs_st_cancelled">Cancelled</option>
+            <option value="expired" data-i18n="rs_st_expired">Expired</option>
+          </select>
+        </div>
+      </div>
+      <p class="rs-muted" id="rs-list-status" role="status" aria-live="polite"></p>
+      <ol class="rs-cards" id="rs-cards" aria-busy="false"></ol>
+      <nav class="rs-pager" id="rs-pager" hidden aria-label="Pages">
+        <button type="button" class="rs-btn" id="rs-prev" data-i18n="rs_prev">← Previous</button>
+        <span id="rs-page"></span>
+        <button type="button" class="rs-btn" id="rs-next" data-i18n="rs_next">Next →</button>
+      </nav>
+      <a class="rs-btn primary rs-find" href="index.html#hero-search" data-i18n="rs_find">Search for a medicine</a>
+    </section>
+  </div>
+
+  <!-- ===================== One reservation ===================== -->
+  <section class="rs-panel" id="rs-detail" hidden aria-live="polite">
+    <a class="rs-link" id="rs-back" href="reservations.html" data-i18n="rs_back">← All reservations</a>
+    <div id="rs-detail-body"></div>
+  </section>
+</section>
+</main>
+
+<script src="js/site-layout.js" data-part="footer"></script>
+<script src="js/reservations-i18n.js"></script>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/script.js"></script>
+<script src="js/reservations.js"></script>
+</body>
+</html>

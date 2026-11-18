@@ -197,9 +197,9 @@ def main():
               and "NPC" not in owner.inner_text("#ver")
               and owner.inner_text("#dash-user") == f"{w['owner_email']} · Owner" and owner.is_hidden("#org"))
         home = owner.inner_text("#view")
-        check("overview: live data, no sample strip, patient ordering and expiry shown as not live",
+        check("overview: live data, no sample strip, reservations from the API and expiry shown as not live",
               f"Kigali Care {RUN}" in home and "Preview with sample data" not in home
-              and "Patient ordering is coming soon" in home and "not connected yet" in owner.inner_text("#shelf-life"))
+              and "No reservation requests waiting" in home and "not connected yet" in owner.inner_text("#shelf-life"))
 
         # Branches
         open_view(owner, "set")
@@ -443,10 +443,13 @@ def main():
         check("forecast: labelled as example data", "Example data" in sup.inner_text("#view"))
 
         # ============================================================ not live yet
-        open_view(owner, "por")
+        # Patient orders were a placeholder; the live Reservations workspace replaced them
+        # (covered in depth by e2e_pharmacy_reservations.py).
+        open_view(owner, "res")
+        owner.wait_for_selector("#rv-list .empty, #rv-list .rv-card")
         txt = owner.inner_text("#view")
-        check("patient orders: 'coming soon', no sample orders or buttons in the live dashboard",
-              "Patient ordering is coming soon" in txt and owner.locator("#view [data-a=pya]").count() == 0)
+        check("reservations: the live workspace, no sample orders",
+              "No reservations with this status" in txt and owner.locator("#view [data-a=pya]").count() == 0)
 
         # ============================================================ switching organizations
         check("switcher shown for a user in two pharmacies", mgr.is_visible("#org") and mgr.locator("#org option").count() == 2)

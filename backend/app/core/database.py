@@ -23,6 +23,10 @@ ACTOR_KEY = "actor_user_id"
 engine = create_engine(
     settings.database_url,
     pool_pre_ping=True,
+    # Errors and logs never include statement parameters (phone numbers, notes,
+    # names, tokens): only the SQL text. See app/core/errors.py, which logs
+    # unexpected database errors with their stack trace.
+    hide_parameters=True,
 )
 
 SessionLocal = sessionmaker(

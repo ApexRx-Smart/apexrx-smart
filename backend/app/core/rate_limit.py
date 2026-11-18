@@ -168,3 +168,6 @@ class ActionRateLimiter:
 # Chat: 30 messages a minute per user. Procurement requests: 30 an hour per user.
 message_limiter = ActionRateLimiter("chat-message", 30, 60)
 procurement_limiter = ActionRateLimiter("procurement-request", 30, 3600)
+# New patient reservation requests: 20 an hour per patient (retries of an
+# existing request are not counted; RESERVATION_MAX_OPEN_PER_PATIENT caps open ones).
+reservation_limiter = ActionRateLimiter("reservation-request", 20, 3600)

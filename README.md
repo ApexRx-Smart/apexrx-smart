@@ -40,11 +40,15 @@ apexrx-smart/
 │   │   ├── api.js           # API client used by every page (window.ApexAPI)
 │   │   ├── script.js        # homepage, including medicine search
 │   │   ├── registration.js  # pharmacy and supplier registration and sign-in
-│   │   ├── dashboard.js     # pharmacy and supplier dashboards (with dashboard-data.js, dashboard-i18n.js, dashboard-forecast.js)
+│   │   ├── dashboard.js     # pharmacy and supplier dashboards (with dashboard-data.js, dashboard-i18n.js, dashboard-forecast.js, dashboard-reservations.js)
+│   │   ├── reservations.js  # patient reservations page (with reservations-i18n.js)
 │   │   ├── pharmacies-i18n.js
 │   │   └── pharmacies-motion.js
 │   ├── tests/
-│   │   └── e2e_admin.py     # Playwright check of the admin dashboard (local only)
+│   │   ├── e2e_admin.py     # Playwright check of the admin dashboard (local only)
+│   │   ├── e2e_reservations.py  # Playwright check of patient reservations (local only)
+│   │   └── e2e_pharmacy_reservations.py  # Playwright check of the pharmacy Reservations workspace
+│   ├── reservations.html     # patient reservations (sign in, reserve, follow, cancel)
 │   ├── ops-console-7f3k9q.html           # admin dashboard (ApexRX staff)
 │   ├── index.html
 │   ├── pharmacies.html
@@ -121,7 +125,7 @@ Stop the server with `Ctrl+C`. VS Code Live Server works too, on port 5501.
 
 - **The admin dashboard** (`ops-console-7f3k9q.html`) lets ApexRX staff review registrations. See [Admin dashboard](#admin-dashboard).
 
-Not connected yet, and shown as such on the dashboards: stock batch numbers and expiry dates (no API), patient orders, forecasting (example data), and plans and payments. There is no subscription or payment anywhere.
+Not connected yet, and shown as such on the dashboards: stock batch numbers and expiry dates (no API), forecasting (example data), and plans and payments. There is no subscription or payment anywhere.
 
 ### Verify frontend changes
 
@@ -208,7 +212,7 @@ This works on an **empty database** and on a database still on the **old (batch-
 - On an old-schema database, migration `a6f0c2d9e1b4` keeps the `app_user`, `drug` and `product` rows (ids preserved) and **drops the old organization, membership, location, batch and stock rows**, which do not fit the v6 model. Back up first if those rows matter. Carried-over users without a password must have one set again (use `create_admin` or re-register).
 - `alembic downgrade 211f0e646448` restores the old schema (keeping users, drugs and products).
 
-`database/db_implementation_script.sql` contains the same v6 schema as a standalone script, for review or for building a scratch database by hand. If you build a database with it, run `alembic stamp head` afterwards.
+`database/db_implementation_script.sql` is the v6 schema (migration `a6f0c2d9e1b4`) as a standalone script, kept for review. It does not contain the later migrations (sessions, email verification, messaging, procurement, notifications, patient reservations), so build real databases with `alembic upgrade head`. If you do build a scratch database from the script, run `alembic stamp a6f0c2d9e1b4` and then `alembic upgrade head`.
 
 ### 4. Create an admin and (optionally) demo data
 
@@ -256,6 +260,8 @@ export TEST_DATABASE_URL=postgresql+psycopg://USER:PASSWORD@localhost:5432/apexr
 python -m pytest
 ruff check app tests alembic
 ```
+
+The reservation tests (`tests/test_reservation*.py`) also need a **superuser** test role on that local server: they move deadlines into the past with `session_replication_role = replica`, switch a trigger off and on to build an impossible state, and create a temporary restricted role to prove the application role cannot switch the safeguards off.
 
 The document tests use an in-memory fake of the Supabase Storage client, and the suite forces `DOCUMENT_STORAGE=local`, so tests never touch a real bucket. `tests/test_supabase_live.py` is an optional round trip against the real bucket (a dummy PDF under a random `test-.../` prefix, deleted afterwards). It runs only with `SUPABASE_LIVE_TESTS=1` and the `SUPABASE_*` variables set.
 
@@ -516,6 +522,94 @@ Each purchase order includes `allowed_actions`, the actions the current user may
 
 Every authenticated request sets the database transaction actor (`set_config('app.user_id', ...)`) automatically through a SQLAlchemy session hook (`app/core/database.py`). Database triggers then stamp `updated_by`, `created_by`, `status_changed_by` and `responded_by`, and write the `stock_adjustment` and `purchase_order_status_history` audit rows. The application cannot fake or forget these values. Any script that writes stock, offers or orders must call `set_session_actor(session, user_id)` first (see `app/scripts/seed_demo.py`).
 
+## Patient reservations
+
+Migration `c8e5a1f7d2b9` and `app/services/reservations.py` add patient medicine reservations; `app/api/reservations.py` exposes them, and the patient pages are `frontend/reservations.html` plus the Reserve button on `frontend/search.html` , and pharmacies work in the **Reservations** screen of `frontend/pharmacy-dashboard.html` (see `frontend/README.md`).
+
+- **Lifecycle:** a patient requests one medicine at one branch (`requested`). The pharmacy confirms (`confirmed`, the quantity is allocated for 24 hours), declines, or lets it lapse (24 hours to respond). A confirmed reservation is collected (the full quantity is deducted from stock), cancelled by the patient or an owner/manager, or expires. Pending requests hold no stock.
+- **Stock:** `stock.quantity` stays the physical count. Allocation is the sum of confirmed, unexpired reservations. Patient availability (`patient_availability`) is stock minus allocation. A manual correction below what is reserved is allowed and shows as a shortfall; confirmations that would deepen it are refused; nothing is cancelled automatically.
+- **Collection:** always the full quantity. If the recorded stock is too low it is refused (`stock_record_insufficient`); staff correct the stock, or an owner/manager overrides with a physical count and a reason. `reservation_collection` records who, when, the stock before and after, and the exact `stock_adjustment` rows.
+- **Eligibility:** only products a platform admin classified as non-prescription, with a stock unit (`pack` or `unit` and a label such as "box" or "tablet"), a maximum quantity and reservations enabled; at a branch whose owner or manager acknowledged the current unit; from an approved pharmacy with an active branch and a listed offer. A unit change is refused while reservations are open and invalidates the acknowledgements.
+- **Enforced by the database:** who may make each transition, deadlines (measured with `clock_timestamp()`), stock on confirmation and collection, eligibility, immutable records and history. Expiry and cancellation on suspension are the only "system" transitions, and the triggers accept them only when the deadline has really passed or the pharmacy is really suspended.
+- **Side effects on existing endpoints:** suspending a pharmacy cancels its open reservations and notifies the patients; a branch cannot be closed, a stock record deleted, or a pack product's pack size changed while reservations for it are open.
+- **Expiry:** correct without any job (expired by time everywhere). The scheduled job `python -m app.scripts.expire_reservations` records it and sends the notifications; see [Reservation expiry job](#reservation-expiry-job).
+- **Lock order** (documented in the service): organization, location, product, patient, reservations, stock. Exclusive locks on parent rows use `FOR NO KEY UPDATE`.
+- **Database role:** the guarantees assume the application's database role does not own the tables, is not a superuser, may not set `session_replication_role` and has no `TRUNCATE`; any of those can get around the triggers. `python -m app.scripts.check_db_role` (read-only) checks all of it and that the role has what the API needs. See [OPERATIONS.md](OPERATIONS.md#2-database-roles) before deploying.
+
+### Reservation expiry job
+
+**What it does.** A reservation is treated as expired the moment its deadline passes: every screen, count and action compares the deadline with the current time, so nothing waits for this job. The job **records** the expiry (status `expired`, the reason, a history row) and **sends the notifications**:
+
+| What lapsed | Patient | Pharmacy |
+|---|---|---|
+| A request nobody answered within 24 hours | `reservation_expired` | `reservation_request_lapsed` ("expired without an answer") |
+| A confirmed reservation not collected within 24 hours | `reservation_expired` | `reservation_expired` ("not collected before its deadline; the stock it held is free again") |
+
+Until it runs, the patient and the pharmacy see the reservation as expired but get no notification.
+
+**How.** `python -m app.scripts.expire_reservations` (from `backend/`) calls the engine's `expire_due_batch` until nothing more is due (at most `--max-batches`, default 50, of `--batch-size`, default 200). There is no second expiry logic in the script.
+
+- **Safe to repeat and to overlap.** Each batch is one transaction. Rows are locked with `FOR UPDATE SKIP LOCKED`, so a reservation that a user's action or another run is holding is skipped, not waited for; the next run takes it. The expiry and its notifications are committed together, and notifications are unique per reservation, kind and recipient, so a retry never notifies twice.
+- **Failures.** A lost connection or any error rolls the whole batch back (nothing half-recorded) and the run exits 1. The next run retries the same reservations. Each transaction has a 10 s lock timeout and a 60 s statement timeout.
+- **Stopping.** SIGTERM or Ctrl+C lets the current batch finish, then the run exits 2. The rest waits for the next run.
+- **Schema.** If the database is not at the code's migration head, the run refuses (exit 1) and changes nothing.
+- `--check` reports what is due and changes nothing.
+
+**Environment.** The same as the API: `DATABASE_URL` and `JWT_SECRET_KEY` (the settings validate it at start-up even though the job issues no tokens). Optional: `RESERVATION_EXPIRY_BATCH_SIZE` (default 200, 1 to 1000). Use the same restricted database role as the API.
+
+**Run locally.** `cd backend`, then `python -m app.scripts.expire_reservations --check` and `python -m app.scripts.expire_reservations` against your local database.
+
+**Proposed schedule: every 15 minutes** (`*/15 * * * *`).
+- Correctness does not depend on the schedule. It only sets how late the notifications and the recorded status can be: at most about 15 minutes, against 24-hour windows.
+- A run with nothing due is one indexed query (`idx_reservation_respond_by`, `idx_reservation_expires_at`).
+- More often (for example every 5 minutes) would keep a Neon compute that suspends after 5 idle minutes awake all the time, using free-plan compute hours. 15 minutes lets it sleep between runs. Check the Neon plan before choosing a shorter interval.
+
+**Render Cron Job (not configured; to do after approval).**
+- Create a **Cron Job** service from this repository: root directory `backend`, build command `pip install -r requirements.txt`, command `python -m app.scripts.expire_reservations`, schedule `*/15 * * * *` (UTC).
+- Environment: the API's `DATABASE_URL`, `JWT_SECRET_KEY` and `APP_ENV=production`, ideally from a shared environment group so they cannot drift apart.
+- To verify on the account first: whether the current Render plan includes Cron Jobs and what they cost (they are a separate service type from the free web service), the minimum interval and the maximum run time. The job finishes in seconds when little is due.
+- Deploy order: migrations first, then the API, then the cron job. The job refuses to run against an outdated schema, so an early deploy is harmless.
+
+**Monitoring.** Each run prints one JSON line per event to stdout, which is the run's log on Render:
+
+- `reservation_expiry.start`;
+- `reservation_expiry.batch`, one per batch, with `expired`, `unanswered`, `uncollected`, `notifications` and `duration_ms`;
+- one closing line: `reservation_expiry.finish`, `.failed` (with the error class and SQLSTATE, never the message) or `.refused`.
+
+The `.finish` line carries `outcome`, the totals, `duration_ms`, `due_before`, `remaining_due` and `already_processed`. Lines hold counts only: no names, phone numbers, references or emails.
+
+What to watch:
+- **A failed run:** a non-zero exit, which Render marks as a failed run; its log ends with `.failed` or `.refused`.
+- **Repeated failures:** several failed runs in a row, or `--check` showing `due` growing.
+- **A backlog:** `remaining_due` above 0 run after run, which means more due than `--max-batches` × `--batch-size`, or rows held by long transactions.
+
+### Reservation endpoints and permissions
+
+Reservations are addressed by their reference (`RX-` and 10 characters), never by database id. Request bodies reject unknown fields (422), so a client cannot send a status, actor, price, deadline or stock figure. Every change goes through the reservation engine.
+
+| Endpoint | Who | Notes |
+|---|---|---|
+| `GET /reservations/options?location_id=&product_id=` | Anyone (signed in: also `own_pharmacy`) | Whether the medicine can be reserved at the branch, why not, its unit (`unit_version`) and maximum quantity. No stock figures. |
+| `POST /reservations` | Any signed-in user (not at a pharmacy they work for) | 201 new, 200 for a retry with the same `client_request_id`. Needs `unit_version` (409 `unit_changed` if stale) and a phone (`contact_phone` or the account phone, else 422 `phone_required`). 20 new requests an hour per user (429). |
+| `GET /reservations`, `GET /reservations/{reference}` | The patient who made it | Others get 404. Filter `status` (repeatable; past-deadline ones show as `expired`), `limit`/`offset`. |
+| `POST /reservations/{reference}/cancel` | The patient | Pending or confirmed only. |
+| `GET /organizations/{id}/reservations` | Active members of the pharmacy | Filters `location_id`, `status`, `submitted_from`/`submitted_to`, `reference`; `sort=newest` or `deadline`. Patient name and phone; the phone only while the reservation is open. |
+| `GET /organizations/{id}/reservations/{reference}` | Active members | History, `respond_by` (response deadline) and `collect_by` (collection deadline), the branch's stock against allocations, the collection record. |
+| `POST …/{reference}/confirm`, `…/decline` | Any role, approved pharmacy | Decline needs a `reason`. |
+| `POST …/{reference}/cancel` | Owners and managers | Confirmed reservations only, with a `reason`. |
+| `POST …/{reference}/collect` | Any role; `override` owners and managers | Body `{reference, override?}`: `reference` is the code the patient shows, typed by staff, and must match (422 `reference_mismatch`, nothing collected). Always the full quantity. 409 `stock_record_insufficient`, `stock_changed`, `expired`. |
+| `GET /organizations/{id}/locations/{loc}/reservation-units` | Active members | Each stocked medicine: current unit, acknowledged or not, reservable or why not. |
+| `GET`/`POST /organizations/{id}/locations/{loc}/products/{pid}/unit-acknowledgement` | Read: members. Acknowledge: owners and managers | Send back exactly the current `unit_version`, `stock_unit`, `unit_label`, `pack_size`. |
+| `GET /catalogue/products/{pid}/reservation-settings` | Any signed-in user | Classification, unit, limit, and `problems` explaining why reservations cannot be enabled. |
+| `PATCH /catalogue/products/{pid}/reservation-settings`, `GET …/history` | Platform admins | The catalogue is shared by every pharmacy, so only ApexRx admins classify medicines. |
+
+- Patients see their personal notifications with `GET /notifications` (no `organization_id`); each reservation notification carries `reservation_reference`.
+- A pharmacy's "New reservation request" notification counts as read for every member once the request no longer needs an answer (confirmed, declined, cancelled or past its response deadline). This is decided when listing; read state stays per user and no data is changed.
+- The stock screen (`/organizations/{id}/inventory`) shows `allocated_quantity`, `available_to_reserve` and `reservation_shortfall`, and its `availability` filter uses stock minus allocations, like the status shown and public search. Public search never shows quantities.
+- Platform admins have no access to reservations or patient phone numbers. Expiry and suspension have no endpoint.
+- `RESERVATION_MAX_OPEN_PER_PATIENT` (default 3) caps a patient's open reservations.
+- Browser checks (local backend and a disposable database only): `frontend/tests/e2e_pharmacy_reservations.py` covers the pharmacy workspace (access, groups, filters, actions, collection and override, shortfall, unit setup, notifications, suspension, languages, phone); `frontend/tests/e2e_reservations.py` covers the Reserve button, the sign-in handoff, submission and retries, errors, the list, details, cancellation, updates, isolation, the three languages and a 390px phone.
+
 ## Frontend and Backend Integration
 
 Run the frontend and backend in separate terminals during local development. CORS allows `http://127.0.0.1:5501` and `http://localhost:5501` by default; change it with `CORS_ORIGINS`.
@@ -525,11 +619,13 @@ All frontend requests go through `frontend/js/api.js` (`window.ApexAPI`):
 - It reads the backend address from `js/config.js`.
 - It turns error responses into `ApiError` objects that carry a readable message.
 - It keeps the access token in `sessionStorage`, so the token is cleared when the tab closes.
-- Requests time out after 15 seconds.
+- Requests time out after 45 seconds (a sleeping free Render instance can take that long to wake).
 
 See `/docs` on the backend for the full request and response schemas.
 
 ## Deployment (test environment)
+
+**Operations runbook:** [OPERATIONS.md](OPERATIONS.md) covers the database roles, backups and recovery, the deployment order for the reservation release (with fix-forward), health checks, monitoring, infrastructure limits and the security checklist.
 
 The test deployment uses free tiers only.
 

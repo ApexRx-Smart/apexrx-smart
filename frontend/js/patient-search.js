@@ -7,6 +7,9 @@
  *                                    on any number of results. Sent with record=false: the
  *                                    homepage already counted this search in search insights.
  *   GET /search/pharmacies/{id}      the selected pharmacy, with everything it lists.
+ *   GET /reservations/options        whether the searched medicine can be reserved at the
+ *                                    selected branch (public; no stock figures). The Reserve
+ *                                    button appears only when it can; otherwise the reason.
  * Branches without coordinates have no distance (the API returns null, never an estimate).
  *
  * Map and directions (free OpenStreetMap services, no key, no billing):
@@ -294,12 +297,36 @@ ${d.location_name && d.location_name !== d.pharmacy_name ? `<p class="ps-branch"
 ${searched ? `<div class="ps-searched"><small>${esc(t('ps_searched'))}</small>
   <strong>${esc(SITE.medicineLabel(searched))}</strong>
   <span class="ps-price">${esc(SITE.formatPrice(searched.unit_price, searched.currency))}</span>
-  <span class="ps-meta"><span class="rstock ${status[0]}">${esc(t(status[1]))}</span><span>${esc(t('t_updated') + ' ' + SITE.formatAge(searched.last_updated))}</span></span></div>` : ''}
+  <span class="ps-meta"><span class="rstock ${status[0]}">${esc(t(status[1]))}</span><span>${esc(t('t_updated') + ' ' + SITE.formatAge(searched.last_updated))}</span></span>
+  <div class="rs-reserve-box" id="ps-reserve" aria-live="polite"><p class="ps-msg">${esc(t('rs_checking'))}</p></div></div>` : ''}
 ${d.medicines.length ? `<h3>${esc(t('ps_other_meds'))}</h3><ul class="ps-medlist">${d.medicines.map(m => {
       const st = SITE.stockClass(m.availability_status);
       return `<li class="${isSearched(m) ? 'match' : ''}"><span>${esc(SITE.medicineLabel(m))}</span><span><span class="rstock ${st[0]}">${esc(t(st[1]))}</span> <span class="ps-medprice">${esc(SITE.formatPrice(m.unit_price, m.currency))}</span></span></li>`;
     }).join('')}</ul>` : ''}`;
     const title = $('ps-detail-title'); if (title) title.focus({ preventScroll: true });
+    if (searched) paintReserve(d.location_id, searched.product_id);
+  }
+
+  /* ----------------------------------------------------------- reserve */
+  // The API decides; the button is shown only when this medicine can be reserved at
+  // this branch, otherwise the reason. Signed-out patients sign in on reservations.html
+  // and come back to the same medicine and branch (public ids only in the address).
+  let reserveRun = 0;
+  async function paintReserve(locationId, productId) {
+    const run = ++reserveRun;
+    let options = null;
+    try { options = await API.reservations.options(locationId, productId); } catch (e) { options = null; }
+    const box = $('ps-reserve');
+    if (run !== reserveRun || !box) return;
+    if (!options) { box.innerHTML = ''; return; }
+    if (options.reservable) {
+      const target = 'reservations.html?' + new URLSearchParams({ location: locationId, product: productId, lang: SITE.lang() });
+      box.innerHTML = `<a class="rs-btn primary" id="ps-reserve-btn" href="${esc(target)}">${esc(t('rs_reserve_btn'))}</a>
+<p class="ps-msg">${esc(t('rs_reserve_note'))}</p>
+<p class="ps-msg">${esc(t('rs_price_note'))}</p>`;
+    } else {
+      box.innerHTML = `<p class="ps-msg"><strong>${esc(t('rs_cannot'))}</strong> ${esc(t('rs_reason_' + options.reason))}</p>`;
+    }
   }
 
   /* --------------------------------------------------------------- map */
