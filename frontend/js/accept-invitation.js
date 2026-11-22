@@ -50,7 +50,7 @@
     $('#invite-facts').hidden = true;
     $('#invite-actions').hidden = false;
     const link = $('#invite-continue');
-    link.href = 'pharmacies.html#signin';
+    link.href = 'pharmacy-sign-in.html';
     link.firstChild.nodeValue = 'Go to sign in ';
   }
 

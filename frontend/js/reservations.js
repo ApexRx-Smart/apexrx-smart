@@ -33,7 +33,8 @@
   const STATUS_ICON = { requested: '⏳', confirmed: '✓', collected: '✔', declined: '✕', cancelled: '⊘', expired: '⌛' };
 
   const S = {
-    view: null, authMode: 'signin', me: null,
+    // #register (the header's "For Patients" / Get started) opens account creation.
+    view: null, authMode: location.hash === '#register' ? 'create' : 'signin', me: null,
     reserve: null,        // {location, product, options, place, medicine}
     submitting: false, page: 0, status: '', run: 0,
     inflight: 0, listSig: null, detailRef: null, detailSig: null
@@ -152,6 +153,7 @@
     $('rs-auth-submit').setAttribute('data-i18n', create ? 'rs_create_btn' : 'rs_signin_btn');
     $('rs-auth-submit').textContent = t(create ? 'rs_create_btn' : 'rs_signin_btn');
     $('rs-auth-error').textContent = '';
+    $('rs-forgot-row').hidden = create;
   }
   async function submitAuth(e) {
     e.preventDefault();
@@ -560,6 +562,12 @@ ${r.can_cancel ? cancelBlock() : ''}`;
   }
 
   /* --------------------------------------------------------------- events */
+  // A link to #signin or #register on this page (the header's account chooser) switches the form.
+  window.addEventListener('hashchange', () => {
+    const mode = location.hash === '#register' ? 'create' : location.hash === '#signin' ? 'signin' : null;
+    if (mode && !$('rs-auth').hidden) { setAuthMode(mode); $(mode === 'create' ? 'rs-name' : 'rs-email').focus(); }
+    else if (mode) S.authMode = mode;
+  });
   $('rs-tab-signin').addEventListener('click', () => setAuthMode('signin'));
   $('rs-tab-create').addEventListener('click', () => setAuthMode('create'));
   $('rs-auth-form').addEventListener('submit', submitAuth);

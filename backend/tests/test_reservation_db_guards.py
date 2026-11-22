@@ -1,7 +1,8 @@
-"""Database safeguards of migration c8e5a1f7d2b9, exercised with direct SQL
-(an application-level bypass): collection records (T1-T11), product unit
-rules (T12-T15), branch acknowledgement enforcement, forged system actions,
-and a restricted application role that cannot switch the safeguards off."""
+"""Database safeguards of migrations c8e5a1f7d2b9 and d4a7e2c9b1f8, exercised
+with direct SQL (an application-level bypass): collection records (T1-T11),
+product unit rules (T12-T15), the branch minimum stock and stock held from the
+request, forged system actions, and a restricted application role that cannot
+switch the safeguards off."""
 
 import pytest
 from sqlalchemy import text
@@ -132,8 +133,6 @@ def test_t5_records_and_histories_are_immutable(client):
         "DELETE FROM reservation",
         "UPDATE reservation_status_history SET reason = 'x'",
         "DELETE FROM reservation_status_history",
-        "DELETE FROM offer_unit_acknowledgement",
-        "UPDATE offer_unit_acknowledgement SET unit_label = 'tablet'",
         "UPDATE product_reservation_history SET unit_label = 'tablet'",
     ):
         tx = HeldSQL(w.owner)
@@ -225,32 +224,36 @@ def product_update(w, product, sql, **params):
 
 def test_t12_unit_label_rules(client):
     w = ResWorld(client)
-    product = w.medicine("Ibuprofen", "Brufen 200mg", enable=False, ack=False)
+    product = w.medicine("Ibuprofen", "Brufen 200mg", classify=False)
     for label in ("", " tablet", "tablet ", "n/a", "NA", "---", "20", "x"):
         expect_db_error("product_unit_label_check", product_update, w, product,
                         "stock_unit = 'unit', unit_label = :l", l=label)
     for label in ("tablet", "vial", "bottle", "box of 20"):
         product_update(w, product, "stock_unit = 'unit', unit_label = :l", l=label)
     expect_db_error("product_unit_label_check", product_update, w, product, "stock_unit = 'pack', unit_label = NULL")
-    # A pack must describe its contents before reservations can be enabled.
-    product_update(w, product, "pack_size = NULL, stock_unit = 'pack', unit_label = 'box'")
-    expect_db_error("product_reservation_enabled_check", product_update, w, product,
-                    "dispensing_class = 'non_prescription', max_reservation_quantity = 3, reservation_enabled = true")
-    product_update(w, product, "stock_unit = 'unit', unit_label = 'tablet', dispensing_class = 'non_prescription', "
-                               "max_reservation_quantity = 3, reservation_enabled = true")
+    # A pack must describe its contents before it can be reserved.
+    product_update(w, product, "pack_size = NULL, stock_unit = 'pack', unit_label = 'box', "
+                               "dispensing_class = 'non_prescription'")
+    tx = HeldSQL(w.patient)
+    expect_db_error(r"\(pack_size_missing\)", insert_reservation_sql, tx, w, product=product)
+    tx.rollback()
+    product_update(w, product, "pack_size = '20 tablets'")
+    tx = HeldSQL(w.patient)
+    insert_reservation_sql(tx, w, product=product)
+    tx.commit()
 
 
-def test_t13_disabled_products(client):
+def test_t13_reclassified_products(client):
     w = ResWorld(client)
     confirmed = w.confirmed(quantity=2)
     to_cancel = w.confirmed(quantity=1, patient=w.patient2)
     pending = w.submit(patient=w.outsider, quantity=1)
-    product_update(w, w.product, "reservation_enabled = false")
+    product_update(w, w.product, "dispensing_class = 'prescription_only'")
     tx = HeldSQL(w.patient2)
-    expect_db_error(r"\(disabled\)", insert_reservation_sql, tx, w, patient=w.patient2, quantity=1)
+    expect_db_error(r"\(prescription_only\)", insert_reservation_sql, tx, w, patient=w.patient2, quantity=1)
     tx.rollback()
     tx = HeldSQL(w.staff)
-    expect_db_error(r"cannot be confirmed \(disabled\)", tx.execute,
+    expect_db_error(r"cannot be confirmed \(prescription_only\)", tx.execute,
                     "UPDATE reservation SET status = 'confirmed', status_source = 'pharmacy' WHERE reservation_id = :r",
                     r=pending.reservation_id)
     tx.rollback()
@@ -271,72 +274,39 @@ def test_t13_disabled_products(client):
     assert [w.status(r.reservation_id) for r in (confirmed, to_cancel, pending)] == ["collected", "cancelled", "expired"]
 
 
-def test_t14_re_enabling_requires_every_condition(client):
+def test_t14_the_retired_switch_and_acknowledgements_are_not_required(client):
     w = ResWorld(client)
     product_update(w, w.product, "reservation_enabled = false")
-    for sql in (
-        "max_reservation_quantity = NULL, reservation_enabled = true",
-        "stock_unit = 'unknown', unit_label = NULL, reservation_enabled = true",
-        "dispensing_class = 'prescription_only', reservation_enabled = true",
-        "dispensing_class = 'unclassified', reservation_enabled = true",
-    ):
-        expect_db_error("product_reservation_enabled_check", product_update, w, w.product, sql)
-    product_update(w, w.product, "reservation_enabled = true")
+    assert scalar("SELECT count(*) FROM offer_unit_acknowledgement") == 0
+    assert scalar("SELECT reservation_ineligibility(:l, :p)", l=w.branch, p=w.product) is None
+    tx = HeldSQL(w.patient)
+    insert_reservation_sql(tx, w)
+    tx.commit()
+    # The old CHECK on the retired column still refuses an inconsistent "true".
+    expect_db_error("product_reservation_enabled_check", product_update, w, w.product,
+                    "dispensing_class = 'unclassified', reservation_enabled = true")
 
 
-def test_t15_acknowledgements_and_unit_changes(client):
+def test_t15_unit_changes(client):
     w = ResWorld(client)
     version = scalar("SELECT unit_version FROM product WHERE product_id = :p", p=w.product)
-    # An acknowledgement must match the current unit exactly.
-    for label, v in (("bottle", version), ("box", version - 1)):
-        tx = HeldSQL(w.owner)
-        expect_db_error("has changed; review it", tx.execute,
-                        "INSERT INTO offer_unit_acknowledgement (location_id, product_id, unit_version, stock_unit, unit_label, pack_size) "
-                        "VALUES (:l, :p, :v, 'pack', :lbl, '20 tablets')", l=w.branch, p=w.product, v=v, lbl=label)
-        tx.rollback()
-    tx = HeldSQL(w.staff)
-    expect_db_error("only owners and managers", tx.execute,
-                    "INSERT INTO offer_unit_acknowledgement (location_id, product_id, unit_version, stock_unit, unit_label, pack_size) "
-                    "VALUES (:l, :p, :v, 'pack', 'box', '20 tablets')", l=w.branch2, p=w.product, v=version)
-    tx.rollback()
     # A unit change with an open reservation is refused by the product trigger.
     r = w.submit()
     expect_db_error("open reservations", product_update, w, w.product, "unit_label = 'carton'")
     expect_db_error("open reservations", product_update, w, w.product, "pack_size = '30 tablets'")
     w.collect(w.confirm(r.reservation_id))
-    # Without open reservations the change is accepted, bumps the version and
-    # invalidates the acknowledgement.
+    # Without open reservations the change is accepted and bumps the version;
+    # new requests quote the new unit, with nothing to acknowledge.
     product_update(w, w.product, "pack_size = '30 tablets'")
     assert scalar("SELECT unit_version FROM product WHERE product_id = :p", p=w.product) == version + 1
     tx = HeldSQL(w.patient2)
-    expect_db_error(r"\(unit_not_acknowledged\)", insert_reservation_sql, tx, w, patient=w.patient2)
-    tx.rollback()
-
-
-# ---------------------------------------------------------------------------
-# Branch acknowledgement enforced against direct SQL (requirement B)
-# ---------------------------------------------------------------------------
-def test_direct_insert_without_acknowledgement_is_refused(client):
-    w = ResWorld(client)
-    unacked = w.medicine("Ibuprofen", "Brufen 200mg", ack=False)
-    tx = HeldSQL(w.patient)
-    expect_db_error(r"\(unit_not_acknowledged\)", insert_reservation_sql, tx, w, product=unacked)
-    tx.rollback()
-    # An acknowledgement for an earlier unit version does not count.
-    w.acknowledge(unacked)
-    product_update(w, unacked, "unit_label = 'carton'")
-    tx = HeldSQL(w.patient)
-    expect_db_error(r"\(unit_not_acknowledged\)", insert_reservation_sql, tx, w, product=unacked)
-    tx.rollback()
-    w.acknowledge(unacked)
-    tx = HeldSQL(w.patient)
-    reservation_id = insert_reservation_sql(tx, w, product=unacked)
+    reservation_id = insert_reservation_sql(tx, w, patient=w.patient2)
     tx.commit()
-    assert rows("SELECT unit_label, unit_version FROM reservation WHERE reservation_id = :r", r=reservation_id) == [
-        ("carton", scalar("SELECT unit_version FROM product WHERE product_id = :p", p=unacked))]
+    assert rows("SELECT pack_size, unit_version FROM reservation WHERE reservation_id = :r", r=reservation_id) == [
+        ("30 tablets", version + 1)]
 
 
-def test_direct_confirmation_rechecks_the_acknowledgement(client):
+def test_direct_confirmation_rechecks_the_unit(client):
     w = ResWorld(client)
     r = w.submit()
     # Force an inconsistent catalogue state that the application cannot
@@ -345,10 +315,66 @@ def test_direct_confirmation_rechecks_the_acknowledgement(client):
         conn.execute(text("SET LOCAL session_replication_role = replica"))
         conn.execute(text("UPDATE product SET unit_version = unit_version + 1 WHERE product_id = :p"), {"p": w.product})
     tx = HeldSQL(w.staff)
-    expect_db_error(r"cannot be confirmed \(unit_not_acknowledged\)", tx.execute,
+    expect_db_error("the stock unit of this product changed after the request", tx.execute,
                     "UPDATE reservation SET status = 'confirmed', status_source = 'pharmacy' WHERE reservation_id = :r",
                     r=r.reservation_id)
     tx.rollback()
+
+
+# ---------------------------------------------------------------------------
+# Branch minimum stock and stock held from the request (d4a7e2c9b1f8)
+# ---------------------------------------------------------------------------
+def test_direct_inserts_respect_the_branch_minimum_and_what_is_held(client):
+    w = ResWorld(client)  # 10 recorded
+    w.set_min_stock(6)  # 4 reservable
+    tx = HeldSQL(w.patient)
+    expect_db_error("not enough stock available for reservation", insert_reservation_sql, tx, w, quantity=5)
+    tx.rollback()
+    tx = HeldSQL(w.patient)
+    insert_reservation_sql(tx, w, quantity=4)  # exactly what is reservable
+    tx.commit()
+    tx = HeldSQL(w.patient2)
+    expect_db_error("not enough stock available for reservation", insert_reservation_sql, tx, w,
+                    patient=w.patient2, quantity=1)
+    tx.rollback()
+    assert scalar("SELECT reservation_allocated(:l, :p, NULL)", l=w.branch, p=w.product) == 4
+    # The other branch has its own minimum (0) and no stock record here.
+    assert scalar("SELECT reservation_min_stock FROM location WHERE location_id = :l", l=w.branch2) == 0
+
+
+def test_branch_minimum_is_checked_by_the_database(client):
+    w = ResWorld(client)
+    for bad in (-1, 1_000_001):
+        tx = HeldSQL(w.owner)
+        expect_db_error("location_reservation_min_stock_check", tx.execute,
+                        "UPDATE location SET reservation_min_stock = :v WHERE location_id = :l", v=bad, l=w.branch)
+        tx.rollback()
+    with engine.begin() as conn:
+        assert conn.execute(text(
+            "SELECT column_default, is_nullable FROM information_schema.columns "
+            "WHERE table_name = 'location' AND column_name = 'reservation_min_stock'")).one() == ("0", "NO")
+
+
+def test_direct_confirmation_cannot_exceed_the_stock_after_other_holds(client):
+    w = ResWorld(client)
+    a = w.submit(quantity=5)
+    b = w.submit(patient=w.patient2, quantity=5)
+    w.set_stock(w.product, 8)
+    tx = HeldSQL(w.staff)
+    expect_db_error("not enough unreserved stock to confirm", tx.execute,
+                    "UPDATE reservation SET status = 'confirmed', status_source = 'pharmacy' WHERE reservation_id = :r",
+                    r=a.reservation_id)
+    tx.rollback()
+    w.set_min_stock(5)  # the minimum applies to new requests only, never to confirmation
+    run_decline = HeldSQL(w.staff)
+    run_decline.execute("UPDATE reservation SET status = 'declined', status_source = 'pharmacy', "
+                        "decline_reason = 'Short' WHERE reservation_id = :r", r=b.reservation_id)
+    run_decline.commit()
+    tx = HeldSQL(w.staff)
+    tx.execute("UPDATE reservation SET status = 'confirmed', status_source = 'pharmacy' WHERE reservation_id = :r",
+               r=a.reservation_id)
+    tx.commit()
+    assert w.status(a.reservation_id) == "confirmed"
 
 
 # ---------------------------------------------------------------------------

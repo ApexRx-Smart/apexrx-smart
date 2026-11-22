@@ -7,6 +7,9 @@
   const ROLE = document.body.dataset.role;
   const IS_PH = ROLE === 'pharmacy';
   const ONBOARD = IS_PH ? 'pharmacies.html' : 'suppliers.html';
+  // Where a signed-out member signs in again: the pharmacy sign-in page, or the supplier page's sign-in.
+  const SIGN_IN = IS_PH ? 'pharmacy-sign-in.html' : 'suppliers.html';
+  const SIGN_IN_HASH = IS_PH ? '' : '#signin';
   const params = new URLSearchParams(location.search);
 
   /* ---------------------------------------------------------------- text */
@@ -54,7 +57,7 @@
   /* --------------------------------------------------------------- state */
   const D = params.get('preview') === '1' || !(window.ApexAPI && ApexAPI.session.isSignedIn()) ? null : window.DashData.live(ROLE);
   const isPreview = !D;
-  if (isPreview && params.get('preview') !== '1') { location.replace(ONBOARD + '?lang=' + lang + '#signin'); return; }
+  if (isPreview && params.get('preview') !== '1') { location.replace(SIGN_IN + '?lang=' + lang + SIGN_IN_HASH); return; }
   const data = D || window.DashData.preview(ROLE);
   const S = { view: 'home', loc: null, stock: [], orders: [], full: new Map(), drugs: [], q: '', cat: '', sort: 'price', sf: '', ovq: '', party: null, newParty: null, listOpen: false, listRows: [], imp: null, offers: [], ins: null, insErr: false, convs: [], unread: 0, chat: null, reqs: [], rq: null, rqOpen: null, rqNew: null, notes: { items: [], unread_count: 0 }, resNew: 0 };
   let ctx = null; // { user, org, myRole, locations }
@@ -340,9 +343,9 @@ ${writable && canManage() ? `<div class="up"><div class="row"><strong>${esc(t('U
 <p class="note" style="margin:8px 0 0">${esc(t('Columns: Item description, Pack size, Batch number, Unit price, Total price, Expiry date (YYYY-MM-DD), Quantity. Total price is the price of one box. Quantity is the number of boxes. Each row must match a medicine in the ApexRX catalogue.'))}${b ? '' : ' ' + esc(t('Batch number and expiry date are optional for now and are not saved.'))}</p><div id="imp"></div></div>
 <form id="addf" class="up"><div class="addf"><label>${esc(t('Item description'))}<input id="a-s" type="search" placeholder="${esc(t('Type to search'))}" autocomplete="off"><select id="a-p" aria-label="${esc(t('Choose the medicine'))}" required><option value="">${esc(t('Choose the medicine'))}</option></select></label><label>${esc(t('Batch number'))}<input id="a-b" maxlength="60"${off}></label><label>${esc(t('Unit price'))}<input id="a-unit" type="number" min="0" step="any"></label><label>${esc(t('Total price'))}<input id="a-u" type="number" min="0" step="any"></label><label>${esc(t('Expiry date'))}<input id="a-e" type="date"${off}></label><label>${esc(t('Quantity'))}<input id="a-q" type="number" min="0" step="1" required></label><label>${esc(t('Low stock alert'))}<input id="a-t" type="number" min="0" step="1" value="${IS_PH ? 10 : 100}" required></label><button class="solid">${esc(t('Add item'))}</button></div></form>` : ''}
 <div class="bar"><label class="grow"><span class="sr">${esc(t('Filter your stock'))}</span><input id="sf" type="search" value="${esc(S.sf)}" placeholder="${esc(t('Filter by item or batch number'))}" autocomplete="off"></label>${writable ? `<button class="solid" data-a="conf">${esc(t('Confirm all as still correct'))}</button>` : ''}</div>
-<div class="tbl"><table class="stock"><thead><tr><th>${esc(t('Item description'))}</th><th>${esc(t('Pack size'))}</th><th>${esc(t('Batch number'))}</th><th>${esc(t('Unit price'))}</th><th>${esc(t('Total price'))}</th><th>${esc(t('Expiry date'))}</th><th>${esc(t('Quantity'))}${IS_PH ? `<small>${esc(t('Recorded · reserved · free'))}</small>` : ''}</th><th>${esc(t('Low stock alert'))}</th><th>${esc(t('Listed'))}</th><th>${esc(t(IS_PH ? 'What patients see' : 'What pharmacies see'))}<small>${esc(t('Last confirmed'))}</small></th><th></th></tr></thead><tbody id="srows"></tbody></table></div>
+<div class="tbl"><table class="stock"><thead><tr><th>${esc(t('Item description'))}</th><th>${esc(t('Pack size'))}</th><th>${esc(t('Batch number'))}</th><th>${esc(t('Unit price'))}</th><th>${esc(t('Total price'))}</th><th>${esc(t('Expiry date'))}</th><th>${esc(t('Quantity'))}${IS_PH ? `<small>${esc(t('Recorded · held · reservable'))}</small>` : ''}</th><th>${esc(t('Low stock alert'))}</th><th>${esc(t('Listed'))}</th><th>${esc(t(IS_PH ? 'What patients see' : 'What pharmacies see'))}<small>${esc(t('Last confirmed'))}</small></th><th></th></tr></thead><tbody id="srows"></tbody></table></div>
 <p class="note">${esc(t(IS_PH ? 'Patients see availability and price, never exact quantities. Expired batches are hidden from patients.' : 'Verified pharmacies see your price and quantity. Other suppliers never do. Expired batches are hidden.'))}</p>
-${IS_PH ? `<p class="note">${esc(t('Quantity is the stock on your shelf as recorded. Reserved is held for patients by confirmed reservations; free is what patients can still reserve. Collecting a reservation reduces the recorded stock.'))}</p>` : ''}`;
+${IS_PH ? `<p class="note">${esc(t('Quantity is the stock on your shelf as recorded. Held is taken by open reservation requests and confirmed reservations; unallocated is the rest. Reservable is what patients can still reserve after the minimum this branch keeps for walk-in customers (Reservations › Reservation settings). Collecting a reservation reduces the recorded stock.'))}</p>` : ''}`;
     },
     res() { return RES ? RES.view() : ''; },
     set() {
@@ -351,7 +354,7 @@ ${IS_PH ? `<p class="note">${esc(t('Quantity is the stock on your shelf as recor
       const mgr = canManage(), owner = ctx.myRole === 'owner';
       const branches = [...(ctx.locations || [])].sort((a, b) => (b.is_active - a.is_active) || a.name.localeCompare(b.name));
       const place = l => [l.address, l.village, l.cell, l.sector].filter(Boolean).join(', ');
-      return `<h2 style="margin-top:0">${esc(t(IS_PH ? 'Your pharmacy profile' : 'Your supplier profile'))}</h2><div class="panel"><dl class="kv">${rows.filter(r => r[1]).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${isPreview ? '' : `<p style="margin:12px 0 0"><a class="ghost" id="open-registration" href="${ONBOARD}?lang=${lang}#review">${esc(t('Registration details and review →'))}</a></p>`}</div>
+      return `<h2 style="margin-top:0">${esc(t(IS_PH ? 'Your pharmacy profile' : 'Your supplier profile'))}</h2><div class="panel"><dl class="kv">${rows.filter(r => r[1]).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${isPreview ? '' : `<p style="margin:12px 0 0"><a class="ghost" id="open-registration" href="${IS_PH ? SIGN_IN : ONBOARD}?lang=${lang}#review">${esc(t('Registration details and review →'))}</a></p>`}</div>
 <h2>${esc(t(IS_PH ? 'Branches' : 'Depots'))}</h2><div class="tbl"><table><thead><tr><th>${esc(t(IS_PH ? 'Branch' : 'Depot'))}</th><th>${esc(t('District'))}</th><th>${esc(t('Address'))}</th><th>${esc(t('Phone'))}</th><th>${esc(t('Status'))}</th><th></th></tr></thead><tbody>${branches.map(l => `<tr data-branch="${l.location_id}"><td><strong>${esc(l.name)}</strong>${l.region ? `<small>${esc(l.region)}</small>` : ''}</td><td>${esc(l.city || '—')}</td><td>${esc(place(l) || '—')}</td><td>${esc(l.phone || '—')}</td><td><span class="tag ${l.is_active ? 'good' : ''}">${esc(t(l.is_active ? 'Active' : 'Inactive'))}</span></td><td class="act">${mgr && !isPreview ? `<button class="ghost" data-a="editloc" data-l="${l.location_id}">${esc(t('Edit'))}</button><button class="ghost" data-a="${l.is_active ? 'offloc' : 'onloc'}" data-l="${l.location_id}">${esc(t(l.is_active ? 'Deactivate' : 'Reactivate'))}</button>` : ''}</td></tr>`).join('') || `<tr><td colspan="6" class="empty">${esc(t('No location yet.'))}</td></tr>`}</tbody></table></div>
 ${mgr ? `<p><button class="ghost" data-a="addloc">${esc(t(IS_PH ? 'Add a branch' : 'Add a depot'))}</button></p>` : `<p class="note">${esc(t(IS_PH ? 'Only owners and managers can add or change branches.' : 'Only owners and managers can add or change depots.'))}</p>`}
 <h2>${esc(t('Team and permissions'))}</h2><div class="tbl"><table><thead><tr><th>${esc(t('Name'))}</th><th>${esc(t('Role'))}</th><th>${esc(t('Can do'))}</th><th>${esc(t('Status'))}</th><th></th></tr></thead><tbody id="team"><tr><td colspan="5" class="empty">${esc(t('Loading…'))}</td></tr></tbody></table></div>
@@ -877,17 +880,30 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
   function reservedInfo(x) {
     if (!IS_PH || x.allocated_quantity == null) return '';
     const short = x.reservation_shortfall || 0;
-    return `<small class="rsv">${esc(t('Reserved {a} · free {f}', { a: x.allocated_quantity, f: x.available_to_reserve }))}</small>`
-      + (short ? `<small><span class="tag out">${esc(t('{s} short of confirmed reservations', { s: short }))}</span></small>` : '');
+    return `<small class="rsv">${esc(t('Held {a} · unallocated {f} · reservable {r}', { a: x.allocated_quantity, f: x.available_to_reserve, r: x.reservable_quantity ?? x.available_to_reserve }))}</small>`
+      + (short ? `<small><span class="tag out">${esc(t('{s} short of open reservations', { s: short }))}</span></small>` : '');
   }
-  // Before saving a recorded quantity below what confirmed reservations hold.
+  // Before saving a recorded quantity below what open reservations hold.
   async function belowReserved(items) {
     const list = items.filter(i => IS_PH && i.x && i.qty < (i.x.allocated_quantity || 0));
     if (!list.length) return true;
-    const form = await ask(t('Stock below confirmed reservations'), `<p>${esc(t('Confirmed reservations are commitments to patients. With these quantities the recorded stock is lower than what they hold:'))}</p>
+    const form = await ask(t('Stock below what reservations hold'), `<p>${esc(t('Open reservation requests and confirmed reservations hold stock for patients. With these quantities the recorded stock is lower than what they hold:'))}</p>
 <ul>${list.map(i => `<li><strong>${esc(label(i.x))}</strong>: ${esc(t('{q} recorded, {a} reserved ({s} short)', { q: i.qty, a: i.x.allocated_quantity, s: i.x.allocated_quantity - i.qty }))}</li>`).join('')}</ul>
 <p>${esc(t('Save only if this is the real count. Nothing is cancelled automatically: the Reservations screen will show the shortfall, and an owner or manager decides what to do with the affected reservations.'))}</p>`, t('Save anyway'));
     return !!form;
+  }
+  // Save a quantity. The server refuses one below what reservations hold unless
+  // the pharmacy confirmed the count (``confirmed``); if reservations arrived
+  // since this list loaded, ask now with the server's figure, then retry.
+  async function putQuantity(pid, qty, x, confirmed) {
+    try {
+      return await data.setQuantity(S.loc, pid, qty, confirmed);
+    } catch (err) {
+      const d = err && err.data;
+      if (!IS_PH || !d || d.code !== 'below_reserved' || confirmed) throw err;
+      if (!(await belowReserved([{ x: { ...(x || {}), allocated_quantity: d.held_quantity }, qty }]))) return null;
+      return data.setQuantity(S.loc, pid, qty, true);
+    }
   }
   function stockRows() {
     const el = $('#srows'); if (!el) return;
@@ -927,8 +943,10 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
         Object.assign(x, next);
       } else if (f === 'qty') {
         const q = Math.max(0, parseInt(input.value, 10) || 0);
-        if (!(await belowReserved([{ x, qty: q }]))) { stockRows(); return; }
-        const next = await data.setQuantity(S.loc, pid, q);
+        const below = IS_PH && q < (x.allocated_quantity || 0);
+        if (below && !(await belowReserved([{ x, qty: q }]))) { stockRows(); return; }
+        const next = await putQuantity(pid, q, x, below);
+        if (next === null) { stockRows(); return; }
         if (next && next.quantity != null) Object.assign(x, next); else x.quantity = q;
       } else {
         const o = x.offer || { unit_price: 0, low_stock_threshold: 5, is_listed: true };
@@ -969,7 +987,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
     const btn = form.querySelector('button'); btn.disabled = true;
     try {
       if (hasBatches()) await data.setBatch(S.loc, pid, { batch_number: $('#a-b').value.trim(), expiry_date: $('#a-e').value, quantity: qty });
-      else await data.setQuantity(S.loc, pid, qty);
+      else if ((await putQuantity(pid, qty, S.stock.find(s => s.product_id === pid), false)) === null) { btn.disabled = false; return; }
       await data.setOffer(S.loc, pid, { unit_price: price, low_stock_threshold: thr, is_listed: true });
       S.stock = await data.stock(S.loc);
       toast(savedText()); stay('stk');
@@ -1051,7 +1069,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
     try {
       for (const r of S.imp.rows.filter(row => !row.e)) {
         if (hasBatches()) await data.setBatch(S.loc, r.product.product_id, { batch_number: r.batch, expiry_date: r.exp, quantity: r.qty });
-        else await data.setQuantity(S.loc, r.product.product_id, r.qty);
+        else if ((await putQuantity(r.product.product_id, r.qty, S.stock.find(s => s.product_id === r.product.product_id), true)) === null) continue;
         await data.setOffer(S.loc, r.product.product_id, { unit_price: r.price, low_stock_threshold: r.thr, is_listed: true });
         done++;
       }
@@ -1363,7 +1381,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
     },
     async conf() {
       const short = IS_PH ? S.stock.filter(x => x.reservation_shortfall > 0) : [];
-      if (short.length && !(await ask(t('Confirm all as still correct'), `<p>${esc(t('These items have less recorded stock than their confirmed reservations hold. Confirming says the counts are correct; the reservations stay commitments.'))}</p><ul>${short.map(x => `<li><strong>${esc(label(x))}</strong>: ${esc(t('{q} recorded, {a} reserved ({s} short)', { q: x.quantity, a: x.allocated_quantity, s: x.reservation_shortfall }))}</li>`).join('')}</ul>`, t('Confirm all')))) return;
+      if (short.length && !(await ask(t('Confirm all as still correct'), `<p>${esc(t('These items have less recorded stock than their open reservations hold. Confirming says the counts are correct; the reservations stay commitments.'))}</p><ul>${short.map(x => `<li><strong>${esc(label(x))}</strong>: ${esc(t('{q} recorded, {a} reserved ({s} short)', { q: x.quantity, a: x.allocated_quantity, s: x.reservation_shortfall }))}</li>`).join('')}</ul>`, t('Confirm all')))) return;
       try { await data.confirmStock(S.loc); S.stock = await data.stock(S.loc); toast(t('Stock confirmed for today.')); stay('stk'); } catch (err) { fail(err); }
     },
     addbatch: d => { const x = S.stock.find(s => s.product_id === +d.p); if (x) addBatch(x); },
@@ -1431,7 +1449,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
   });
   $('#theme').addEventListener('click', () => ApexTheme.toggle());
   window.addEventListener('apexrx:theme', paintTheme);
-  $('#out').addEventListener('click', () => { data.signOut(); location.href = ONBOARD + '?lang=' + lang + (isPreview ? '' : '#signin'); });
+  $('#out').addEventListener('click', () => { data.signOut(); location.href = isPreview ? ONBOARD + '?lang=' + lang : SIGN_IN + '?lang=' + lang + SIGN_IN_HASH; });
   $('#lang').addEventListener('change', e => {
     lang = e.target.value;
     try { localStorage.setItem('apexrx_lang', lang); } catch (err) { /* ignore */ }
@@ -1487,7 +1505,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
   // back to sign-in. The registration page explains why.
   window.addEventListener('apexrx:signed-out', e => {
     const reason = e.detail && e.detail.reason;
-    location.href = ONBOARD + '?lang=' + lang + (reason && reason !== 'signed_out' ? '&signed_out=' + encodeURIComponent(reason) : '') + '#signin';
+    location.href = SIGN_IN + '?lang=' + lang + (reason && reason !== 'signed_out' ? '&signed_out=' + encodeURIComponent(reason) : '') + SIGN_IN_HASH;
   });
   // Another organization: remember it for this tab and open its dashboard.
   $('#org').addEventListener('change', e => {

@@ -205,7 +205,7 @@ def main():
         ctx = context(browser, {"width": 390, "height": 844})
         page = ctx.new_page()
         watch(page, errors)
-        page.goto(SITE + "/pharmacies.html#staff")
+        page.goto(SITE + "/pharmacy-sign-in.html")
         page.click("#forgot-link")
         page.wait_for_url("**/reset-password.html*")
         wait_text(page, "#reset-title", "temporarily unavailable")

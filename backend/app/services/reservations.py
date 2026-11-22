@@ -1,12 +1,20 @@
 """Patient medicine reservations: the reservation engine.
 
-A patient requests one medicine at one pharmacy branch. Requests hold no
-stock. When the pharmacy confirms, the quantity is allocated against the
-branch's physical stock (Stock.quantity, which is never changed by a
-reservation until it is collected) for 24 hours. Collection deducts the full
-quantity from physical stock; cancellation, decline and expiry release the
-allocation. Expiry is decided by time: a reservation past its deadline counts
-as expired everywhere at once, and ``expire_due`` records it.
+A patient requests one medicine at one pharmacy branch. The request HOLDS
+(allocates) its quantity from the moment it is made, against the branch's
+recorded stock (Stock.quantity, which no reservation changes until it is
+collected): an open request (24 hours for the pharmacy to answer) and a
+confirmed reservation (24 hours to collect) both count as held. Declining,
+cancelling and expiry release the hold; collection deducts the full quantity
+from the recorded stock. Expiry is decided by time: a reservation past its
+deadline stops holding stock and counts as expired everywhere at once, and
+``expire_due`` records it.
+
+What a branch can still promise: reservable = recorded - held - the branch's
+reservation_min_stock (kept back for walk-in customers). A medicine is offered
+for reservation while that is above zero; nothing has to be enabled per
+medicine. The minimum applies to NEW requests only: raising it never
+invalidates a reservation that already holds stock.
 
 Every public operation here is ONE transaction: it commits on success and
 rolls back completely on any error. The database triggers of migration
@@ -44,16 +52,14 @@ from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import ALL_ROLES, MANAGERS, get_org_access, get_org_location
+from app.api.deps import ALL_ROLES, MANAGERS, get_org_access
 from app.core.config import settings
 from app.core.errors import AppError, Conflict, Forbidden, NotFound
 from app.models import (
     Location,
     Membership,
-    OfferUnitAcknowledgement,
     Organization,
     Product,
-    ProductOffer,
     Reservation,
     ReservationCollection,
     ReservationStatus,
@@ -80,10 +86,9 @@ INELIGIBLE = {
     "prescription_only": "Prescription-only medicines cannot be reserved.",
     "unclassified": "This medicine has not been classified for reservations yet.",
     "unit_unknown": "The stock unit of this medicine has not been defined yet.",
-    "no_quantity_limit": "A reservation limit has not been set for this medicine yet.",
-    "disabled": "Reservations are turned off for this medicine.",
+    "pack_size_missing": "The pack size of this medicine has not been defined yet.",
     "offer_unlisted": "This branch does not list this medicine.",
-    "unit_not_acknowledged": "This branch has not confirmed the stock unit it uses for this medicine.",
+    "no_reservable_stock": "There is not enough stock available for reservation at this branch right now.",
 }
 
 
@@ -109,11 +114,13 @@ class CollectionOverride:
 
 @dataclass
 class StockPosition:
-    quantity: int | None  # physical stock on record (None: no stock row)
-    allocated: int  # confirmed, unexpired reservations
-    available_to_reserve: int
-    shortfall: int  # allocated beyond physical stock (after a manual correction)
+    quantity: int | None  # recorded stock (None: no stock row)
+    allocated: int  # held by open requests and confirmed reservations
+    available_to_reserve: int  # unallocated: recorded - held (never negative)
+    shortfall: int  # held beyond recorded stock (after a manual correction)
     at_risk_reservation_ids: list[int] = field(default_factory=list)
+    min_stock: int = 0  # the branch keeps this much back from new reservations
+    reservable: int = 0  # what new requests may still take: recorded - held - min_stock
 
 
 class _CommitThenRaise(Exception):
@@ -177,24 +184,31 @@ def effective_status():
     return case((lapsed_clause(), S.EXPIRED), else_=R.status)
 
 
-def allocated_quantity(db: Session, location_id: int, product_id: int) -> int:
-    return db.scalar(
-        select(func.coalesce(func.sum(R.quantity), 0)).where(
-            R.location_id == location_id,
-            R.product_id == product_id,
-            R.status == S.CONFIRMED,
-            R.expires_at > _now(),
-        )
+def allocated_quantity(db: Session, location_id: int, product_id: int, *, exclude: int | None = None) -> int:
+    """Held by open requests and confirmed reservations still inside their
+    deadline (the database function reservation_allocated() is the same rule)."""
+    stmt = select(func.coalesce(func.sum(R.quantity), 0)).where(
+        R.location_id == location_id, R.product_id == product_id, open_clause()
     )
+    if exclude is not None:
+        stmt = stmt.where(R.reservation_id != exclude)
+    return db.scalar(stmt)
+
+
+def effective_max_quantity(product: Product) -> int:
+    """The most one reservation may ask for: the medicine's own limit, else the default."""
+    return product.max_reservation_quantity or settings.reservation_default_max_quantity
 
 
 def stock_position(db: Session, location_id: int, product_id: int) -> StockPosition:
-    """Physical stock against confirmed reservations. A shortfall appears when
-    physical stock was corrected below what is already reserved; the affected
+    """Recorded stock against what open reservations hold, and what is left
+    for new requests after the branch's minimum stock. A shortfall appears when
+    the recorded stock was corrected below what is already held; the affected
     reservations are listed oldest first."""
     quantity = db.scalar(
         select(Stock.quantity).where(Stock.location_id == location_id, Stock.product_id == product_id)
     )
+    min_stock = db.scalar(select(Location.reservation_min_stock).where(Location.location_id == location_id)) or 0
     allocated = allocated_quantity(db, location_id, product_id)
     on_hand = quantity or 0
     shortfall = max(0, allocated - on_hand)
@@ -203,16 +217,14 @@ def stock_position(db: Session, location_id: int, product_id: int) -> StockPosit
         at_risk = list(
             db.scalars(
                 select(R.reservation_id)
-                .where(
-                    R.location_id == location_id,
-                    R.product_id == product_id,
-                    R.status == S.CONFIRMED,
-                    R.expires_at > _now(),
-                )
-                .order_by(R.confirmed_at, R.reservation_id)
+                .where(R.location_id == location_id, R.product_id == product_id, open_clause())
+                .order_by(R.created_at, R.reservation_id)
             )
         )
-    return StockPosition(quantity, allocated, max(0, on_hand - allocated), shortfall, at_risk)
+    return StockPosition(
+        quantity, allocated, max(0, on_hand - allocated), shortfall, at_risk,
+        min_stock=min_stock, reservable=max(0, on_hand - allocated - min_stock),
+    )
 
 
 def eligibility_problem(db: Session, location_id: int, product_id: int) -> str | None:
@@ -444,12 +456,9 @@ def submit(
         raise _ineligible(problem)
     if expected_unit_version is not None and expected_unit_version != product.unit_version:
         raise _unit_changed(product)
-    if quantity > product.max_reservation_quantity:
-        raise _conflict(
-            f"At most {product.max_reservation_quantity} can be reserved at once.",
-            "quantity_above_limit",
-            max_quantity=product.max_reservation_quantity,
-        )
+    limit = effective_max_quantity(product)
+    if quantity > limit:
+        raise _conflict(f"At most {limit} can be reserved at once.", "quantity_above_limit", max_quantity=limit)
     same = db.scalar(
         select(R.reference).where(
             R.patient_user_id == patient.user_id,
@@ -473,8 +482,16 @@ def submit(
             f"You can have at most {settings.reservation_max_open_per_patient} open reservations.",
             "too_many_open_reservations",
         )
-    if _lock(db, Stock, Stock.location_id == location_id, Stock.product_id == product_id, mode="share") is None:  # L6
+    # L6 FOR UPDATE: concurrent requests for this medicine at this branch are
+    # counted one after the other. A new statement after the lock sees every
+    # request committed meanwhile; the branch minimum was read under L2.
+    stock = lock_stock(db, location_id, product_id)
+    if stock is None:
         raise _ineligible("offer_unlisted")
+    held = allocated_quantity(db, location_id, product_id)
+    if stock.quantity - held - branch.reservation_min_stock < quantity:
+        # The patient is not told the figures (public responses never show quantities).
+        raise _conflict(INELIGIBLE["no_reservable_stock"], "insufficient_stock", reason="no_reservable_stock")
 
     for attempt in range(3):
         reservation = R(
@@ -549,8 +566,10 @@ def _require_approved(org: Organization) -> None:
 
 @_transaction
 def confirm(db: Session, actor: User, organization_id: int, reservation_id: int) -> Outcome:
-    """Allocate the requested quantity: the branch's physical stock minus
-    confirmed, unexpired reservations must cover it."""
+    """Keep the quantity the request already holds for 24 hours more. The
+    recorded stock must still cover it after every OTHER open reservation (a
+    manual correction may have lowered it). The branch minimum is not applied
+    again: it governs new requests, not ones that already hold stock."""
     _, location_id, product_id = _pharmacy_access(db, actor, organization_id, reservation_id)
     org = _lock(db, Organization, Organization.organization_id == organization_id, mode="share")  # L1
     lock_location(db, location_id, mode="share")  # L2
@@ -572,9 +591,8 @@ def confirm(db: Session, actor: User, organization_id: int, reservation_id: int)
     stock = lock_stock(db, location_id, product_id)  # L6
     if stock is None:
         raise _ineligible("offer_unlisted")
-    # A new statement after the stock lock: sees every confirmation committed meanwhile.
-    allocated = allocated_quantity(db, location_id, product_id)
-    available = stock.quantity - allocated
+    # A new statement after the stock lock: sees every hold committed meanwhile.
+    available = stock.quantity - allocated_quantity(db, location_id, product_id, exclude=reservation_id)
     if available < reservation.quantity:
         raise _conflict(
             "Not enough unreserved stock to confirm this reservation.",
@@ -801,8 +819,7 @@ PRODUCT_SETTINGS = (
     "stock_unit",
     "unit_label",
     "pack_size",
-    "max_reservation_quantity",
-    "reservation_enabled",
+    "max_reservation_quantity",  # optional; RESERVATION_DEFAULT_MAX_QUANTITY otherwise
 )
 UNIT_LABEL_PLACEHOLDERS = frozenset({"n/a", "na", "none", "unknown", "tbd", "other", "x"})
 SETTINGS_PROBLEMS = {
@@ -812,7 +829,6 @@ SETTINGS_PROBLEMS = {
     "unit_label_missing": "Name the unit (for example \"box\" or \"tablet\").",
     "unit_label_invalid": "The unit name must be 2 to 60 characters, contain a letter and not be a placeholder.",
     "pack_size_missing": "A medicine counted in packs needs a pack size.",
-    "no_quantity_limit": "Set the maximum quantity per reservation.",
 }
 
 
@@ -833,8 +849,9 @@ def _label_problem(stock_unit: str, label: str | None) -> str | None:
 
 
 def settings_problems(product: Product) -> list[str]:
-    """Why reservations cannot be enabled for this product (codes from
-    SETTINGS_PROBLEMS), in the order a reviewer would fix them. Empty when they can."""
+    """Why this medicine cannot be reserved anywhere yet (codes from
+    SETTINGS_PROBLEMS), in the order a reviewer would fix them. Empty when its
+    catalogue settings allow reservations; each branch then decides by stock."""
     problems = []
     if not product.is_active:
         problems.append("product_inactive")
@@ -846,18 +863,18 @@ def settings_problems(product: Product) -> list[str]:
         problems.append(label)
     if product.stock_unit == "pack" and not product.pack_size:
         problems.append("pack_size_missing")
-    if product.max_reservation_quantity is None:
-        problems.append("no_quantity_limit")
     return problems
 
 
 @_transaction
 def configure_product(db: Session, admin: User, product_id: int, **changes) -> Product:
-    """Set a product's reservation settings. Enabling requires a
-    non-prescription classification, a known unit with a label (and a pack
-    size for packs) and a maximum quantity (database CHECK). A unit change is
-    refused while reservations are open and invalidates every branch
-    acknowledgement (unit_version)."""
+    """Set a medicine's catalogue reservation settings: its classification,
+    unit (with a label, and a pack size for packs) and an optional per-
+    reservation limit. Once classified non-prescription with a defined unit it
+    is reservable wherever a branch lists it with stock above its minimum;
+    nothing is enabled per medicine. A unit change is refused while
+    reservations are open and starts a new unit_version (reservations quote
+    the version they were made with)."""
     if not admin.is_platform_admin:
         raise Forbidden("Platform administrator access is required.")
     unknown = set(changes) - set(PRODUCT_SETTINGS)
@@ -892,14 +909,15 @@ def configure_product(db: Session, admin: User, product_id: int, **changes) -> P
         )
     for key, value in changes.items():
         setattr(product, key, value)
-    problems = [p for p in settings_problems(product) if p != "product_inactive"]
+    # Retired switch (migration d4a7e2c9b1f8): nothing reads it any more; cleared
+    # so that its old CHECK can never refuse an otherwise valid change.
+    product.reservation_enabled = False
     label_problem = _label_problem(product.stock_unit, product.unit_label)
-    if label_problem == "unit_label_invalid" or (product.reservation_enabled and problems):
-        if label_problem == "unit_label_invalid" and label_problem not in problems:
-            problems.append(label_problem)
+    if label_problem == "unit_label_invalid":
+        problems = [label_problem]
         raise AppError(
             "These reservation settings are not valid together. Reservations need a non-prescription "
-            "classification, a stock unit with a clear name (and a pack size for packs) and a maximum quantity.",
+            "classification and a stock unit with a clear name (and a pack size for packs).",
             status_code=422,
             extra={
                 "code": "invalid_reservation_settings",
@@ -911,58 +929,8 @@ def configure_product(db: Session, admin: User, product_id: int, **changes) -> P
     except IntegrityError as exc:  # the database CHECKs remain the authority
         raise _invalid(
             "These reservation settings are not valid together. Reservations need a non-prescription "
-            "classification, a stock unit with a clear name (and a pack size for packs) and a maximum quantity.",
+            "classification and a stock unit with a clear name (and a pack size for packs).",
             "invalid_reservation_settings",
         ) from exc
     db.refresh(product)
     return product
-
-
-@_transaction
-def acknowledge_unit(
-    db: Session,
-    actor: User,
-    organization_id: int,
-    location_id: int,
-    product_id: int,
-    *,
-    unit_version: int,
-    stock_unit: str,
-    unit_label: str,
-    pack_size: str | None,
-) -> OfferUnitAcknowledgement:
-    """An owner or manager confirms that this branch counts the product in the
-    unit shown to them. The values shown must still be the current ones."""
-    get_org_access(
-        db, actor, organization_id, roles=MANAGERS, org_type=OrganizationType.PHARMACY, require_approved=True
-    )
-    get_org_location(db, organization_id, location_id, require_active=True)
-    product = lock_product(db, product_id, mode="share")  # L3
-    if product is None:
-        raise NotFound("Product not found.")
-    if product.stock_unit == "unknown":
-        raise _conflict("This medicine has no stock unit to acknowledge yet.", "unit_unknown")
-    shown = (unit_version, stock_unit, unit_label)
-    current = (product.unit_version, product.stock_unit, product.unit_label)
-    if shown != current or (product.stock_unit == "pack" and pack_size != product.pack_size):
-        raise _unit_changed(product)
-    if not db.scalar(
-        select(ProductOffer.offer_id).where(
-            ProductOffer.location_id == location_id, ProductOffer.product_id == product_id
-        )
-    ):
-        raise _conflict("Add this medicine to the branch stock and price it first.", "offer_missing")
-    existing = db.get(OfferUnitAcknowledgement, (location_id, product_id, product.unit_version))
-    if existing is not None:
-        return existing
-    ack = OfferUnitAcknowledgement(
-        location_id=location_id,
-        product_id=product_id,
-        unit_version=product.unit_version,
-        stock_unit=product.stock_unit,
-        unit_label=product.unit_label,
-        pack_size=product.pack_size,
-    )
-    db.add(ack)
-    db.flush()
-    return ack

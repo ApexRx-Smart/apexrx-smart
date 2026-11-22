@@ -219,9 +219,29 @@ This exercises the migration, the export and the restore without touching produc
 - **The migration succeeded but the backend deploy failed.** The old backend still serves (its `/health` reports outdated). Fix and redeploy the new backend. Don't roll the database back.
 - **The new backend has a bug.**
   - **Fix forward:** ship a corrected build on the same schema.
-  - **Short term:** turn reservations off per medicine. In the admin console, set each medicine's `reservation_enabled` to false; confirmed reservations stay collectable, and no new requests are possible.
+  - **Short term:** stop new reservations of a medicine by classifying it as not reservable in the admin console (for example prescription-only): confirmed reservations stay collectable, and no new request or confirmation is possible. (Since `d4a7e2c9b1f8` the per-medicine `reservation_enabled` switch is retired.) A pharmacy can also stop new requests at one branch by raising its minimum stock.
   - **Avoid** rolling application code back to a version older than the schema. If it's unavoidable, expect `/health` to report 503 and turn off the Render health-check gate while it runs.
 - **Data damage.** Restore (section 3). Know what's lost first.
+
+### Migration `d4a7e2c9b1f8`: branch minimum stock, stock held from the request
+
+**What changes** (on top of `c8e5a1f7d2b9`; single head):
+- `location.reservation_min_stock INTEGER NOT NULL DEFAULT 0` with a CHECK (0 to 1,000,000). Every existing branch gets 0, so nothing is kept back until a pharmacy sets it.
+- New function `reservation_allocated()` and partial index `idx_reservation_open_hold`.
+- Replaced (same signatures): `reservation_ineligibility()` (no per-medicine switch, no branch acknowledgement; a pack needs a pack size), the reservation insert and update triggers (a request needs reservable stock and locks the stock row; confirmation needs the stock to cover it after the other holds), and the `patient_availability` view (requests hold stock too; same columns).
+- No table or column is dropped. `product.reservation_enabled` and `offer_unit_acknowledgement` stay with their rows; nothing reads them.
+
+**Downgrade:** `alembic downgrade c8e5a1f7d2b9` restores the previous functions, triggers and view and drops the index, the function and the column (losing only the branch minimums). It was run on local test databases only. Don't run it on a shared database to "test" it.
+
+**Mixed versions (tested locally, 2026-11-22):** the deployed `main` backend code was run against a local database migrated to `d4a7e2c9b1f8`, and 26 checks of its flows passed: sign-in, catalogue and settings, registration, branches, approval, stock, offers, unit acknowledgement, options, reservations, confirmation, collection, decline, cancellation, inventory, public search and lists.
+
+| Database | Backend | Result |
+|---|---|---|
+| `d4a7e2c9b1f8` | `main` (old) | Requests work. `/health` returns **503** "schema outdated", because the check requires an exact match. A request beyond the reservable stock gets main's generic 409 with the database's message. If Render's Health Check Path is `/health`, a deploy, restart or wake-up of the old code may not be marked healthy. |
+| `d4a7e2c9b1f8` | this branch | The target. `/health` 200. |
+| `c8e5a1f7d2b9` | this branch | **Broken**: the model expects `location.reservation_min_stock`. Never deploy the branch before the migration. |
+
+**Order for a shared or production database** (each step needs approval): back up (section 3), then `alembic upgrade head` with the owner URL, then deploy the backend, then the frontend. Keep the gap between the migration and the backend deploy short, because the old backend's `/health` reports 503 in between.
 
 ## 5. Health checks and monitoring
 

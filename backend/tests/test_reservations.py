@@ -106,10 +106,10 @@ def test_business_users_cannot_reserve_at_their_own_pharmacy(client):
 @pytest.mark.parametrize(
     "change, reason",
     [
-        (dict(dispensing_class="prescription_only", reservation_enabled=False), "prescription_only"),
-        (dict(dispensing_class="unclassified", reservation_enabled=False), "unclassified"),
-        (dict(reservation_enabled=False), "disabled"),
-        (dict(max_reservation_quantity=None, reservation_enabled=False), "no_quantity_limit"),
+        (dict(dispensing_class="prescription_only"), "prescription_only"),
+        (dict(dispensing_class="unclassified"), "unclassified"),
+        (dict(stock_unit="unknown", unit_label=None), "unit_unknown"),
+        (dict(pack_size=None), "pack_size_missing"),
     ],
 )
 def test_ineligible_products_cannot_be_reserved(client, change, reason):
@@ -118,24 +118,24 @@ def test_ineligible_products_cannot_be_reserved(client, change, reason):
     with pytest.raises(Conflict) as exc:
         w.submit()
     assert code(exc.value) == "not_reservable" and exc.value.extra["reason"] == reason
+    assert run(None, reservations.eligibility_problem, w.branch, w.product) == reason
 
 
-def test_unit_must_be_known_acknowledged_and_listed(client):
+def test_classified_listed_medicine_needs_nothing_else(client):
+    """No per-medicine switch and no branch acknowledgement: a classified,
+    listed medicine with stock is reservable as soon as it is classified."""
     w = ResWorld(client)
-    unacked = w.medicine("Ibuprofen", "Brufen 200mg", ack=False)
+    product = w.medicine("Ibuprofen", "Brufen 200mg", classify=False)
     with pytest.raises(Conflict) as exc:
-        w.submit(product=unacked)
-    assert exc.value.extra["reason"] == "unit_not_acknowledged"
-
-    unknown = w.medicine("Cetirizine", "Zyrtec 10mg", enable=False, ack=False)
-    with pytest.raises(Conflict) as exc:
-        w.submit(product=unknown)
+        w.submit(product=product)
     assert exc.value.extra["reason"] == "unclassified"
-    w.configure(unknown, stock_unit="unknown", unit_label=None, reservation_enabled=False)
-    with pytest.raises(Conflict) as exc:
-        w.acknowledge(unknown)
-    assert code(exc.value) == "unit_unknown"
+    w.configure(product)
+    assert w.submit(product=product).status == "requested"
+    assert scalar("SELECT count(*) FROM offer_unit_acknowledgement") == 0
 
+
+def test_unlisted_offer_cannot_be_reserved(client):
+    w = ResWorld(client)
     r = client.put(
         f"/organizations/{w.org}/locations/{w.branch}/stock/{w.product}/offer",
         json={"unit_price": "500.00", "is_listed": False}, headers=w.owner_headers,
@@ -146,27 +146,14 @@ def test_unit_must_be_known_acknowledged_and_listed(client):
     assert exc.value.extra["reason"] == "offer_unlisted"
 
 
-def test_acknowledgement_requires_current_unit_and_a_manager(client):
+def test_unit_change_needs_no_branch_acknowledgement(client):
     w = ResWorld(client)
-    product = w.medicine("Ibuprofen", "Brufen 200mg", ack=False)
+    product = w.medicine("Ibuprofen", "Brufen 200mg")
     version = scalar("SELECT unit_version FROM product WHERE product_id = :p", p=product)
-    with pytest.raises(Forbidden):
-        w.acknowledge(product, by=w.staff)
-    with pytest.raises(Conflict) as exc:
-        run(w.owner, reservations.acknowledge_unit, w.org, w.branch, product,
-            unit_version=version, stock_unit="pack", unit_label="bottle", pack_size="20 tablets")
-    assert code(exc.value) == "unit_changed"
-    ack = w.acknowledge(product, by=w.manager)
-    assert ack.acknowledged_by == w.manager and ack.unit_version == version
-    assert w.acknowledge(product).acknowledged_by == w.manager  # already acknowledged: unchanged
-
-    # A unit change invalidates the acknowledgement (decision 3).
     w.configure(product, unit_label="blister")
-    with pytest.raises(Conflict) as exc:
-        w.submit(product=product)
-    assert exc.value.extra["reason"] == "unit_not_acknowledged"
-    w.acknowledge(product)
-    assert w.submit(product=product).status == "requested"
+    assert scalar("SELECT unit_version FROM product WHERE product_id = :p", p=product) == version + 1
+    r = w.submit(product=product)
+    assert r.status == "requested" and r.unit_label == "blister"
 
 
 def test_unit_changes_refused_while_reservations_are_open(client):
@@ -182,19 +169,24 @@ def test_unit_changes_refused_while_reservations_are_open(client):
     assert r.status_code == 200
 
 
-def test_product_settings_validation_and_audit(client):
+def test_product_settings_validation_and_audit(client, monkeypatch):
     w = ResWorld(client)
-    product = w.medicine("Ibuprofen", "Brufen 200mg", enable=False, ack=False)
-    with pytest.raises(AppError) as exc:  # no cap
-        w.configure(product, max_reservation_quantity=None)
-    assert code(exc.value) == "invalid_reservation_settings"
+    product = w.medicine("Ibuprofen", "Brufen 200mg", classify=False)
+    # No per-medicine limit: the default limit applies.
+    monkeypatch.setattr(reservations.settings, "reservation_default_max_quantity", 3)
+    w.configure(product, max_reservation_quantity=None)
+    with pytest.raises(Conflict) as exc:
+        w.submit(product=product, quantity=4)
+    assert code(exc.value) == "quantity_above_limit" and exc.value.extra["max_quantity"] == 3
     for label in ("n/a", "--", "20"):
         with pytest.raises(AppError):
-            w.configure(product, unit_label=label, reservation_enabled=False)
+            w.configure(product, unit_label=label)
     for label in ("tablet", "vial", "bottle"):
-        w.configure(product, stock_unit="unit", unit_label=label, reservation_enabled=False)
+        w.configure(product, stock_unit="unit", unit_label=label)
     with pytest.raises(Forbidden):
-        run(w.owner, reservations.configure_product, product, reservation_enabled=False)
+        run(w.owner, reservations.configure_product, product, dispensing_class="non_prescription")
+    with pytest.raises(ValueError):  # the retired switch is no longer a setting
+        run(w.admin, reservations.configure_product, product, reservation_enabled=True)
     history = rows("SELECT changed_by FROM product_reservation_history WHERE product_id = :p", p=product)
     assert history and all(row[0] == w.admin for row in history)
 
@@ -233,29 +225,41 @@ def test_idempotent_submission(client):
     assert scalar("SELECT count(*) FROM reservation") == 1
 
 
-def test_confirmation_is_limited_by_unreserved_stock(client):
+def test_requests_hold_stock_from_submission(client):
     w = ResWorld(client, quantity=6)
-    a = w.confirmed(quantity=4)
-    b = w.submit(patient=w.patient2, quantity=3)
+    a = w.submit(quantity=4)  # held from the request, before any confirmation
+    position = run(None, reservations.stock_position, w.branch, w.product)
+    assert (position.quantity, position.allocated, position.available_to_reserve, position.reservable) == (6, 4, 2, 2)
     with pytest.raises(Conflict) as exc:
-        w.confirm(b.reservation_id)
-    assert code(exc.value) == "insufficient_stock" and exc.value.extra["available_to_reserve"] == 2
-    assert w.status(b.reservation_id) == "requested"
-    run(w.patient, reservations.cancel_by_patient, a.reservation_id)  # releases the allocation
-    assert w.confirm(b.reservation_id).status == "confirmed"
+        w.submit(patient=w.patient2, quantity=3)
+    assert code(exc.value) == "insufficient_stock" and exc.value.extra["reason"] == "no_reservable_stock"
+    b = w.submit(patient=w.patient2, quantity=2)
+    assert w.confirm(b.reservation_id).status == "confirmed"  # it already holds its stock
+    run(w.patient, reservations.cancel_by_patient, a.reservation_id)  # releases the hold
+    assert run(None, reservations.stock_position, w.branch, w.product).allocated == 2
+
+
+def test_confirmation_refused_after_a_stock_correction(client):
+    w = ResWorld(client)
+    pending = w.submit(quantity=5)
+    w.set_stock(w.product, 3)
+    with pytest.raises(Conflict) as exc:
+        w.confirm(pending.reservation_id)
+    assert code(exc.value) == "insufficient_stock"
+    assert w.status(pending.reservation_id) == "requested"
 
 
 def test_shortfall_after_manual_correction(client):
     w = ResWorld(client)
     a = w.confirmed(quantity=5)
-    w.set_stock(w.product, 3)  # D7: physical correction below the reserved quantity is allowed
+    w.set_stock(w.product, 3)  # D7: a deliberate correction below the held quantity is allowed
     position = run(None, reservations.stock_position, w.branch, w.product)
     assert (position.quantity, position.allocated, position.available_to_reserve, position.shortfall) == (3, 5, 0, 2)
     assert position.at_risk_reservation_ids == [a.reservation_id]
     assert w.status(a.reservation_id) == "confirmed"  # never cancelled silently
-    b = w.submit(patient=w.patient2, quantity=1)
-    with pytest.raises(Conflict):  # no confirmation may deepen the shortfall
-        w.confirm(b.reservation_id)
+    with pytest.raises(Conflict) as exc:  # nothing new may deepen the shortfall
+        w.submit(patient=w.patient2, quantity=1)
+    assert exc.value.extra["reason"] == "no_reservable_stock"
 
 
 def test_collection_with_insufficient_record_and_override(client):
@@ -352,22 +356,20 @@ def test_lapsed_request_does_not_block_a_new_one(client):
     assert code(exc.value) == "reservation_state_conflict" and exc.value.extra["status"] == "expired"
 
 
-def test_disabling_reservations_keeps_confirmed_ones(client):
+def test_raising_the_minimum_keeps_existing_reservations(client):
     w = ResWorld(client)
     confirmed = w.confirmed(quantity=2)
-    pending = w.submit(patient=w.patient2)
-    w.configure(w.product, reservation_enabled=False)
+    pending = w.submit(patient=w.patient2, quantity=3)
+    w.set_min_stock(8)  # 10 recorded, 5 held: nothing left for new requests
     with pytest.raises(Conflict) as exc:
         w.submit(patient=w.outsider, quantity=1)
-    assert exc.value.extra["reason"] == "disabled"
-    with pytest.raises(Conflict) as exc:
-        w.confirm(pending.reservation_id)
-    assert exc.value.extra["reason"] == "disabled"
-    assert run(w.staff, reservations.decline, w.org, pending.reservation_id, "Not reservable now").changed
-    assert w.collect(confirmed).reservation.status == "collected"  # still valid (decision 4)
-    # Re-enabling requires the normal conditions; the acknowledgement is still current.
-    w.configure(w.product, reservation_enabled=True)
-    assert w.submit(patient=w.patient2, quantity=1).status == "requested"
+    assert exc.value.extra["reason"] == "no_reservable_stock"
+    assert w.confirm(pending.reservation_id).status == "confirmed"  # the minimum applies to new requests only
+    assert w.collect(confirmed).reservation.status == "collected"
+    assert w.collect(pending).reservation.status == "collected"
+    assert w.stock_quantity() == 5
+    w.set_min_stock(4)  # 5 recorded, none held: 1 reservable
+    assert w.submit(patient=w.outsider, quantity=1).status == "requested"
 
 
 def test_suspension_closes_open_reservations(client):
@@ -413,3 +415,86 @@ def test_patient_availability_counts_reservations(client):
 def test_notification_has_exactly_one_recipient():
     with engine.begin() as conn, pytest.raises(Exception, match="notification_recipient_check"):
         conn.execute(text("INSERT INTO notification (kind) VALUES ('message')"))
+
+
+# ---------------------------------------------------------------------------
+# Branch minimum stock: boundaries (stock 10 unless stated, limit 20 per reservation)
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "stock, minimum, quantity, accepted",
+    [
+        (10, 0, 10, True),    # default minimum: all the stock can be reserved
+        (10, 5, 5, True),     # exactly down to the minimum
+        (10, 5, 6, False),    # one below the minimum
+        (10, 10, 1, False),   # unallocated stock equals the minimum
+        (10, 11, 1, False),   # minimum above the stock
+        (0, 0, 1, False),     # no stock at all
+        (1, 0, 1, True),      # the last unit
+    ],
+)
+def test_reservable_stock_boundaries(client, stock, minimum, quantity, accepted):
+    w = ResWorld(client)
+    product = w.medicine("Ibuprofen", "Brufen 200mg", quantity=stock, max_quantity=20)
+    w.set_min_stock(minimum)
+    if accepted:
+        assert w.submit(product=product, quantity=quantity).status == "requested"
+        position = run(None, reservations.stock_position, w.branch, product)
+        assert position.reservable == max(0, stock - quantity - minimum)
+    else:
+        with pytest.raises(Conflict) as exc:
+            w.submit(product=product, quantity=quantity)
+        assert code(exc.value) == "insufficient_stock" and exc.value.extra["reason"] == "no_reservable_stock"
+        assert scalar("SELECT count(*) FROM reservation") == 0
+    options_problem = run(None, reservations.stock_position, w.branch, product).reservable
+    assert options_problem == max(0, stock - (quantity if accepted else 0) - minimum)
+
+
+def test_several_requests_share_the_reservable_stock(client):
+    w = ResWorld(client)  # 10 recorded
+    w.set_min_stock(3)    # 7 reservable
+    w.submit(quantity=3)
+    w.submit(patient=w.patient2, quantity=4)  # exactly what was left
+    with pytest.raises(Conflict) as exc:
+        w.submit(patient=w.outsider, quantity=1)
+    assert exc.value.extra["reason"] == "no_reservable_stock"
+    position = run(None, reservations.stock_position, w.branch, w.product)
+    assert (position.quantity, position.allocated, position.available_to_reserve, position.min_stock,
+            position.reservable) == (10, 7, 3, 3, 0)
+
+
+def test_each_branch_has_its_own_minimum(client):
+    w = ResWorld(client)
+    w.set_stock(w.product, 10, branch=w.branch2)
+    client.put(f"/organizations/{w.org}/locations/{w.branch2}/stock/{w.product}/offer",
+               json={"unit_price": "500.00"}, headers=w.owner_headers).raise_for_status()
+    w.set_min_stock(10)  # branch 1 keeps everything back
+    with pytest.raises(Conflict):
+        w.submit(quantity=1)
+    assert w.submit(quantity=2, branch=w.branch2).status == "requested"  # branch 2: minimum 0
+
+
+def test_allocation_through_the_lifecycle(client):
+    """Pending holds, confirmed keeps, declined / cancelled / expired release,
+    collected consumes (and the stock drops by the quantity)."""
+    w = ResWorld(client)
+
+    def held():
+        return run(None, reservations.stock_position, w.branch, w.product).allocated
+
+    a = w.submit(quantity=2)
+    assert held() == 2
+    a = w.confirm(a.reservation_id)
+    assert held() == 2
+    b = w.submit(patient=w.patient2, quantity=3)
+    assert held() == 5
+    run(w.staff, reservations.decline, w.org, b.reservation_id, "Not today")
+    assert held() == 2
+    c = w.submit(patient=w.patient2, quantity=1)
+    run(w.patient2, reservations.cancel_by_patient, c.reservation_id)
+    assert held() == 2
+    d = w.submit(patient=w.outsider, quantity=4)
+    assert held() == 6
+    backdate(d.reservation_id)
+    assert held() == 2  # past its deadline: released at once, before any job runs
+    w.collect(a)
+    assert (held(), w.stock_quantity()) == (0, 8)

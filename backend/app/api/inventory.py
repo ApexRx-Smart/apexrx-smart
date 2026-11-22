@@ -33,7 +33,6 @@ from app.models import (
     Product,
     ProductOffer,
     Reservation,
-    ReservationStatus,
     Stock,
     StockAdjustment,
     User,
@@ -53,8 +52,8 @@ router = APIRouter()
 
 
 def availability_for(quantity: int, offer: ProductOffer | None, allocated: int = 0) -> AvailabilityStatus | None:
-    """Same rule as the patient_availability view: physical stock minus
-    confirmed, unexpired patient reservations."""
+    """Same rule as the patient_availability view: recorded stock minus what
+    open patient reservations (requests and confirmed ones) hold."""
     if offer is None or not offer.is_listed:
         return None
     quantity -= allocated
@@ -83,6 +82,8 @@ def _inventory_item(
         quantity=stock.quantity,
         allocated_quantity=allocated,
         available_to_reserve=max(0, stock.quantity - allocated),
+        reservation_min_stock=location.reservation_min_stock,
+        reservable_quantity=max(0, stock.quantity - allocated - location.reservation_min_stock),
         reservation_shortfall=max(0, allocated - stock.quantity),
         last_updated=stock.last_updated,
         updated_by=stock.updated_by,
@@ -104,14 +105,14 @@ def _inventory_item(
 
 
 def _allocated():
-    """Confirmed, unexpired reservations of the stock row in the outer query."""
+    """What open reservations (requests and confirmed ones still inside their
+    deadline) hold of the stock row in the outer query."""
     return (
         select(func.coalesce(func.sum(Reservation.quantity), 0))
         .where(
             Reservation.location_id == Stock.location_id,
             Reservation.product_id == Stock.product_id,
-            Reservation.status == ReservationStatus.CONFIRMED,
-            Reservation.expires_at > func.clock_timestamp(),
+            reservations.open_clause(),
         )
         .correlate(Stock)
         .scalar_subquery()
@@ -281,9 +282,22 @@ def upsert_stock(
     db: DbSession,
 ):
     """Record the quantity on hand. Saving an unchanged quantity confirms it is
-    still accurate (refreshes ``last_updated``)."""
+    still accurate (refreshes ``last_updated``). A quantity below what open
+    patient reservations hold is refused (409 ``below_reserved``) unless
+    ``allow_below_reserved`` is true: the count may be right, but it should be
+    a deliberate decision. Reservations are never changed by a stock edit."""
     _writable_location(db, user, organization_id, location_id)
     get_active_product(db, product_id)
+    # Locked like a reservation request does, so the check below and a request
+    # for this medicine are counted one after the other.
+    if reservations.lock_stock(db, location_id, product_id) is not None and not payload.allow_below_reserved:
+        held = reservations.allocated_quantity(db, location_id, product_id)
+        if payload.quantity < held:
+            raise Conflict(
+                f"Open patient reservations hold {held} of this medicine. Recording {payload.quantity} leaves "
+                f"them {held - payload.quantity} short. Count again, or confirm that the count is right.",
+                extra={"code": "below_reserved", "held_quantity": held, "shortfall": held - payload.quantity},
+            )
     # Always issue an UPDATE for an existing row, even if the quantity is
     # unchanged, so the trigger refreshes last_updated ("still accurate").
     result = db.execute(

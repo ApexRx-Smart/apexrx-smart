@@ -12,6 +12,11 @@ class StockUpsert(BaseModel):
     still accurate and refreshes its freshness timestamp."""
 
     quantity: Quantity
+    allow_below_reserved: bool = Field(
+        default=False,
+        description="Required to record a quantity below what open patient reservations hold "
+        "(otherwise 409 below_reserved). The reservations stay: the shortfall is shown to the pharmacy.",
+    )
 
 
 class OfferUpsert(BaseModel):
@@ -49,11 +54,13 @@ class InventoryItem(BaseModel):
     pack_size: str | None
     quantity: int = Field(description="Physical stock on record.")
     allocated_quantity: int = Field(
-        default=0, description="Held by confirmed, unexpired patient reservations (pharmacies only)."
+        default=0, description="Held by open patient reservations: requests and confirmed ones (pharmacies only)."
     )
-    available_to_reserve: int = Field(default=0, description="Recorded stock minus allocated (never negative).")
+    available_to_reserve: int = Field(default=0, description="Unallocated: recorded stock minus held (never negative).")
+    reservation_min_stock: int = Field(default=0, description="The branch keeps this much back from new reservations.")
+    reservable_quantity: int = Field(default=0, description="What new reservations may still take: unallocated minus the minimum.")
     reservation_shortfall: int = Field(
-        default=0, description="Allocated beyond the recorded stock, after a stock correction."
+        default=0, description="Held beyond the recorded stock, after a stock correction."
     )
     last_updated: datetime
     updated_by: int | None

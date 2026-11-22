@@ -15,7 +15,10 @@ module only resolves who is asking and what they may see:
 * The patient's phone number is shown only to members of the handling
   pharmacy, and only while the reservation is open.
 * Platform admins classify medicines (catalogue settings); they have no
-  access to reservations or patient details.
+  access to reservations or patient details. Nothing is enabled per medicine:
+  a classified medicine is reservable wherever a branch lists it with stock
+  above the branch's minimum (location.reservation_min_stock, set by owners and
+  managers through PATCH /organizations/{id}/locations/{loc}).
 
 Reservations are addressed by reference, never by database id. Expiry and
 suspension are system operations with no endpoint here.
@@ -47,9 +50,9 @@ from app.models import (
     Drug,
     Location,
     Membership,
-    OfferUnitAcknowledgement,
     Organization,
     Product,
+    ProductOffer,
     ProductReservationHistory,
     Reservation,
     ReservationCollection,
@@ -63,6 +66,7 @@ from app.models.views import patient_availability
 from app.schemas.common import Page
 from app.schemas.reservations import (
     REFERENCE_PATTERN,
+    BranchMedicine,
     BranchSummary,
     CollectionDetail,
     CollectRequest,
@@ -83,8 +87,6 @@ from app.schemas.reservations import (
     ReservationStatusFilter,
     SettingsProblem,
     StockAllocation,
-    UnitAcknowledgementRequest,
-    UnitAcknowledgementStatus,
     UnitInfo,
 )
 from app.services import reservations as engine
@@ -353,6 +355,8 @@ def _pharmacy_detail(db: Session, user: User, organization_id: int, reference: s
             recorded_quantity=position.quantity,
             allocated_quantity=position.allocated,
             available_to_reserve=position.available_to_reserve,
+            min_stock=position.min_stock,
+            reservable_quantity=position.reservable,
             shortfall=position.shortfall,
             last_updated=last_updated,
             this_reservation_at_risk=r.reservation_id in position.at_risk_reservation_ids,
@@ -382,11 +386,13 @@ def reservation_options(
     location_id: Annotated[int, Query(gt=0)],
     product_id: Annotated[int, Query(gt=0)],
 ):
-    """Whether this medicine can be reserved at this branch, its unit (quote
-    ``unit.unit_version`` when submitting) and the maximum quantity. Never
-    returns stock quantities. Works signed out too (public search shows the
-    Reserve button only when it applies); signed in, it also says when the
-    caller works for this pharmacy (``own_pharmacy``)."""
+    """Whether this medicine can be reserved at this branch now, its unit
+    (quote ``unit.unit_version`` when submitting) and the most one reservation
+    may ask for. It is reservable while the branch's stock, after what open
+    reservations hold and the branch's minimum, is above zero
+    (``no_reservable_stock`` otherwise). Never returns stock quantities. Works
+    signed out too; signed in, it also says when the caller works for this
+    pharmacy (``own_pharmacy``)."""
     product = db.get(Product, product_id)
     if product is None:
         raise NotFound("Medicine not found.")
@@ -397,6 +403,8 @@ def reservation_options(
         select(Location.organization_id).where(Location.location_id == location_id)
     ) in _member_organization_ids(db, user):
         problem = "own_pharmacy"
+    if problem is None and engine.stock_position(db, location_id, product_id).reservable <= 0:
+        problem = "no_reservable_stock"
     public = db.execute(
         select(patient_availability.c.availability_status, patient_availability.c.unit_price, patient_availability.c.currency).where(
             patient_availability.c.location_id == location_id, patient_availability.c.product_id == product_id
@@ -407,7 +415,7 @@ def reservation_options(
         reason=problem,
         message=ELIGIBILITY_MESSAGES.get(problem) if problem else None,
         availability_status=public.availability_status if public else None,
-        max_quantity=product.max_reservation_quantity if problem is None else None,
+        max_quantity=engine.effective_max_quantity(product) if problem is None else None,
         unit=UnitInfo(
             unit_version=product.unit_version,
             stock_unit=product.stock_unit,
@@ -605,30 +613,25 @@ def collect_reservation(
     return _pharmacy_detail(db, user, organization_id, reference)
 
 
-# Branch unit acknowledgement --------------------------------------------------
-def _ack_status(db: Session, location_id: int, product: Product) -> UnitAcknowledgementStatus:
-    A = OfferUnitAcknowledgement
-    current = db.execute(
-        select(A, User.name)
-        .outerjoin(User, User.user_id == A.acknowledged_by)
-        .where(A.location_id == location_id, A.product_id == product.product_id, A.unit_version == product.unit_version)
-    ).one_or_none()
-    last = db.scalar(select(func.max(A.unit_version)).where(A.location_id == location_id, A.product_id == product.product_id))
+# A branch's medicines, as reservations see them --------------------------------
+def _branch_medicine(db: Session, location_id: int, product: Product, listed: bool) -> BranchMedicine:
+    position = engine.stock_position(db, location_id, product.product_id)
     problem = engine.eligibility_problem(db, location_id, product.product_id)
-    return UnitAcknowledgementStatus(
-        location_id=location_id,
+    if problem is None and position.reservable <= 0:
+        problem = "no_reservable_stock"
+    return BranchMedicine(
         product_id=product.product_id,
         product_name=product.product_name,
-        current_unit=UnitInfo(
-            unit_version=product.unit_version,
-            stock_unit=product.stock_unit,
-            unit_label=product.unit_label,
-            pack_size=product.pack_size,
-        ),
-        acknowledged=current is not None,
-        acknowledged_at=current[0].acknowledged_at if current else None,
-        acknowledged_by_name=current[1] if current else None,
-        last_acknowledged_version=last,
+        unit=UnitInfo(unit_version=product.unit_version, stock_unit=product.stock_unit,
+                      unit_label=product.unit_label, pack_size=product.pack_size),
+        dispensing_class=product.dispensing_class,
+        listed=listed,
+        recorded_quantity=position.quantity or 0,
+        held_quantity=position.allocated,
+        unallocated_quantity=position.available_to_reserve,
+        min_stock=position.min_stock,
+        reservable_quantity=position.reservable,
+        max_quantity=engine.effective_max_quantity(product),
         reservable=problem is None,
         reason=problem,
         message=ELIGIBILITY_MESSAGES.get(problem) if problem else None,
@@ -636,67 +639,26 @@ def _ack_status(db: Session, location_id: int, product: Product) -> UnitAcknowle
 
 
 @pharmacy_router.get(
-    "/{organization_id}/locations/{location_id}/reservation-units",
-    response_model=Page[UnitAcknowledgementStatus],
+    "/{organization_id}/locations/{location_id}/reservation-medicines",
+    response_model=Page[BranchMedicine],
 )
-def list_branch_units(organization_id: int, location_id: int, user: CurrentUser, db: DbSession, page: Pagination):
-    """Each medicine this branch has a stock record for: its current unit,
-    whether the branch acknowledged it and whether it can be reserved here."""
+def list_branch_medicines(organization_id: int, location_id: int, user: CurrentUser, db: DbSession, page: Pagination):
+    """Each medicine this branch has a stock record for: recorded, held,
+    unallocated and reservable quantities after the branch's minimum, and
+    whether patients can reserve it here now (and why not). Any active member."""
     _pharmacy_access(db, user, organization_id)
     get_org_location(db, organization_id, location_id)
     limit, offset = page
-    stmt = select(Product).join(Stock, Stock.product_id == Product.product_id).where(Stock.location_id == location_id)
-    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
-    products = db.scalars(stmt.order_by(Product.product_name, Product.product_id).limit(limit).offset(offset)).all()
-    return Page(items=[_ack_status(db, location_id, p) for p in products], total=total, limit=limit, offset=offset)
-
-
-def _branch_product(db: Session, organization_id: int, location_id: int, product_id: int) -> Product:
-    get_org_location(db, organization_id, location_id)
-    product = db.get(Product, product_id, populate_existing=True)
-    if product is None:
-        raise NotFound("Product not found.")
-    return product
-
-
-@pharmacy_router.get(
-    "/{organization_id}/locations/{location_id}/products/{product_id}/unit-acknowledgement",
-    response_model=UnitAcknowledgementStatus,
-)
-def get_unit_acknowledgement(organization_id: int, location_id: int, product_id: int, user: CurrentUser, db: DbSession):
-    _pharmacy_access(db, user, organization_id)
-    return _ack_status(db, location_id, _branch_product(db, organization_id, location_id, product_id))
-
-
-@pharmacy_router.post(
-    "/{organization_id}/locations/{location_id}/products/{product_id}/unit-acknowledgement",
-    response_model=UnitAcknowledgementStatus,
-)
-def acknowledge_unit(
-    organization_id: int,
-    location_id: int,
-    product_id: int,
-    payload: UnitAcknowledgementRequest,
-    user: CurrentUser,
-    db: DbSession,
-):
-    """Confirm that this branch counts the medicine in the unit shown (owners
-    and managers). Send back exactly the current ``unit_version``,
-    ``stock_unit``, ``unit_label`` and ``pack_size``; anything stale or
-    different is 409 ``unit_changed`` with the current values. Each unit
-    version is acknowledged once; repeating it is harmless."""
-    engine.acknowledge_unit(
-        db,
-        user,
-        organization_id,
-        location_id,
-        product_id,
-        unit_version=payload.unit_version,
-        stock_unit=payload.stock_unit,
-        unit_label=payload.unit_label,
-        pack_size=payload.pack_size,
+    stmt = (
+        select(Product, ProductOffer.is_listed)
+        .join(Stock, Stock.product_id == Product.product_id)
+        .outerjoin(ProductOffer, (ProductOffer.location_id == Stock.location_id) & (ProductOffer.product_id == Product.product_id))
+        .where(Stock.location_id == location_id)
     )
-    return _ack_status(db, location_id, _branch_product(db, organization_id, location_id, product_id))
+    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+    rows = db.execute(stmt.order_by(Product.product_name, Product.product_id).limit(limit).offset(offset)).all()
+    return Page(items=[_branch_medicine(db, location_id, p, bool(listed)) for p, listed in rows],
+                total=total, limit=limit, offset=offset)
 
 
 # ---------------------------------------------------------------------------
@@ -713,16 +675,16 @@ def _settings(product: Product) -> ReservationSettings:
         unit_label=product.unit_label,
         pack_size=product.pack_size,
         max_reservation_quantity=product.max_reservation_quantity,
-        reservation_enabled=product.reservation_enabled,
-        can_enable=not problems,
+        effective_max_quantity=engine.effective_max_quantity(product),
+        ready=not problems,
         problems=[SettingsProblem(code=p, message=SETTINGS_PROBLEMS[p]) for p in problems],
     )
 
 
 @settings_router.get("/products/{product_id}/reservation-settings", response_model=ReservationSettings)
 def get_reservation_settings(product_id: int, _: CurrentUser, db: DbSession):
-    """The medicine's classification and unit, and why reservations cannot
-    be enabled yet (``problems``)."""
+    """The medicine's classification and unit, and why it cannot be reserved
+    anywhere yet (``problems``)."""
     product = db.get(Product, product_id)
     if product is None:
         raise NotFound("Product not found.")
@@ -733,10 +695,10 @@ def get_reservation_settings(product_id: int, _: CurrentUser, db: DbSession):
 def update_reservation_settings(product_id: int, payload: ReservationSettingsUpdate, admin: AdminUser, db: DbSession):
     """Platform admins only (the catalogue is shared by every pharmacy). A
     change of unit, unit name or (for packs) pack size is refused while
-    reservations are open and starts a new ``unit_version``, which every branch
-    must acknowledge again. Every change is audited."""
+    reservations are open and starts a new ``unit_version`` (reservations
+    quote the version they were made with). Every change is audited."""
     changes = payload.model_dump(exclude_unset=True)
-    for key in ("dispensing_class", "stock_unit", "reservation_enabled"):
+    for key in ("dispensing_class", "stock_unit"):
         if key in changes and changes[key] is None:
             raise AppError(f"{key} cannot be null.", status_code=422, extra={"code": "invalid_reservation_settings"})
     product = engine.configure_product(db, admin, product_id, **changes)

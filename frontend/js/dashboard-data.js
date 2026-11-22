@@ -63,7 +63,7 @@
       updateLocation: (id, data) => A.organizations.updateLocation(orgId, id, data),
 
       stock: locationId => allPages(p => A.inventory.list(orgId, { location_id: locationId, ...p })),
-      setQuantity: (loc, product, qty) => A.inventory.setQuantity(orgId, loc, product, qty),
+      setQuantity: (loc, product, qty, allowBelowReserved) => A.inventory.setQuantity(orgId, loc, product, qty, allowBelowReserved),
       setOffer: (loc, product, offer) => A.inventory.setOffer(orgId, loc, product, offer),
       removeOffer: (loc, product) => A.inventory.removeOffer(orgId, loc, product),
       removeStock: (loc, product) => A.inventory.remove(orgId, loc, product),
@@ -142,8 +142,7 @@
       reservations: (params, quiet) => A.pharmacyReservations.list(orgId, params, quiet ? QUIET : undefined),
       reservation: (ref, quiet) => A.pharmacyReservations.get(orgId, ref, quiet ? QUIET : undefined),
       reservationAct: (ref, action, body) => A.pharmacyReservations.act(orgId, ref, action, body),
-      reservationUnits: (loc, params) => A.pharmacyReservations.units(orgId, loc, params),
-      acknowledgeUnit: (loc, product, shown) => A.pharmacyReservations.acknowledge(orgId, loc, product, shown),
+      reservationMedicines: (loc, params) => A.pharmacyReservations.medicines(orgId, loc, params),
       reservationSettings: product => A.pharmacyReservations.settings(product),
       notifications: quiet => A.notifications.list(orgId, { limit: 30 }, quiet ? QUIET : undefined),
       readNotifications: ids => A.notifications.read(orgId, ids),

@@ -19,7 +19,7 @@ from app.api.deps import (
 from app.core.config import settings
 from app.core.errors import AppError, Conflict, Forbidden, NotFound
 from app.models import Location, Membership, Organization, OrganizationDocument, User
-from app.models.enums import DocumentStatus, MembershipRole, OrganizationStatus
+from app.models.enums import DocumentStatus, MembershipRole, OrganizationStatus, OrganizationType
 from app.schemas.common import Message
 from app.schemas.organizations import (
     DocumentResponse,
@@ -316,13 +316,15 @@ def update_location(
     appearing in search, while its stock history and orders are preserved.
     A branch with open patient reservations cannot be closed until they are
     resolved (the row is locked so that no reservation is submitted meanwhile)."""
-    get_org_access(db, user, organization_id, roles=MANAGERS)
+    access = get_org_access(db, user, organization_id, roles=MANAGERS)
     get_org_location(db, organization_id, location_id)
     location = reservations.lock_location(db, location_id)
     data = payload.model_dump(exclude_unset=True)
-    for required in ("name", "is_active"):
+    for required in ("name", "is_active", "reservation_min_stock"):
         if required in data and data[required] is None:
             raise AppError(f"{required} cannot be null.")
+    if "reservation_min_stock" in data and access.organization.type != OrganizationType.PHARMACY:
+        raise AppError("Only pharmacy branches keep stock back from patient reservations.", status_code=422)
     if data.get("is_active") is False and location.is_active:
         open_ids = reservations.open_reservation_ids(db, location_id=location_id)
         if open_ids:

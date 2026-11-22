@@ -3,7 +3,8 @@
  *
  * Include it where each part belongs; it renders synchronously at that spot,
  * before js/script.js runs (which adds translations, the mobile menu and the
- * Sign in / Get started buttons):
+ * Sign in / Get started buttons, which open the account chooser below: patients,
+ * pharmacies and suppliers each have their own sign-in and registration):
  *   <body data-page="home|how|about|legal">
  *   <script src="js/site-layout.js" data-part="header"></script>
  *   ...page content...
@@ -24,9 +25,10 @@
 
   function current(name) { return page === name ? ' aria-current="page"' : ''; }
 
-  // "For Patients" is not in the main navigation: patients use the medicine
-  // search on the landing page and have no account journey.
+  // One entry point per group: patients (an account to reserve medicines),
+  // pharmacies and suppliers (registration pages).
   var NAV =
+    '<a href="reservations.html#register" data-i18n="nav_patients"' + current('reservations') + '>For Patients</a>' +
     '<a href="pharmacies.html" data-i18n="nav_pharmacies">For Pharmacies</a>' +
     '<a href="suppliers.html" data-i18n="nav_suppliers">For Suppliers</a>' +
     '<a href="how-it-works.html" data-i18n="nav_how"' + current('how') + '>How it works</a>' +
@@ -55,6 +57,17 @@
     '      <button class="btn btn-pill" id="getStartedBtnMobile" data-i18n="btn_start">Get started</button>' +
     '    </div>' +
     '  </nav>' +
+    // Sign in / Get started: which account (js/script.js sets the links for the mode).
+    '  <dialog class="account-chooser" id="accountChooser" aria-labelledby="accountChooserTitle">' +
+    '    <form method="dialog" class="ac-close-row"><button class="ac-close" value="close" data-i18n-aria="ac_close" aria-label="Close">✕</button></form>' +
+    '    <h2 id="accountChooserTitle" data-i18n="ac_title_signin">Sign in to ApexRX</h2>' +
+    '    <p class="ac-lede" id="accountChooserLede" data-i18n="ac_lede_signin">Choose your account type.</p>' +
+    '    <ul class="ac-options">' +
+    '      <li><a class="ac-option" id="acPatient" href="reservations.html#signin"><strong data-i18n="ac_patient">Patient</strong><span id="acPatientText" data-i18n="ac_patient_signin">Your medicine reservations</span></a></li>' +
+    '      <li><a class="ac-option" id="acPharmacy" href="pharmacy-sign-in.html"><strong data-i18n="ac_pharmacy">Pharmacy</strong><span id="acPharmacyText" data-i18n="ac_pharmacy_signin">Owners, managers and staff</span></a></li>' +
+    '      <li><a class="ac-option" id="acSupplier" href="suppliers.html#signin"><strong data-i18n="ac_supplier">Supplier</strong><span id="acSupplierText" data-i18n="ac_supplier_signin">Medicine wholesalers and distributors</span></a></li>' +
+    '    </ul>' +
+    '  </dialog>' +
     '</header>';
 
   var SOCIAL =
@@ -90,7 +103,8 @@
     '        <div class="footer-cols">' +
     '          <div class="footer-col">' +
     '            <h4 data-i18n="f_product">Product</h4>' +
-    '            <a href="' + searchHref + '" data-i18n="nav_patients">For Patients</a>' +
+    '            <a href="reservations.html#register" data-i18n="nav_patients">For Patients</a>' +
+    '            <a href="' + searchHref + '" data-i18n="nav_find">Find a medicine</a>' +
     '            <a href="reservations.html" data-i18n="nav_reservations">My reservations</a>' +
     '            <a href="pharmacies.html" data-i18n="nav_pharmacies">For Pharmacies</a>' +
     '            <a href="suppliers.html" data-i18n="nav_suppliers">For Suppliers</a>' +

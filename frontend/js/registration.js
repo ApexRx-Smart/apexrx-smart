@@ -1,14 +1,21 @@
 'use strict';
 /* Registration for pharmacies (pharmacies.html) and suppliers (suppliers.html),
- * on the ApexRX API (js/api.js). The page says which: <body data-role="pharmacy">
- * or <body data-role="supplier">. The organization type sent to the backend
- * comes only from that role.
+ * and pharmacy sign-in (pharmacy-sign-in.html), on the ApexRX API (js/api.js).
+ * The page says which: <body data-role="pharmacy"> or <body data-role="supplier">.
+ * The organization type sent to the backend comes only from that role.
+ *
+ * Pharmacies have two dedicated pages: pharmacies.html (data-auth="create":
+ * registration only) and pharmacy-sign-in.html (data-auth="signin": sign-in
+ * only). Each links to the other; neither links to supplier or patient sign-in.
+ * Old links to pharmacies.html#signin, #staff or #review open the sign-in page.
+ * suppliers.html keeps one page with a create / sign-in switch (#signin).
  *
  * Steps (every decision about progress is read back from the backend, so an
  * incomplete registration resumes where it stopped, on any device):
  *   0 Account   -> "Create account": POST /auth/register, then POST /auth/login
  *                  (an email that is already registered signs in instead).
- *                  "Sign in" (the switch, or #signin): POST /auth/login only.
+ *                  "Sign in" (pharmacy-sign-in.html, or the supplier switch /
+ *                  #signin): POST /auth/login only.
  *   1 Verify    -> email verification by link: POST /auth/email/send, then the
  *                  user opens the link (verify-email.html). GET /auth/email/status
  *                  says whether it is done. The backend refuses to create an
@@ -30,6 +37,15 @@
   const $ = s => document.querySelector(s);
   const API = window.ApexAPI;
   const ROLE = document.body.dataset.role === 'supplier' ? 'supplier' : 'pharmacy';
+  // Pharmacy pages are dedicated to one action: 'create' or 'signin' (null: suppliers, both).
+  const PAGE_AUTH = ROLE === 'pharmacy' ? (document.body.dataset.auth === 'signin' ? 'signin' : 'create') : null;
+  const SIGN_IN_PAGE = 'pharmacy-sign-in.html', REGISTER_PAGE = 'pharmacies.html';
+  // An old link to the registration page's sign-in (#signin, #staff) or review
+  // (#review): the dedicated sign-in page, keeping the query (language, notices).
+  if (PAGE_AUTH === 'create' && ['#signin', '#staff', '#review'].includes(location.hash)) {
+    location.replace(SIGN_IN_PAGE + location.search + (location.hash === '#review' ? '#review' : ''));
+    return;
+  }
   const ORG_KEY = ROLE === 'pharmacy' ? 'apexrx_selected_pharmacy' : 'apexrx_selected_supplier';
   const MAX_FILE = 10 * 1024 * 1024;
   const FILE_TYPES = /\.(pdf|png|jpe?g)$/i;
@@ -42,8 +58,7 @@
     pharmacy: {
       createTitle: 'Create your pharmacy account', createDesc: 'Join a connected community of pharmacies and suppliers in Kigali.',
       signinNote: 'Signing in opens your pharmacy workspace.', toCreate: 'Create a pharmacy account', emailPh: 'pharmacy@example.com',
-      otherHint: 'Registering a medicine supplier?', otherLink: 'Register as a supplier →', otherHref: 'suppliers.html',
-      otherAccount: 'This account belongs to a supplier, not a pharmacy.', otherContinue: 'Continue on the supplier page →',
+      otherAccount: 'This account is registered as a medicine supplier, not a pharmacy. Sign out to use a pharmacy account.',
       detailsTitle: 'Make your pharmacy easy to find.', detailsDesc: 'Add your pharmacy’s contact details and the address of its main branch.',
       name: 'Pharmacy name', namePh: 'Kigali Central Pharmacy', place: 'Branch name', placeDefault: 'Main branch',
       address: 'Main branch address', docsTitle: 'Licensing documents', docsDesc: 'Upload the documents ApexRX uses to verify your pharmacy.',
@@ -60,8 +75,7 @@
     supplier: {
       createTitle: 'Create your supplier account', createDesc: 'Join a connected network of pharmacies and suppliers in Kigali.',
       signinNote: 'Signing in shows your supplier registration.', toCreate: 'Create a supplier account', emailPh: 'depot@example.com',
-      otherHint: 'Registering a pharmacy?', otherLink: 'Register as a pharmacy →', otherHref: 'pharmacies.html',
-      otherAccount: 'This account belongs to a pharmacy, not a supplier.', otherContinue: 'Continue on the pharmacy page →',
+      otherAccount: 'This account is registered as a pharmacy, not a medicine supplier. Sign out to use a supplier account.',
       detailsTitle: 'Tell us about your business.', detailsDesc: 'Add your business contact details and the address of your main warehouse.',
       name: 'Business name', namePh: 'Kigali Medical Supplies Ltd', place: 'Warehouse name', placeDefault: 'Main warehouse',
       address: 'Main warehouse address', docsTitle: 'Verification documents', docsDesc: 'Upload the documents ApexRX uses to verify your business.',
@@ -85,17 +99,14 @@
   const STEPS_HTML = STEP_NAMES.map(n => `<li>${n}</li>`).join('');
   const FORMS_HTML = `
 <form id="account" class="step-form" novalidate>
-  ${ROLE === 'pharmacy' ? `<div class="auth-tabs" role="tablist" aria-label="Pharmacy access">
-    <button type="button" role="tab" id="tab-create" data-auth-tab="create">Register a pharmacy</button>
-    <button type="button" role="tab" id="tab-signin" data-auth-tab="signin">Staff sign-in</button>
-  </div>` : ''}
   <label>Email address<input name="email" type="email" autocomplete="email" placeholder="${T.emailPh}" required></label>
   <div class="fields"><label>Password<input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required></label><label id="confirm-field">Confirm password<input name="confirm" type="password" autocomplete="new-password" minlength="8" placeholder="Re-enter your password" required></label></div>
   <p class="note" id="account-note">Your account is created on ApexRX Smart.</p>
   <p class="forgot-row" id="forgot-row" hidden><a href="reset-password.html?next=${ROLE}" id="forgot-link">Forgot password?</a></p>
   <button class="primary" id="account-submit">Create account <span>→</span></button>
-  <p class="auth-switch"><span id="auth-switch-text">Already have an account?</span> <button type="button" class="text-button" id="auth-switch">Sign in</button></p>
-  <p class="role-hint" id="other-hint">${T.otherHint} <a href="${T.otherHref}">${T.otherLink}</a></p>
+  ${PAGE_AUTH === 'create' ? `<p class="auth-switch"><span>Already registered, or working at a registered pharmacy?</span> <a class="text-button" id="auth-switch-link" href="${SIGN_IN_PAGE}">Sign in to your pharmacy →</a></p>`
+    : PAGE_AUTH === 'signin' ? `<p class="auth-switch"><span>New pharmacy?</span> <a class="text-button" id="auth-switch-link" href="${REGISTER_PAGE}">Register your pharmacy →</a></p>`
+    : `<p class="auth-switch"><span id="auth-switch-text">Already have an account?</span> <button type="button" class="text-button" id="auth-switch">Sign in</button></p>`}
   <button type="button" class="text-button" id="explore">Just exploring? Preview the workspace ↗</button>
 </form>
 
@@ -291,7 +302,11 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     reset();
   }
 
-  function reset(message) {
+  function reset(message, reason) {
+    if (PAGE_AUTH === 'create') {
+      location.replace(SIGN_IN_PAGE + (reason ? '?signed_out=' + encodeURIComponent(reason) : ''));
+      return;
+    }
     reg = null; resetEmailState(); paintSignedIn();
     $('#onboarding').hidden = false;
     const dash = $('#dashboard'); if (dash) dash.hidden = true;
@@ -299,7 +314,7 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     show(0, false);
     if (message) formError(message);
   }
-  function sessionExpired() { reset('Your session has expired. Please sign in again.'); }
+  function sessionExpired() { reset('Your session has expired. Please sign in again.', 'expired'); }
   function signedOutText(detail) {
     const reason = detail && detail.reason;
     if (reason === 'idle') return `You were signed out after ${(detail && detail.idleMinutes) || 30} minutes of inactivity. Sign in again to continue.`;
@@ -314,7 +329,7 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     await load();
     if (!reg.membership) {
       const other = (reg.me.memberships || []).find(m => m.organization_type !== ROLE);
-      if (other) return accountPanel(T.otherAccount, T.otherContinue, T.otherHref);
+      if (other) return accountPanel(T.otherAccount, 'Back to the ApexRX home page →', 'index.html');
       if (reg.me.is_platform_admin) {
         return accountPanel('You are signed in as an ApexRX administrator. Administrators do not register here. Sign out to use another account.', 'Open the admin console →', 'ops-console-7f3k9q.html');
       }
@@ -369,16 +384,17 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
   }
 
   /* -------------------------------------------------------- step 0: account */
-  // Read before the sign-in tabs rewrite the hash.
+  // Read before setAuthMode rewrites the hash.
   const WANTS_REVIEW = location.hash === '#review';
-  let authMode = (location.hash === '#signin' || location.hash === '#staff' || WANTS_REVIEW) ? 'signin' : 'create';
+  let authMode = PAGE_AUTH || ((location.hash === '#signin' || WANTS_REVIEW) ? 'signin' : 'create');
   const AUTH_TEXT = {
     create: { title: T.createTitle, description: T.createDesc, submit: 'Create account', note: 'Your account is created on ApexRX Smart.', switchText: 'Already have an account?', switchButton: 'Sign in' },
     signin: ROLE === 'pharmacy'
-      ? { title: 'Staff sign-in', description: 'Already working at a pharmacy registered on ApexRX? Sign in with your personal account to open your pharmacy workspace.', submit: 'Sign in', note: 'Owners, managers and staff each sign in with their own account. Never share passwords.', switchText: 'New to ApexRX?', switchButton: T.toCreate }
+      ? { title: 'Pharmacy sign-in', description: 'Owners, managers and staff of a pharmacy registered on ApexRX: sign in with your personal account to open your pharmacy workspace, or to continue your registration.', submit: 'Sign in', note: 'Each person signs in with their own account. Never share passwords.', switchText: '', switchButton: '' }
       : { title: 'Sign in to ApexRX', description: 'Welcome back. Use the email and password of your ApexRX account.', submit: 'Sign in', note: T.signinNote, switchText: 'New to ApexRX?', switchButton: T.toCreate }
   };
   function setAuthMode(mode, focus) {
+    if (PAGE_AUTH) mode = PAGE_AUTH; // a dedicated pharmacy page never switches
     authMode = mode;
     const text = AUTH_TEXT[mode], f = $('#account').elements, signin = mode === 'signin';
     titles[0] = text.title; descriptions[0] = text.description;
@@ -390,30 +406,22 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     f.password.placeholder = signin ? 'Your password' : 'At least 8 characters';
     $('#account-submit').firstChild.nodeValue = text.submit + ' ';
     $('#account-note').textContent = text.note;
-    $('#auth-switch-text').textContent = text.switchText;
-    $('#auth-switch').textContent = text.switchButton;
+    if ($('#auth-switch')) {
+      $('#auth-switch-text').textContent = text.switchText;
+      $('#auth-switch').textContent = text.switchButton;
+    }
     $('#forgot-row').hidden = !signin;
-    // A link to #signin / #staff on this page switches to sign-in (no reload).
-  window.addEventListener('hashchange', () => {
-    const wanted = (location.hash === '#signin' || location.hash === '#staff') ? 'signin' : null;
-    if (wanted && authMode !== wanted && !$('#account').hidden) setAuthMode(wanted, true);
-  });
-  document.querySelectorAll('[data-auth-tab]').forEach(tab => {
-      const on = tab.dataset.authTab === mode;
-      tab.classList.toggle('active', on); tab.setAttribute('aria-selected', String(on)); tab.tabIndex = on ? 0 : -1;
-    });
     if (!$('#account').hidden) { $('#step-title').textContent = text.title; $('#step-description').textContent = text.description; formError(''); }
-    try { history.replaceState(null, '', location.pathname + location.search + (signin ? '#signin' : '')); } catch (e) { /* ignore */ }
+    // Suppliers: the address says which form is shown (#signin). Pharmacy pages keep #review.
+    if (!PAGE_AUTH) {
+      try { history.replaceState(null, '', location.pathname + location.search + (signin ? '#signin' : '')); } catch (e) { /* ignore */ }
+    }
     if (focus) (f.email.value ? f.password : f.email).focus();
   }
-  $('#auth-switch').addEventListener('click', () => setAuthMode(authMode === 'signin' ? 'create' : 'signin', true));
-  document.querySelectorAll('[data-auth-tab]').forEach(tab => {
-    tab.addEventListener('click', () => { if (authMode !== tab.dataset.authTab) setAuthMode(tab.dataset.authTab, true); });
-    tab.addEventListener('keydown', e => {
-      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-      const other = document.querySelector(`[data-auth-tab="${tab.dataset.authTab === 'create' ? 'signin' : 'create'}"]`);
-      other.click(); other.focus();
-    });
+  if ($('#auth-switch')) $('#auth-switch').addEventListener('click', () => setAuthMode(authMode === 'signin' ? 'create' : 'signin', true));
+  // Suppliers: a link to #signin on this page switches to sign-in (no reload).
+  window.addEventListener('hashchange', () => {
+    if (!PAGE_AUTH && location.hash === '#signin' && authMode !== 'signin' && !$('#account').hidden) setAuthMode('signin', true);
   });
 
   $('#account').addEventListener('submit', e => {
@@ -980,7 +988,7 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     if (signingOut) return;
     const detail = e.detail || {};
     if (!reg && !['idle', 'other_tab'].includes(detail.reason)) return;
-    reset(signedOutText(detail));
+    reset(signedOutText(detail), detail.reason && detail.reason !== 'signed_out' ? detail.reason : '');
   });
 
   window.ApexRegistration = {

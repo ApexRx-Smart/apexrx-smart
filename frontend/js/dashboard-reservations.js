@@ -8,7 +8,8 @@
  *   GET  /organizations/{id}/reservations/{reference}    detail: history, stock, collection,
  *                                                         and `actions` (what THIS member may do now)
  *   POST .../{reference}/confirm | decline | cancel | collect (with optional override)
- *   GET  /organizations/{id}/locations/{loc}/reservation-units, POST .../unit-acknowledgement
+ *   GET  /organizations/{id}/locations/{loc}/reservation-medicines  (stock breakdown per medicine)
+ *   PATCH /organizations/{id}/locations/{loc} {reservation_min_stock}  (owners and managers)
  *   GET  /catalogue/products/{id}/reservation-settings   (read only: admins edit the catalogue)
  *
  * The page never decides an outcome: buttons come from the API's `actions`, every
@@ -38,7 +39,7 @@
       status: 'requested', loc: '', from: '', to: '', ref: '', sort: 'deadline', page: 0,
       counts: null, list: null, listErr: null, open: null, detail: null, detailErr: null, busy: false,
       problem: null,              // a refused collection or confirmation, explained on the detail
-      setupLoc: null, units: null, unitsErr: null, run: 0
+      setupLoc: null, meds: null, run: 0
     };
     const data = () => env.data();
     const ctx = () => env.ctx();
@@ -81,7 +82,7 @@
       }
       const tabs = `<div class="chips rv-tabs" role="group" aria-label="${esc(t('Reservations'))}">
 <button class="chip${R.mode !== 'setup' ? ' on' : ''}" data-a="rvmode" data-m="list" aria-pressed="${R.mode !== 'setup'}">${esc(t('Reservations'))}</button>
-<button class="chip${R.mode === 'setup' ? ' on' : ''}" data-a="rvmode" data-m="setup" aria-pressed="${R.mode === 'setup'}">${esc(t('Medicine setup'))}</button></div>`;
+<button class="chip${R.mode === 'setup' ? ' on' : ''}" data-a="rvmode" data-m="setup" aria-pressed="${R.mode === 'setup'}">${esc(t('Reservation settings'))}</button></div>`;
       const readOnly = ctx().org.status !== 'approved'
         ? `<p class="lock">${esc(t('Your pharmacy is not approved right now: you can read reservations but not act on them.'))}</p>` : '';
       if (R.mode === 'setup') return tabs + readOnly + `<div id="rv-setup"><p class="empty">${esc(t('Loading…'))}</p></div>`;
@@ -223,8 +224,10 @@ ${actions.includes('override') ? `<p class="note rv-ovnote">${esc(t('Recorded st
 <div class="panel"><h3 style="margin-top:0">${esc(t('Stock of this medicine at {b}', { b: r.location_name }))}</h3>
 <dl class="kv">
   <dt>${esc(t('Recorded stock'))}</dt><dd>${st.recorded_quantity == null ? esc(t('No stock record')) : esc(st.recorded_quantity)}</dd>
-  <dt>${esc(t('Held by confirmed reservations'))}</dt><dd>${esc(st.allocated_quantity)}</dd>
-  <dt>${esc(t('Available to reserve'))}</dt><dd>${esc(st.available_to_reserve)}</dd>
+  <dt>${esc(t('Held by reservations'))}</dt><dd>${esc(st.allocated_quantity)}</dd>
+  <dt>${esc(t('Unallocated'))}</dt><dd>${esc(st.available_to_reserve)}</dd>
+  <dt>${esc(t('Kept back'))}</dt><dd>${esc(st.min_stock ?? 0)}</dd>
+  <dt>${esc(t('Reservable now'))}</dt><dd>${esc(st.reservable_quantity ?? st.available_to_reserve)}</dd>
   <dt>${esc(t('Shortfall'))}</dt><dd>${st.shortfall ? `<strong class="rv-bad">${esc(st.shortfall)}</strong>` : '0'}</dd>
   <dt>${esc(t('Stock last confirmed'))}</dt><dd>${esc(time(st.last_updated))}</dd>
 </dl></div>
@@ -256,8 +259,8 @@ ${hideRef ? '' : `<dt>${esc(t('Reference'))}</dt><dd>${esc(r.reference)}</dd>`}
 <dt>${esc(t('Quantity'))}</dt><dd><strong>${esc(r.quantity)} × ${esc(unitText(r.unit))}</strong></dd>
 <dt>${esc(t('Branch'))}</dt><dd>${esc(r.location_name)}</dd>
 ${withStock ? `<dt>${esc(t('Recorded stock'))}</dt><dd>${esc(r.stock.recorded_quantity ?? 0)}</dd>
-<dt>${esc(t('Held by confirmed reservations'))}</dt><dd>${esc(r.stock.allocated_quantity)}</dd>
-<dt>${esc(t('Available to reserve'))}</dt><dd>${esc(r.stock.available_to_reserve)}</dd>
+<dt>${esc(t('Held by reservations'))}</dt><dd>${esc(r.stock.allocated_quantity)}</dd>
+<dt>${esc(t('Unallocated'))}</dt><dd>${esc(r.stock.available_to_reserve)}</dd>
 ${r.stock.shortfall ? `<dt>${esc(t('Shortfall'))}</dt><dd>${esc(r.stock.shortfall)}</dd>` : ''}` : ''}
 </dl>`;
     async function act(action) {
@@ -266,10 +269,13 @@ ${r.stock.shortfall ? `<dt>${esc(t('Shortfall'))}</dt><dd>${esc(r.stock.shortfal
       if (!r || R.busy) return;
       let body, title, submit, html;
       if (action === 'confirm') {
-        const short = r.stock.available_to_reserve < r.quantity;
+        // The request already holds its own quantity: it can be confirmed while the
+        // recorded stock covers it after the OTHER open reservations.
+        const covers = Math.max(0, (r.stock.recorded_quantity || 0) - (r.stock.allocated_quantity - r.quantity));
+        const short = covers < r.quantity;
         html = facts(r, true) + `<p><strong>${esc(t('Respond by'))}:</strong> ${esc(time(r.respond_by))}</p>
 <p>${esc(t('Confirming commits this branch to hand over the full {n} × {u} to the patient. The quantity is held for 24 hours and is not available to other patients.', { n: r.quantity, u: unitText(r.unit) }))}</p>
-${short ? `<p class="lock" role="alert">${esc(t('Only {a} is available to reserve: the confirmation will be refused unless the recorded stock is corrected first.', { a: r.stock.available_to_reserve }))}</p>` : ''}
+${short ? `<p class="lock" role="alert">${esc(t('After the other open reservations, the recorded stock covers only {a}: the confirmation will be refused unless the recorded stock is corrected first.', { a: covers }))}</p>` : ''}
 <label class="rv-check"><input type="checkbox" name="sure" required> ${esc(t('I have checked that we can supply the full quantity.'))}</label>`;
         title = t('Confirm reservation {r}', { r: r.reference }); submit = t('Confirm reservation');
       } else if (action === 'decline') {
@@ -335,7 +341,7 @@ ${facts(r, false, true)}
           + ' ' + esc(t(canOverride ? 'Count the shelf: correct the stock in My stock if the record is wrong, or use the physical-count override.' : 'Count the shelf and correct the stock in My stock, or ask an owner or manager for a physical-count override.'));
       }
       const map = {
-        insufficient_stock: t('Not confirmed: only {a} is available to reserve. Correct the recorded stock if it is wrong, or decline the request.', { a: d.available_to_reserve ?? 0 }),
+        insufficient_stock: t('Not confirmed: after the other open reservations, the recorded stock covers only {a}. Correct the recorded stock if it is wrong, or decline the request.', { a: d.available_to_reserve ?? 0 }),
         expired: t('This reservation has expired: its deadline passed. It can no longer be changed.'),
         reservation_state_conflict: t('This reservation was already handled (now: {s}). The current state is shown.', { s: t(STATUS_LABEL[d.status] || d.status || '') }),
         stock_changed: t('The recorded stock changed since you looked (now {s}). Count again and repeat the override.', { s: d.recorded_quantity }),
@@ -358,63 +364,63 @@ ${facts(r, false, true)}
       const locs = branches().filter(l => l.is_active);
       if (!locs.length) { box.innerHTML = `<p class="empty">${esc(t('Add a branch first.'))}</p>`; return; }
       if (!locs.some(l => l.location_id === R.setupLoc)) R.setupLoc = (locs.find(l => l.location_id === env.currentLocation()) || locs[0]).location_id;
+      const loc = locs.find(l => l.location_id === R.setupLoc);
+      const min = loc.reservation_min_stock || 0;
+      const canEdit = env.canManage() && !env.isPreview();
       const run = ++R.run;
       box.innerHTML = `<label class="rv-inline">${esc(t('Branch'))} <select id="rv-setup-loc">${locs.map(l => `<option value="${l.location_id}"${l.location_id === R.setupLoc ? ' selected' : ''}>${esc(l.name)}</option>`).join('')}</select></label>
-<p class="muted">${esc(t('A medicine can be reserved at a branch once ApexRX has classified it and the branch has confirmed how it counts it. Only ApexRX administrators change the catalogue settings.'))}${env.canManage() ? '' : ' ' + esc(t('Owners and managers acknowledge units.'))}</p>
-<div id="rv-units"><p class="empty">${esc(t('Loading…'))}</p></div>`;
+<section class="rv-min" aria-labelledby="rv-min-h">
+  <h3 id="rv-min-h">${esc(t('Minimum stock for walk-in customers'))}</h3>
+  <p>${esc(t('Set the minimum quantity of each medicine you want to retain for walk-in customers. Medicines will automatically become unavailable for public reservations when their remaining unallocated stock reaches this threshold.'))}</p>
+  ${canEdit ? `<form id="rv-min-f" class="rv-inline"><label>${esc(t('Keep back at {b}', { b: loc.name }))} <input id="rv-min" type="number" min="0" max="1000000" step="1" required value="${min}" inputmode="numeric"></label> <button class="solid">${esc(t('Save'))}</button></form>
+  <p class="muted">${esc(t('It applies to every medicine at this branch, counted in each medicine’s own unit. Existing reservations are kept when you change it; it only limits new requests.'))}</p>`
+    : `<p><strong>${esc(t('{n} of each medicine', { n: min }))}</strong></p><p class="muted">${esc(t('Owners and managers change this.'))}</p>`}
+</section>
+<p class="muted">${esc(t('A medicine can be reserved when ApexRX has classified it as non-prescription with a defined unit, this branch lists it, and its unallocated stock is above the minimum. Open requests and confirmed reservations both hold stock. Only ApexRX administrators change the catalogue settings.'))}</p>
+<div id="rv-meds"><p class="empty">${esc(t('Loading…'))}</p></div>`;
       $('#rv-setup-loc').addEventListener('change', e => { R.setupLoc = +e.target.value; loadSetup(); });
+      const f = $('#rv-min-f');
+      if (f) f.addEventListener('submit', e => { e.preventDefault(); saveMin(loc); });
+      if (env.isPreview()) { $('#rv-meds').innerHTML = `<p class="empty">${esc(t('Your medicines appear here in your live workspace.'))}</p>`; return; }
       try {
-        const page = await data().reservationUnits(R.setupLoc, { limit: 100 });
-        if (run !== R.run || !$('#rv-units')) return;
-        R.units = page.items;
-        paintUnits();
+        const page = await data().reservationMedicines(R.setupLoc, { limit: 100 });
+        if (run !== R.run || !$('#rv-meds')) return;
+        R.meds = page.items;
+        paintMeds(page.total);
       } catch (err) {
-        if (run !== R.run || !$('#rv-units')) return;
-        $('#rv-units').innerHTML = `<div class="err"><p>${esc(errorText(err))}</p></div>`;
+        if (run !== R.run || !$('#rv-meds')) return;
+        $('#rv-meds').innerHTML = `<div class="err"><p>${esc(errorText(err))}</p></div>`;
       }
     }
-    function paintUnits() {
-      const rows = R.units || [];
-      const canAck = env.canManage() && ctx().org.status === 'approved';
-      $('#rv-units').innerHTML = rows.length ? `<ul class="rv-cards">${rows.map((u, i) => {
-        const cu = u.current_unit, known = cu.stock_unit !== 'unknown';
-        return `<li class="rv-card">
-  <div class="rv-top"><strong>${esc(u.product_name)}</strong>${u.reservable ? `<span class="tag good">✓ ${esc(t('Can be reserved here'))}</span>` : `<span class="tag">${esc(t('Not reservable here'))}</span>`}</div>
-  <dl class="kv">
-    <dt>${esc(t('Counted in'))}</dt><dd>${known ? esc(cu.stock_unit === 'pack' ? t('Packs') : t('Single units')) : esc(t('Not defined yet'))}</dd>
-    <dt>${esc(t('Unit name'))}</dt><dd>${esc(cu.unit_label || '—')}</dd>
-    <dt>${esc(t('Pack size'))}</dt><dd>${esc(cu.pack_size || '—')}</dd>
-    <dt>${esc(t('Unit version'))}</dt><dd>${esc(cu.unit_version)}</dd>
-    <dt>${esc(t('Acknowledged by this branch'))}</dt><dd>${u.acknowledged ? `✓ ${esc(t('Yes'))} · ${esc(u.acknowledged_by_name || '')} · ${esc(time(u.acknowledged_at))}` : `✕ ${esc(t('No'))}${u.last_acknowledged_version ? ' · ' + esc(t('an older version ({v}) was acknowledged', { v: u.last_acknowledged_version })) : ''}`}</dd>
-    ${u.reservable ? '' : `<dt>${esc(t('Why not'))}</dt><dd>${esc(t(ELIGIBILITY[u.reason] || u.reason || ''))}</dd>`}
-  </dl>
-  <div class="rv-actions">${canAck && known && !u.acknowledged ? `<button class="solid" data-a="rvack" data-i="${i}">${esc(t('Acknowledge this unit…'))}</button>` : ''}<button class="ghost" data-a="rvsettings" data-i="${i}">${esc(t('Catalogue settings'))}</button></div>
-</li>`;
-      }).join('')}</ul>` : `<p class="empty">${esc(t('This branch has no stock records yet. Add medicines in My stock first.'))}</p>`;
-    }
-    async function acknowledge(i) {
-      const u = R.units[i]; if (!u || R.busy) return;
-      const cu = u.current_unit;
-      const form = await ask(t('Acknowledge the unit of {m}', { m: u.product_name }), `<dl class="kv rv-dlg">
-<dt>${esc(t('Counted in'))}</dt><dd>${esc(cu.stock_unit === 'pack' ? t('Packs') : t('Single units'))}</dd>
-<dt>${esc(t('Unit name'))}</dt><dd><strong>${esc(cu.unit_label)}</strong></dd>
-<dt>${esc(t('Pack size'))}</dt><dd>${esc(cu.pack_size || '—')}</dd>
-<dt>${esc(t('Unit version'))}</dt><dd>${esc(cu.unit_version)}</dd></dl>
-<p>${esc(t('Acknowledge only if this branch records the stock of this medicine in exactly this unit. Patients then reserve, and you hand over, this unit.'))}</p>
-<label class="rv-check"><input type="checkbox" name="sure" required> ${esc(t('Our stock of this medicine is counted in this unit.'))}</label>`, t('Acknowledge'));
-      if (!form) return;
+    async function saveMin(loc) {
+      const input = $('#rv-min'); if (!input || R.busy) return;
+      const n = Number(input.value);
+      if (!Number.isInteger(n) || n < 0 || n > 1000000) { input.setCustomValidity(t('Enter a whole number from 0 to 1,000,000.')); input.reportValidity(); input.setCustomValidity(''); return; }
+      if (n === (loc.reservation_min_stock || 0)) { toast(t('No change.')); return; }
       R.busy = true;
       try {
-        await data().acknowledgeUnit(R.setupLoc, u.product_id, { unit_version: cu.unit_version, stock_unit: cu.stock_unit, unit_label: cu.unit_label, pack_size: cu.pack_size });
-        toast(t('Unit acknowledged.'));
+        const saved = await data().updateLocation(loc.location_id, { reservation_min_stock: n });
+        Object.assign(loc, { reservation_min_stock: saved && saved.reservation_min_stock != null ? saved.reservation_min_stock : n });
+        toast(t('Saved. {b} keeps {n} of each medicine for walk-in customers.', { b: loc.name, n: loc.reservation_min_stock }));
       } catch (err) {
-        const code = err && err.data && err.data.code;
-        toast(code === 'unit_changed' ? t('The unit changed since this page loaded. Review the new details and acknowledge again.')
-          : code === 'offer_missing' ? t('Price and list this medicine at the branch first.') : errorText(err));
+        toast(err && err.status === 403 ? t('Your role does not allow this action.') : errorText(err));
       } finally { R.busy = false; loadSetup(); }
     }
+    function paintMeds(total) {
+      const rows = R.meds || [];
+      const more = total > rows.length ? `<p class="muted">${esc(t('Showing the first {n} of {m} medicines.', { n: rows.length, m: total }))}</p>` : '';
+      $('#rv-meds').innerHTML = rows.length ? `<div class="tw"><table class="rv-meds">
+<caption class="sr">${esc(t('Medicines at this branch'))}</caption>
+<thead><tr><th scope="col">${esc(t('Medicine'))}</th><th scope="col">${esc(t('Recorded'))}</th><th scope="col">${esc(t('Held by reservations'))}</th><th scope="col">${esc(t('Unallocated'))}</th><th scope="col">${esc(t('Kept back'))}</th><th scope="col">${esc(t('Reservable now'))}</th><th scope="col">${esc(t('Status'))}</th><th scope="col"><span class="sr">${esc(t('Catalogue settings'))}</span></th></tr></thead>
+<tbody>${rows.map((m, i) => `<tr>
+<th scope="row">${esc(m.product_name)}<br><small class="muted">${esc(unitText(m.unit))}</small></th>
+<td>${m.recorded_quantity}</td><td>${m.held_quantity}</td><td>${m.unallocated_quantity}</td><td>${m.min_stock}</td><td><strong>${m.reservable_quantity}</strong></td>
+<td>${m.reservable ? `<span class="tag good">✓ ${esc(t('Reservable'))}</span><br><small class="muted">${esc(t('Up to {n} per reservation', { n: m.max_quantity }))}</small>` : `<span class="tag">${esc(t('Not reservable'))}</span><br><small>${esc(t(ELIGIBILITY[m.reason] || m.message || m.reason || ''))}</small>`}</td>
+<td><button class="ghost" data-a="rvsettings" data-i="${i}">${esc(t('Catalogue settings'))}</button></td></tr>`).join('')}</tbody></table></div>${more}`
+        : `<p class="empty">${esc(t('This branch has no stock records yet. Add medicines in My stock first.'))}</p>`;
+    }
     async function settings(i) {
-      const u = R.units[i]; if (!u) return;
+      const u = (R.meds || [])[i]; if (!u) return;
       try {
         const s = await data().reservationSettings(u.product_id);
         await ask(t('Catalogue settings for {m}', { m: u.product_name }), `<dl class="kv rv-dlg">
@@ -422,9 +428,8 @@ ${facts(r, false, true)}
 <dt>${esc(t('Counted in'))}</dt><dd>${esc(s.stock_unit === 'pack' ? t('Packs') : s.stock_unit === 'unit' ? t('Single units') : t('Not defined yet'))}</dd>
 <dt>${esc(t('Unit name'))}</dt><dd>${esc(s.unit_label || '—')}</dd>
 <dt>${esc(t('Pack size'))}</dt><dd>${esc(s.pack_size || '—')}</dd>
-<dt>${esc(t('Maximum per reservation'))}</dt><dd>${esc(s.max_reservation_quantity ?? '—')}</dd>
-<dt>${esc(t('Reservations'))}</dt><dd>${esc(t(s.reservation_enabled ? 'On' : 'Off'))}</dd></dl>
-${s.problems.length ? `<p><strong>${esc(t('Why reservations cannot be turned on yet'))}</strong></p><ul>${s.problems.map(p => `<li>${esc(t(PROBLEMS[p.code] || p.message))}</li>`).join('')}</ul>` : ''}
+<dt>${esc(t('Maximum per reservation'))}</dt><dd>${esc(s.effective_max_quantity)}</dd></dl>
+${s.problems.length ? `<p><strong>${esc(t('Why it cannot be reserved yet'))}</strong></p><ul>${s.problems.map(p => `<li>${esc(t(PROBLEMS[p.code] || p.message))}</li>`).join('')}</ul>` : ''}
 <p class="note">${esc(t('Only ApexRX administrators change these settings, because every pharmacy shares the catalogue.'))}</p>`, t('Close'));
       } catch (err) { toast(errorText(err)); }
     }
@@ -440,7 +445,6 @@ ${s.problems.length ? `<p><strong>${esc(t('Why reservations cannot be turned on 
       rvback: () => { R.mode = 'list'; R.problem = null; env.go(); },
       rvact: d => act(d.x),
       rvstock: () => { const r = R.detail; if (r) env.openStock(r.location_id, r.medicine.product_name); },
-      rvack: d => acknowledge(+d.i),
       rvsettings: d => settings(+d.i)
     };
     // Background refresh: at most every 40 s, only on this screen, never while a
@@ -490,15 +494,15 @@ ${s.problems.length ? `<p><strong>${esc(t('Why reservations cannot be turned on 
     pharmacy_unavailable: 'The pharmacy is not approved right now.', branch_inactive: 'The branch is closed.',
     product_inactive: 'The medicine was retired from the catalogue.', prescription_only: 'Prescription-only medicines cannot be reserved.',
     unclassified: 'ApexRX has not classified this medicine yet.', unit_unknown: 'ApexRX has not defined its unit yet.',
-    no_quantity_limit: 'ApexRX has not set a maximum quantity yet.', disabled: 'ApexRX has turned reservations off for this medicine.',
+    pack_size_missing: 'ApexRX has not defined its pack size yet.',
     offer_unlisted: 'The branch does not list this medicine (price it and list it in My stock).',
-    unit_not_acknowledged: 'The branch has not acknowledged the current unit.'
+    no_reservable_stock: 'Its unallocated stock is at or below the minimum kept for walk-in customers.'
   };
   const CLASS = { unclassified: 'Not classified yet', non_prescription: 'Non-prescription', prescription_only: 'Prescription only' };
   const PROBLEMS = {
     product_inactive: 'The medicine was retired from the catalogue.', not_non_prescription: 'It is not classified as non-prescription.',
     unit_unknown: 'Its unit is not defined.', unit_label_missing: 'Its unit has no name.', unit_label_invalid: 'Its unit name is not valid.',
-    pack_size_missing: 'It is counted in packs but has no pack size.', no_quantity_limit: 'It has no maximum quantity per reservation.'
+    pack_size_missing: 'It is counted in packs but has no pack size.'
   };
 
   global.DashReservations = create;
