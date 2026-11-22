@@ -472,7 +472,7 @@ Authenticated endpoints need `Authorization: Bearer <token>`. List endpoints ret
 
 | Area | Endpoints |
 |---|---|
-| Auth | `POST /auth/register`, `POST /auth/login`, `GET/PATCH /auth/me`, `POST /auth/me/password` |
+| Auth | `POST /auth/register`, `POST /auth/login`, `GET/PATCH /auth/me`, `POST /auth/me/password`. A `phone` given at registration or in `PATCH /auth/me` must be a mobile number (Rwanda by default, `PHONE_ALLOWED_REGIONS`); it is stored in E.164 (`+250…`), else 422 `invalid_phone`. It is the default reservation contact number and the number SMS verification will use once a provider is set up |
 | Patient search (public) | `GET /search/medicines?q=`, `GET /search/pharmacies?q=\|product_id=\|drug_id=&lat=&lng=&radius_km=&availability=&min_price=&max_price=&sort=distance\|price\|price_desc\|freshness&record=`, `GET /search/pharmacies/{location_id}` |
 | Catalogue | `GET /catalogue/drugs`, `GET /catalogue/products` (public); `POST/PATCH` (admin only) |
 | Organizations | `POST/GET /organizations`, `GET/PATCH /organizations/{id}`, `POST /organizations/{id}/resubmit` |

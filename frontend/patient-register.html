@@ -25,6 +25,8 @@
 <form id="patient-auth" class="step-form" novalidate>
   <label>Your name<input name="name" type="text" autocomplete="name" maxlength="150" placeholder="Your full name" required></label>
   <label>Email address<input name="email" type="email" autocomplete="email" maxlength="255" placeholder="you@example.com" required></label>
+  <label>Mobile number<input name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="30" placeholder="078 812 3456" required aria-describedby="phone-note"></label>
+  <p class="note" id="phone-note">Pharmacies call you on this number about your reservations, so you do not need to enter it again when you reserve.</p>
   <div class="fields"><label>Password<input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required></label><label>Confirm password<input name="confirm" type="password" autocomplete="new-password" minlength="8" placeholder="Re-enter your password" required></label></div>
   <p class="note">A patient account is free. It is used to reserve medicines and follow your reservations.</p>
   <p id="form-error" role="alert"></p>

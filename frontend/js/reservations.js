@@ -195,7 +195,12 @@ ${summary(medicine, place, options)}
     <input id="rs-qty" name="quantity" type="number" inputmode="numeric" min="1" max="${max}" step="1" value="${qty}" required aria-describedby="rs-qty-hint">
     <small class="rs-hint" id="rs-qty-hint">${esc(tf('rs_quantity_hint', { max }))}</small>
   </div>
-  <div class="rs-field">
+  ${account && account.phone ? `<div class="rs-field rs-phone-known" id="rs-phone-known"${draft.phone && draft.phone !== account.phone ? ' hidden' : ''}>
+    <span class="rs-label">${esc(t('rs_phone'))}</span>
+    <p class="rs-phone-line"><strong>${esc(account.phone)}</strong> <button type="button" class="rs-link" id="rs-phone-change">${esc(t('rs_phone_change'))}</button></p>
+    <small class="rs-hint">${esc(t('rs_phone_known_hint'))}</small>
+  </div>` : ''}
+  <div class="rs-field" id="rs-phone-field"${account && account.phone && !(draft.phone && draft.phone !== account.phone) ? ' hidden' : ''}>
     <label for="rs-phone">${esc(t('rs_phone'))}</label>
     <input id="rs-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="30" required aria-describedby="rs-phone-hint"
       value="${esc(draft.phone || (account && account.phone) || '')}">
@@ -210,6 +215,11 @@ ${summary(medicine, place, options)}
   <button type="submit" class="rs-btn primary" id="rs-submit">${esc(t('rs_submit'))}</button>
 </form>`;
     const form = $('rs-reserve-form');
+    // The account's own number is used unless the patient picks another for this reservation.
+    const change = $('rs-phone-change');
+    if (change) change.addEventListener('click', () => {
+      $('rs-phone-known').hidden = true; $('rs-phone-field').hidden = false; $('rs-phone').focus();
+    });
     form.addEventListener('submit', submitReserve);
     form.addEventListener('input', () => {
       const d = readDraft();
@@ -291,6 +301,11 @@ ${summary(medicine, place, options)}
       rate_limited: t('rs_err_rate'),
       insufficient_stock: t('rs_err_stock')
     };
+    if (code === 'invalid_phone' || code === 'phone_required') {
+      // The number shown from the account was refused: let the patient type another.
+      if ($('rs-phone-known')) $('rs-phone-known').hidden = true;
+      $('rs-phone-field').hidden = false; $('rs-phone').focus();
+    }
     if (messages[code]) { err.textContent = messages[code]; return; }
     if (x.status === 429) { err.textContent = t('rs_err_rate'); return; }
     if (x.status === 404) { err.textContent = t('rs_err_not_found'); return; }

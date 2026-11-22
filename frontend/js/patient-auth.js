@@ -3,8 +3,11 @@
  * (patient-register.html, data-auth="create"), on the ApexRX API (js/api.js).
  *
  *   Sign in:  POST /auth/login, then GET /auth/me.
- *   Register: POST /auth/register, then POST /auth/login (the session is set up
- *             at once), then the patient's reservations.
+ *   Register: POST /auth/register (name, email, mobile number, password), then
+ *             POST /auth/login (the session is set up at once), then the patient's
+ *             reservations. The mobile number is the contact number for every
+ *             reservation (the backend stores it as +250...; it will be verified by
+ *             SMS once a provider is set up).
  *
  * Where it goes next: ?next= when it is a patient page on this site (only
  * reservations.html with its own parameters: a reservation being made or one
@@ -62,17 +65,21 @@
     e.preventDefault();
     const f = form.elements;
     const name = f.name ? f.name.value.trim() : '', email = f.email.value.trim(), password = f.password.value;
+    const phone = f.phone ? f.phone.value.trim() : '';
     fail('');
     if (MODE === 'create' && !name) { fail('Enter your name.'); f.name.focus(); return; }
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) { fail('Enter a valid email address.'); f.email.focus(); return; }
+    if (MODE === 'create' && !phone) { fail('Enter your mobile number.'); f.phone.focus(); return; }
+    if (MODE === 'create' && !/^\+?[0-9 ()\-./]{9,30}$/.test(phone)) { fail('Enter a valid mobile number, for example 078 812 3456.'); f.phone.focus(); return; }
     if (!password) { fail('Enter your password.'); f.password.focus(); return; }
     if (MODE === 'create' && password.length < 8) { fail('Use at least 8 characters for your password.'); f.password.focus(); return; }
     if (MODE === 'create' && f.confirm && password !== f.confirm.value) { fail('Your passwords do not match.'); f.confirm.focus(); return; }
     const button = $('auth-submit'); button.disabled = true;
     try {
       if (MODE === 'create') {
-        try { await API.auth.register({ name, email, password }); } catch (x) {
+        try { await API.auth.register({ name, email, phone, password }); } catch (x) {
           if (x && x.status === 409) { fail('An account with this email already exists. Sign in instead.'); return; }
+          if (x && x.status === 422 && x.data && x.data.code === 'invalid_phone') { fail(x.message); f.phone.focus(); return; }
           throw x;
         }
       }

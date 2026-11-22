@@ -24,6 +24,7 @@ from app.schemas.auth import (
 from app.schemas.common import Message
 from app.services import account_emails, sessions
 from app.services.email import email_delivery_available
+from app.services.phone import PhoneNumberError, normalize_phone
 
 router = APIRouter()
 
@@ -34,6 +35,18 @@ def normalize_email(email: str) -> str:
 
 def find_user_by_email(db, email: str) -> User | None:
     return db.scalar(select(User).where(func.lower(func.btrim(User.email)) == normalize_email(email)))
+
+
+def _personal_phone(raw: str | None) -> str | None:
+    """An account's own mobile number, stored in E.164 (+250...). Reservations use
+    it as the contact number, and it will be verified by SMS once a provider is
+    set up, so only mobile numbers are accepted. Empty: no number."""
+    if raw is None or not raw.strip():
+        return None
+    try:
+        return normalize_phone(raw, mobile_only=True)
+    except PhoneNumberError as exc:
+        raise AppError(str(exc), status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, extra={"code": "invalid_phone"}) from None
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -47,7 +60,7 @@ def register(payload: RegisterRequest, db: DbSession):
     user = User(
         name=payload.name,
         email=email,
-        phone=payload.phone,
+        phone=_personal_phone(payload.phone),
         password_hash=hash_password(payload.password),
     )
     db.add(user)
@@ -186,6 +199,8 @@ def update_me(payload: UpdateMeRequest, user: CurrentUser, db: DbSession):
     for field, value in payload.model_dump(exclude_unset=True).items():
         if field == "name" and value is None:
             continue
+        if field == "phone":
+            value = _personal_phone(value)
         setattr(user, field, value)
     db.commit()
     return _me(db, user)

@@ -212,7 +212,7 @@ def main():
 
         # ---------------------------------------------------- footer links
         expected = {
-            "For Patients": "patient-register.html", "Find a medicine": "index.html#hero-search",
+            "For Patients": "patient-register.html",
             "For Pharmacies": "pharmacies.html", "For Suppliers": "suppliers.html",
             "How it works": "how-it-works.html", "About": "about.html", "Careers": "about.html", "Blog": "about.html",
             "Contact": "about.html", "Privacy": "legal.html#privacy", "Terms of Service": "legal.html#terms",
@@ -230,17 +230,9 @@ def main():
               page.locator("footer a:has-text('My reservations'), footer a[href^='reservations.html']").count() == 0)
         check("footer: the YouTube link opens the channel",
               page.get_attribute("footer a[aria-label=YouTube]", "href") == "https://www.youtube.com/channel/UCS3w0RILCJPdfTgQaqm1AwQ")
-        page.click("footer .footer-col a:has-text('Find a medicine')")
-        page.wait_for_url("**/index.html#hero-search")
-        page.wait_for_timeout(800)
-        check("footer: 'Find a medicine' from another page lands on the medicine search",
-              page.evaluate("(() => { const r = document.querySelector('#medicineSearchInput').getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })()"))
-        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        check("footer: on the landing page 'Find a medicine' is an in-page link",
-              page.get_attribute("footer .footer-col a:has-text('Find a medicine')", "href") == "#hero-search")
-        page.click("footer .footer-col a:has-text('Find a medicine')")
-        page.wait_for_timeout(900)
-        check("footer: ...and scrolls up to the search", page.evaluate("scrollY") < 300)
+        product = [a.strip() for a in page.locator("footer .footer-col").first.locator("a").all_inner_texts()]
+        check("footer: the product quick links are exactly For Patients, For Pharmacies, For Suppliers, How it works",
+              product == ["For Patients", "For Pharmacies", "For Suppliers", "How it works"], product)
         page.goto(SITE + "/index.html")
         page.click("footer .footer-col a:has-text('Terms of Service')")
         page.wait_for_url("**/legal.html#terms")

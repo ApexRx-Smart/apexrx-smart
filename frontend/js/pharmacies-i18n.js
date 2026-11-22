@@ -784,6 +784,10 @@ Object.assign(workflowTranslations, {
 // Staff sign-in, invitations, sessions and password reset. Kinyarwanda needs review by a native speaker.
 Object.assign(workflowTranslations, {
  "You are signed in with a pharmacy, supplier or ApexRX account, not a patient account. Sign out to use a patient account.": {"fr": "Vous êtes connecté avec un compte pharmacie, fournisseur ou ApexRX, pas avec un compte patient. Déconnectez-vous pour utiliser un compte patient.", "rw": "Winjiye ukoresheje konti ya farumasi, y’utanga imiti cyangwa ya ApexRX, si konti y’umurwayi. Sohoka ukoreshe konti y’umurwayi."},
+ "Mobile number": {"fr": "Numéro de mobile", "rw": "Nimero ya telefoni igendanwa"},
+ "Pharmacies call you on this number about your reservations, so you do not need to enter it again when you reserve.": {"fr": "Les pharmacies vous appellent à ce numéro au sujet de vos réservations : vous n’aurez pas à le saisir à nouveau pour réserver.", "rw": "Farumasi zizaguhamagara kuri iyi nimero ku byerekeye ibyo wabikishije, bityo ntuzongera kuyandika igihe ubikisha."},
+ "Enter your mobile number.": {"fr": "Saisissez votre numéro de mobile.", "rw": "Andika nimero yawe ya telefoni igendanwa."},
+ "Enter a valid mobile number, for example 078 812 3456.": {"fr": "Saisissez un numéro de mobile valide, par exemple 078 812 3456.", "rw": "Andika nimero ya telefoni igendanwa nyayo, urugero 078 812 3456."},
  "Patient sign-in — ApexRX Smart": {"fr": "Connexion patient — ApexRX Smart", "rw": "Kwinjira k’umurwayi — ApexRX Smart"},
  "Create a patient account — ApexRX Smart": {"fr": "Créer un compte patient — ApexRX Smart", "rw": "Fungura konti y’umurwayi — ApexRX Smart"},
  "FOR PATIENTS · KIGALI": {"fr": "POUR LES PATIENTS · KIGALI", "rw": "KU BARWAYI · KIGALI"},

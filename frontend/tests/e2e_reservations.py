@@ -206,6 +206,15 @@ def main():
         page.wait_for_url("**/patient-register.html*")
         check("handoff: 'Sign up' keeps the reservation in next=", f"location%3D{w['loc']}" in page.url or f"location={w['loc']}" in urllib.parse.unquote(page.url))
         page.fill("#patient-auth [name=name]", PATIENT_A["name"]); page.fill("#patient-auth [name=email]", PATIENT_A["email"])
+        page.fill("#patient-auth [name=password]", PW); page.fill("#patient-auth [name=confirm]", PW)
+        page.click("#auth-submit")
+        check("sign up: the mobile number is required", "Enter your mobile number" in page.locator("#form-error").inner_text())
+        page.fill("#patient-auth [name=phone]", "12345"); page.click("#auth-submit")
+        check("sign up: an obviously wrong number is refused in the page", "valid mobile number" in page.locator("#form-error").inner_text())
+        page.fill("#patient-auth [name=phone]", "0252 123 456"); page.click("#auth-submit")  # a landline: no SMS
+        page.wait_for_function("document.querySelector('#form-error').textContent.includes('mobile')")
+        check("sign up: the server refuses a number that is not a mobile number", "mobile" in page.locator("#form-error").inner_text())
+        page.fill("#patient-auth [name=phone]", "0788 123 456")
         page.fill("#patient-auth [name=password]", "short"); page.fill("#patient-auth [name=confirm]", "short")
         page.click("#auth-submit")
         check("handoff: a short password is refused before anything is sent",
@@ -215,6 +224,8 @@ def main():
         check("handoff: after creating the account the patient is back on the same reservation",
               f"{MED} 500mg" in page.locator("#rs-reserve-body").inner_text()
               and "Gisozi Pharmacy" in page.locator("#rs-reserve-body").inner_text())
+        check("form: the number given at sign-up is used; no phone field to fill",
+              page.is_visible("#rs-phone-known") and "+250788123456" in page.inner_text("#rs-phone-known") and page.is_hidden("#rs-phone"))
         body = page.locator("#rs-reserve-body").inner_text()
         check("form: unit, maximum, the 24-hour rules and 'not confirmed' are explained",
               "box (B/20)" in body and "From 1 to 3" in body and "24 hours" in body and "not a confirmed reservation" in body, body)
@@ -222,6 +233,8 @@ def main():
         # ===================================================== 3 validation
         page.fill("#rs-qty", "5"); page.click("#rs-submit")
         check("form: a quantity above the maximum is refused in the page", "from 1 to 3" in page.locator("#rs-reserve-error").inner_text())
+        page.click("#rs-phone-change")
+        check("form: 'Use another number' opens the field", page.is_visible("#rs-phone") and page.is_hidden("#rs-phone-known"))
         page.fill("#rs-qty", "2"); page.fill("#rs-phone", ""); page.click("#rs-submit")
         check("form: the phone number is required", "Enter a phone number" in page.locator("#rs-reserve-error").inner_text())
         page.fill("#rs-phone", "123456"); page.click("#rs-submit")
@@ -265,7 +278,8 @@ def main():
         # The same medicine again: the existing open reservation is pointed to.
         page.goto(f"{SITE}/reservations.html?location={w['loc']}&product={pid['main']}&lang=en")
         page.wait_for_selector("#rs-reserve-form")
-        page.fill("#rs-phone", "0788 123 456"); page.click("#rs-submit")
+        check("form: a new reservation uses the account's number again", page.is_visible("#rs-phone-known") and page.is_hidden("#rs-phone"))
+        page.click("#rs-submit")
         wait_text(page, "#rs-reserve-error", "already have an open reservation")
         check("errors: an existing open reservation is linked by its reference",
               page.locator("#rs-reserve-error a").get_attribute("href").find(ref_a) > 0)
@@ -274,13 +288,16 @@ def main():
         page.goto(f"{SITE}/reservations.html?location={w['loc']}&product={pid['stale']}&lang=en")
         page.wait_for_selector("#rs-reserve-form")
         call("PATCH", f"/catalogue/products/{pid['stale']}/reservation-settings", {"unit_label": "carton"}, w["admin"])
-        page.fill("#rs-phone", "0788 123 456"); page.click("#rs-submit")
+        page.click("#rs-submit")
         page.wait_for_selector(".rs-notice")
         check("stale unit: the page reloads the unit and asks the patient to review it",
               "has changed" in page.locator(".rs-notice").inner_text() and "carton (B/20)" in page.locator("#rs-reserve-body").inner_text())
-        page.fill("#rs-phone", "0788 123 456"); page.click("#rs-submit")
+        page.click("#rs-submit")
         page.wait_for_selector("#rs-success:not([hidden])")
         ref_stale = page.locator("#rs-success .rs-reference").inner_text()
+        sent = call("GET", f"/organizations/{w['org']}/reservations/{ref_stale}", token=w["owner"])
+        check("form: the pharmacy gets the account's number without the patient typing it",
+              sent["patient"]["phone"] == "+250788123456", sent["patient"])
         check("stale unit: sending again after review works", REFERENCE.fullmatch(ref_stale) is not None)
 
         # A prescription-only medicine reached directly.
