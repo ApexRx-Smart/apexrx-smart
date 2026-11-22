@@ -116,3 +116,9 @@
   .rs-hero p{font-size:14.5px;}
 }
 #rs-list:not([hidden]){display:flex; flex-direction:column; gap:14px;}
+
+/* The account's number, used for the reservation (with "Use another number"). */
+.rs-phone-known .rs-label{display:block; font-weight:600; margin-bottom:4px;}
+.rs-phone-line{margin:0; display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px;}
+.rs-phone-line strong{font-variant-numeric:tabular-nums;}
+.rs-field[hidden]{display:none;}
