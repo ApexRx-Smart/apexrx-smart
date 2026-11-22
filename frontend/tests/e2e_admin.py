@@ -266,9 +266,12 @@ def main():
         page.reload()
         page.wait_for_selector("#dashboard-view:not([hidden])")
         check("session survives a reload", True)
-        page.click("#sign-out")
-        page.wait_for_selector("#login-view:not([hidden])")
-        check("sign out clears the session", page.evaluate("sessionStorage.getItem('apexrx_session')") is None)
+        page.click("#who .am-btn")
+        page.click("[data-am=signout]")
+        page.wait_for_url("**/index.html*")
+        check("sign out (account menu) clears the session and opens the landing page",
+              page.evaluate("sessionStorage.getItem('apexrx_session')") is None)
+        page.goto(SITE + "/ops-console-7f3k9q.html")
 
         # 8. Narrow screen: no horizontal page scroll.
         page.set_viewport_size({"width": 375, "height": 800})

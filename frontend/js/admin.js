@@ -105,7 +105,11 @@
   function showDashboard(me) {
     kit.me = me;
     $('#login-view').hidden = true;
-    $('#who-email').textContent = me.email;
+    // Account menu (js/account-menu.js): Sign out ends the session and opens the landing page.
+    if (window.ApexAccountMenu) {
+      ApexAccountMenu.mount($('#who-acct'), { name: me.name || me.email, email: me.email, detail: 'ApexRX administrator',
+        labels: { menu: 'Account menu', signOut: 'Sign out' } });
+    }
     $('#who').hidden = false;
     $('#dashboard-view').hidden = false;
     showList();
@@ -181,17 +185,11 @@
       .then(function () { button.disabled = false; button.textContent = 'Sign in'; });
   });
 
-  $('#sign-out').addEventListener('click', function () {
-    window.removeEventListener('apexrx:signed-out', onSignedOut);
-    API.auth.logout();
-    window.addEventListener('apexrx:signed-out', onSignedOut);
-    showLogin('You have signed out.');
-  });
-
   // api.js fires this on any 401 (expired, invalid or revoked token).
   function onSignedOut(e) {
     if ($('#dashboard-view').hidden) return;
     var d = (e && e.detail) || {};
+    if (!d.reason || d.reason === 'signed_out') { location.replace('index.html'); return; }
     showLogin(d.reason === 'idle' ? 'You were signed out after ' + (d.idleMinutes || 30) + ' minutes of inactivity. Please sign in again.'
       : d.reason === 'other_tab' ? 'You signed out in another tab.'
       : 'Your session has expired. Please sign in again.');

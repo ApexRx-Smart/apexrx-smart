@@ -155,10 +155,18 @@ def unlabeled(page):
       }).map(el => el.id || el.outerHTML.slice(0, 60))""")
 
 
+def patient_sign_in(page, email):
+    """The patient sign-in page (where a signed-out patient is sent), then back where they were."""
+    page.wait_for_url("**/patient-sign-in.html*")
+    page.fill("#patient-auth [name=email]", email); page.fill("#patient-auth [name=password]", PW)
+    page.click("#auth-submit")
+    page.wait_for_url("**/reservations.html*")
+
+
 def open_reserve_from_search(page, product_name):
     page.goto(f"{SITE}/search.html?q={urllib.parse.quote(product_name)}&lang=en")
     page.wait_for_selector(".ps-card")
-    page.locator(".ps-card button").first.click()
+    page.locator(".ps-card-link").first.click()
     page.wait_for_function("() => { const b = document.querySelector('#ps-reserve');"
                            " return b && b.textContent.trim() && !b.textContent.includes('Checking'); }", timeout=15000)
 
@@ -190,20 +198,19 @@ def main():
         open_reserve_from_search(page, f"{MED} 500mg")
         page.keyboard.press("Tab")
         page.locator("#ps-reserve-btn").focus(); page.keyboard.press("Enter")  # keyboard operable
-        page.wait_for_selector("#rs-auth:not([hidden])")
-        url = page.url
-        check("handoff: Reserve opens the sign-in panel for this medicine and branch",
-              f"location={w['loc']}" in url and f"product={pid['main']}" in url
-              and page.locator("#rs-auth-title").inner_text() == "Sign in to reserve")
-        wait_text(page, "#rs-auth-context", "Gisozi Pharmacy")
-        check("handoff: the panel says what is being reserved",
-              f"{MED} 500mg" in page.locator("#rs-auth-context").inner_text())
-        page.click("#rs-tab-create")
-        page.fill("#rs-name", PATIENT_A["name"]); page.fill("#rs-email", PATIENT_A["email"]); page.fill("#rs-password", "short")
-        page.click("#rs-auth-submit")
+        page.wait_for_url("**/patient-sign-in.html*")
+        nxt = urllib.parse.parse_qs(urllib.parse.urlparse(page.url).query).get("next", [""])[0]
+        check("handoff: Reserve opens the patient sign-in page, keeping this medicine and branch",
+              nxt.startswith("reservations.html") and f"location={w['loc']}" in nxt and f"product={pid['main']}" in nxt)
+        page.click("#auth-other")  # "Don't have an account? Sign up"
+        page.wait_for_url("**/patient-register.html*")
+        check("handoff: 'Sign up' keeps the reservation in next=", f"location%3D{w['loc']}" in page.url or f"location={w['loc']}" in urllib.parse.unquote(page.url))
+        page.fill("#patient-auth [name=name]", PATIENT_A["name"]); page.fill("#patient-auth [name=email]", PATIENT_A["email"])
+        page.fill("#patient-auth [name=password]", "short"); page.fill("#patient-auth [name=confirm]", "short")
+        page.click("#auth-submit")
         check("handoff: a short password is refused before anything is sent",
-              "8 characters" in page.locator("#rs-auth-error").inner_text())
-        page.fill("#rs-password", PW); page.click("#rs-auth-submit")
+              "8 characters" in page.locator("#form-error").inner_text())
+        page.fill("#patient-auth [name=password]", PW); page.fill("#patient-auth [name=confirm]", PW); page.click("#auth-submit")
         page.wait_for_selector("#rs-reserve-form")
         check("handoff: after creating the account the patient is back on the same reservation",
               f"{MED} 500mg" in page.locator("#rs-reserve-body").inner_text()
@@ -365,19 +372,20 @@ def main():
         page.goto(f"{SITE}/reservations.html?lang=en"); page.wait_for_selector(".rs-card")
         check("accessibility: every visible control has a name (list)", not unlabeled(page), unlabeled(page))
 
-        # Signing out returns to the sign-in panel.
-        page.click("#rs-signout")
-        page.wait_for_selector("#rs-auth:not([hidden])")
-        check("sign out: the panel asks to sign in again and no reservation stays on screen",
-              page.locator("#rs-cards").is_hidden() and ref_a not in page.locator("main").inner_text())
+        # Signing out (account menu) opens the landing page; the workspace asks to sign in again.
+        page.click(".am-btn"); page.click("[data-am=signout]")
+        page.wait_for_url("**/index.html*")
+        page.goto(f"{SITE}/reservations.html?lang=en")
+        page.wait_for_url("**/patient-sign-in.html*")
+        check("sign out: landing page, and the reservations need a new sign-in (no reservation on screen)",
+              ref_a not in page.locator("body").inner_text())
         ctx.close()
 
         # ===================================================== 9 ownership isolation
         ctx = context(browser)
         page = ctx.new_page(); watch(page, errors)
         page.goto(f"{SITE}/reservations.html?ref={ref_a}&lang=en")
-        page.wait_for_selector("#rs-auth:not([hidden])")
-        page.fill("#rs-email", PATIENT_B["email"]); page.fill("#rs-password", PW); page.click("#rs-auth-submit")
+        patient_sign_in(page, PATIENT_B["email"])
         wait_text(page, "#rs-detail-body", "Reservation not found")
         check("isolation: another patient's reference is 'not found'", ref_a not in page.locator("#rs-detail-body").inner_text())
         page.goto(f"{SITE}/reservations.html?lang=en")
@@ -391,8 +399,7 @@ def main():
         open_reserve_from_search(page, f"{MED} 500mg")
         search_ok = not wide(page)
         page.goto(f"{SITE}/reservations.html?lang=en")
-        page.wait_for_selector("#rs-auth:not([hidden])")
-        page.fill("#rs-email", PATIENT_A["email"]); page.fill("#rs-password", PW); page.click("#rs-auth-submit")
+        patient_sign_in(page, PATIENT_A["email"])
         page.wait_for_selector(".rs-card")
         list_ok = not wide(page)
         page.goto(f"{SITE}/reservations.html?ref={ref_a}&lang=rw"); page.wait_for_selector("#rs-detail-title")

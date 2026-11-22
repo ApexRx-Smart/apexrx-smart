@@ -13,7 +13,7 @@
   const API = window.ApexAPI;
   const next = new URLSearchParams(location.search).get('next');
   const signIn = next === 'supplier' ? 'suppliers.html#signin' : next === 'admin' ? 'ops-console-7f3k9q.html'
-    : next === 'patient' ? 'reservations.html#signin' : 'pharmacy-sign-in.html';
+    : next === 'patient' ? 'patient-sign-in.html' : 'pharmacy-sign-in.html';
   const token = new URLSearchParams(location.hash.slice(1)).get('token') || '';
   try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* ignore */ }
   $('#back-to-signin').href = signIn;

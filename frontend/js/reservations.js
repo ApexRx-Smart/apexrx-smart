@@ -1,12 +1,15 @@
 'use strict';
-/* Patient reservations (reservations.html) on the ApexRX reservation API (js/api.js).
+/* The patient dashboard (reservations.html) on the ApexRX reservation API (js/api.js).
  *
  * Views, chosen from the address (only public ids are ever put there):
  *   ?location=<branch>&product=<product>   reserve one medicine at one branch
  *   ?ref=RX-XXXXXXXXXX                     one reservation: details, history, cancel
  *   (none)                                 updates + the patient's reservations (status, pages)
- * Signed out, the view is preceded by a sign-in / create-account panel (the same
- * /auth/login and /auth/register as the rest of the site) and then continues.
+ * Signed out, the page sends the patient to patient-sign-in.html?next=<this view>
+ * (registration is one click from there) and the view continues after sign-in, with
+ * the medicine, branch and form draft kept. Only patient accounts (no pharmacy or
+ * supplier membership, not an administrator) use this workspace; other accounts
+ * are told so. The account menu (initials) has Sign out, which opens index.html.
  *
  * The server is the authority for everything: eligibility, unit, price, limits,
  * deadlines and status. This page only shows what the API returns and explains its
@@ -71,7 +74,7 @@
   }
   function show(view) {
     S.view = view;
-    ['rs-auth', 'rs-reserve', 'rs-success', 'rs-list', 'rs-detail'].forEach(id => { $(id).hidden = id !== view; });
+    ['rs-reserve', 'rs-success', 'rs-list', 'rs-detail'].forEach(id => { $(id).hidden = id !== view; });
   }
   function focusHeading(id) { const h = $(id); if (h) h.focus({ preventScroll: false }); }
   function uuid() {
@@ -98,8 +101,9 @@
     const ref = (p.get('ref') || '').trim().toUpperCase();
     const loc = Number(p.get('location')), prod = Number(p.get('product'));
     const wantsReserve = Number.isInteger(loc) && loc > 0 && Number.isInteger(prod) && prod > 0;
+    if (!API.session.isSignedIn()) return toSignIn();
     paintAccount();
-    if (!API.session.isSignedIn()) return showAuth(wantsReserve ? { location: loc, product: prod } : null);
+    if (S.notPatient) return showNotPatient();
     if (REFERENCE.test(ref)) return openDetail(ref);
     if (p.has('location') || p.has('product')) {
       if (wantsReserve) return openReserve(loc, prod);
@@ -120,69 +124,28 @@
   function findLink() { return `<p><a class="rs-btn" href="index.html?${langParam()}#hero-search">${esc(t('rs_find'))}</a></p>`; }
 
   /* ----------------------------------------------------- account and auth */
-  function paintAccount() {
-    const email = API.session.isSignedIn() && API.session.email();
-    $('rs-account').hidden = !API.session.isSignedIn();
-    $('rs-account-text').textContent = email ? tf('rs_signed_in', { email }) : '';
+  // Signed out: the patient sign-in page, coming back to exactly this view.
+  function toSignIn(reason) {
+    const here = 'reservations.html' + location.search;
+    location.replace('patient-sign-in.html?' + new URLSearchParams(Object.assign(
+      { next: here, lang: SITE.lang() }, reason ? { signed_out: reason } : {})));
   }
-  async function showAuth(reserving) {
-    show('rs-auth');
-    $('rs-auth-title').textContent = t(reserving ? 'rs_auth_title' : 'rs_auth_title_list');
-    $('rs-auth-title').setAttribute('data-i18n', reserving ? 'rs_auth_title' : 'rs_auth_title_list');
-    const ctx = $('rs-auth-context');
-    ctx.hidden = true;
-    setAuthMode(S.authMode);
-    if (!reserving) return;
-    // Say what is being reserved (public data only), so the patient knows where they are going back to.
-    try {
-      const place = await API.search.pharmacy(reserving.location);
-      const med = (place.medicines || []).find(m => m.product_id === reserving.product);
-      if (med && S.view === 'rs-auth') {
-        ctx.textContent = tf('rs_auth_reserving', { medicine: SITE.medicineLabel(med), pharmacy: placeName(place) });
-        ctx.hidden = false;
-      }
-    } catch (e) { /* the context line is optional */ }
+  let menu = null;
+  async function paintAccount() {
+    const account = await me();
+    if (!account) return;
+    S.notPatient = !!account.is_platform_admin || !!(account.memberships || []).length;
+    if (!window.ApexAccountMenu || !$('accountHost')) return;
+    const opts = { name: account.name || account.email, email: account.email,
+      labels: { menu: t('rs_account_menu'), signOut: t('rs_signout') } };
+    if (menu) menu.update(opts); else menu = ApexAccountMenu.mount($('accountHost'), opts);
+    if (S.notPatient && S.view !== 'rs-not-patient') showNotPatient();
   }
-  function setAuthMode(mode) {
-    S.authMode = mode;
-    const create = mode === 'create';
-    $('rs-tab-signin').setAttribute('aria-pressed', String(!create));
-    $('rs-tab-create').setAttribute('aria-pressed', String(create));
-    $('rs-name-field').hidden = !create;
-    $('rs-password').setAttribute('autocomplete', create ? 'new-password' : 'current-password');
-    $('rs-auth-submit').setAttribute('data-i18n', create ? 'rs_create_btn' : 'rs_signin_btn');
-    $('rs-auth-submit').textContent = t(create ? 'rs_create_btn' : 'rs_signin_btn');
-    $('rs-auth-error').textContent = '';
-    $('rs-forgot-row').hidden = create;
-  }
-  async function submitAuth(e) {
-    e.preventDefault();
-    const create = S.authMode === 'create';
-    const name = $('rs-name').value.trim(), email = $('rs-email').value.trim(), password = $('rs-password').value;
-    const err = $('rs-auth-error');
-    if (create && !name) { err.textContent = t('rs_err_name'); $('rs-name').focus(); return; }
-    if (!email || !password) { err.textContent = t('rs_err_credentials'); (email ? $('rs-password') : $('rs-email')).focus(); return; }
-    if (create && password.length < 8) { err.textContent = t('rs_err_password'); $('rs-password').focus(); return; }
-    const btn = $('rs-auth-submit');
-    btn.disabled = true; btn.textContent = t('rs_working'); err.textContent = '';
-    try {
-      if (create) {
-        try { await API.auth.register({ name, email, password }); }
-        catch (x) {
-          if (x && x.status === 409) { err.textContent = t('rs_err_email_taken'); setAuthMode('signin'); return; }
-          throw x;
-        }
-      }
-      await API.auth.login(email, password);
-      $('rs-password').value = '';
-      S.me = null;
-      route();
-    } catch (x) {
-      err.textContent = (x && x.message) || t('rs_err_generic');
-    } finally {
-      btn.disabled = false;
-      btn.textContent = t(S.authMode === 'create' ? 'rs_create_btn' : 'rs_signin_btn');
-    }
+  // A pharmacy, supplier or administrator account: not this workspace.
+  function showNotPatient() {
+    ['rs-reserve', 'rs-success', 'rs-list', 'rs-detail'].forEach(id => { $(id).hidden = true; });
+    S.view = 'rs-not-patient';
+    flash(t('rs_not_patient'), 'warn');
   }
   async function me() {
     if (!S.me) { try { S.me = await API.auth.me(); } catch (e) { S.me = null; } }
@@ -562,16 +525,6 @@ ${r.can_cancel ? cancelBlock() : ''}`;
   }
 
   /* --------------------------------------------------------------- events */
-  // A link to #signin or #register on this page (the header's account chooser) switches the form.
-  window.addEventListener('hashchange', () => {
-    const mode = location.hash === '#register' ? 'create' : location.hash === '#signin' ? 'signin' : null;
-    if (mode && !$('rs-auth').hidden) { setAuthMode(mode); $(mode === 'create' ? 'rs-name' : 'rs-email').focus(); }
-    else if (mode) S.authMode = mode;
-  });
-  $('rs-tab-signin').addEventListener('click', () => setAuthMode('signin'));
-  $('rs-tab-create').addEventListener('click', () => setAuthMode('create'));
-  $('rs-auth-form').addEventListener('submit', submitAuth);
-  $('rs-signout').addEventListener('click', () => { clearDraft(); API.auth.logout(); });
   $('rs-status').addEventListener('change', e => go(e.target.value ? { status: e.target.value } : {}));
   $('rs-prev').addEventListener('click', () => go(Object.assign(S.status ? { status: S.status } : {}, { page: S.page })));
   $('rs-next').addEventListener('click', () => go(Object.assign(S.status ? { status: S.status } : {}, { page: S.page + 2 })));
@@ -589,10 +542,13 @@ ${r.can_cancel ? cancelBlock() : ''}`;
   });
   $('rs-back').addEventListener('click', e => { e.preventDefault(); go({}); });
   window.addEventListener('popstate', route);
+  // Signing out (the account menu) ends on the landing page; an ended session
+  // (inactivity, another tab, expiry) goes to sign-in, keeping this view and the draft.
   window.addEventListener('apexrx:signed-out', e => {
     S.me = null;
-    route();
-    if (e && e.detail && e.detail.reason !== 'signed_out' && readDraft()) $('rs-auth-error').textContent = t('rs_err_session');
+    const reason = e && e.detail && e.detail.reason;
+    if (!reason || reason === 'signed_out') { location.replace('index.html'); return; }
+    toSignIn(reason === 'idle' ? 'idle' : 'expired');
   });
   window.addEventListener('apexrx:lang', () => {
     // Redraw dynamic text in the new language; form values are kept in the draft.
@@ -617,5 +573,12 @@ ${r.can_cancel ? cancelBlock() : ''}`;
   setInterval(tick, POLL_MS);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
 
+  // Just registered (patient-register.html): say so once, then drop the flag.
+  if (new URLSearchParams(location.search).get('welcome') === '1') {
+    const p = new URLSearchParams(location.search); p.delete('welcome');
+    history.replaceState(null, '', location.pathname + (p.toString() ? '?' + p : ''));
+    S.welcome = true;
+  }
   route();
+  if (S.welcome && API.session.isSignedIn()) flash(t('rs_welcome'), 'ok');
 })();

@@ -46,11 +46,11 @@
       t_results:'Results for',
       t_updated:'Updated', t_searching:'Searching...', t_search_error:'Unable to load medicine availability. Please try again.',
       // Expanded patient search (search.html, js/patient-search.js)
-      ps_see_more:'See more: compare prices, filter by location and get directions →',
+      ps_see_more:'See more', map_card:'Search medicines in this area',
       ps_title:'Compare pharmacies',
       ps_eyebrow:'Medicine search',
       ps_lede:'Compare prices, find a pharmacy near you and get directions.',
-      ps_back:'← Back to search',
+      ps_back:'Back to search',
       ps_filters:'Filter and sort',
       ps_min:'Min price',
       ps_max:'Max price',
@@ -88,8 +88,8 @@
       ps_km:'{n} km away',
       ps_no_coords:'No map location',
       ps_cheapest:'Lowest price',
-      ps_view:'View pharmacy and directions',
-      ps_back_results:'← Back to results',
+      ps_view:'View pharmacy',
+      ps_back_results:'Back to results',
       ps_phone:'Phone',
       ps_address:'Address',
       ps_searched:'You searched for',
@@ -110,7 +110,7 @@
       ps_tap_map:'Tap the map to set your starting point.',
       ps_you:'You are here',
       ps_loading:'Loading…',
-      ps_call:'Call'
+      ps_call:'Call', ps_call_pharmacy:'Call pharmacy', ps_get_directions:'Get directions'
     },
     fr: {
       motion_pause:'Mettre les images en pause', motion_resume:'Animer les images',
@@ -155,11 +155,11 @@
       t_results:'Résultats pour',
       t_updated:'Mis à jour', t_searching:'Recherche...', t_search_error:'Impossible de charger la disponibilité. Veuillez réessayer.',
       // Expanded patient search (search.html, js/patient-search.js)
-      ps_see_more:'Voir plus : comparer les prix, filtrer par lieu et obtenir l’itinéraire →',
+      ps_see_more:'Voir plus', map_card:'Rechercher des médicaments dans ce quartier',
       ps_title:'Comparer les pharmacies',
       ps_eyebrow:'Recherche de médicament',
       ps_lede:'Comparez les prix, trouvez une pharmacie près de vous et obtenez l’itinéraire.',
-      ps_back:'← Retour à la recherche',
+      ps_back:'Retour à la recherche',
       ps_filters:'Filtrer et trier',
       ps_min:'Prix min.',
       ps_max:'Prix max.',
@@ -197,8 +197,8 @@
       ps_km:'à {n} km',
       ps_no_coords:'Pas de position sur la carte',
       ps_cheapest:'Prix le plus bas',
-      ps_view:'Voir la pharmacie et l’itinéraire',
-      ps_back_results:'← Retour aux résultats',
+      ps_view:'Voir la pharmacie',
+      ps_back_results:'Retour aux résultats',
       ps_phone:'Téléphone',
       ps_address:'Adresse',
       ps_searched:'Vous avez cherché',
@@ -219,7 +219,7 @@
       ps_tap_map:'Touchez la carte pour choisir votre point de départ.',
       ps_you:'Vous êtes ici',
       ps_loading:'Chargement…',
-      ps_call:'Appeler'
+      ps_call:'Appeler', ps_call_pharmacy:'Appeler la pharmacie', ps_get_directions:'Itinéraire'
     },
     /* Kinyarwanda: à faire relire par un locuteur natif avant la mise en ligne */
     rw: {
@@ -265,11 +265,11 @@
       t_results:'Ibisubizo bya',
       t_updated:'Byavuguruwe', t_searching:'Turashakisha...', t_search_error:'Ntibishobotse kubona amakuru y’imiti. Ongera ugerageze.',
       // Expanded patient search (search.html, js/patient-search.js)
-      ps_see_more:'Reba ibindi: gereranya ibiciro, shungura ukurikije aho uri, ubone inzira →',
+      ps_see_more:'Reba ibindi', map_card:'Shakisha imiti muri aka gace',
       ps_title:'Gereranya farumasi',
       ps_eyebrow:'Gushaka umuti',
       ps_lede:'Gereranya ibiciro, ubone farumasi ikwegereye n’inzira yo kuyigeraho.',
-      ps_back:'← Subira ku ishakisha',
+      ps_back:'Subira ku ishakisha',
       ps_filters:'Shungura no gutondeka',
       ps_min:'Igiciro gito',
       ps_max:'Igiciro kinini',
@@ -307,8 +307,8 @@
       ps_km:'km {n} uvuye aho uri',
       ps_no_coords:'Nta hantu ku ikarita',
       ps_cheapest:'Igiciro gito',
-      ps_view:'Reba farumasi n’inzira',
-      ps_back_results:'← Subira ku bisubizo',
+      ps_view:'Reba farumasi',
+      ps_back_results:'Subira ku bisubizo',
       ps_phone:'Telefoni',
       ps_address:'Aderesi',
       ps_searched:'Washatse',
@@ -329,7 +329,7 @@
       ps_tap_map:'Kanda ku ikarita uhitemo aho uhagurukira.',
       ps_you:'Uri hano',
       ps_loading:'Birimo gufunguka…',
-      ps_call:'Hamagara'
+      ps_call:'Hamagara', ps_call_pharmacy:'Hamagara farumasi', ps_get_directions:'Erekwa inzira'
     }
   };
   // Strings from page bundles loaded before this script (js/reservations-i18n.js
@@ -346,103 +346,26 @@
   var menuToggle = document.getElementById('menuToggle');
   var mobileNav = document.getElementById('mobileNav');
   function setMenu(open){
+    if (!mobileNav || !menuToggle) return;
     mobileNav.classList.toggle('open', open);
     menuToggle.setAttribute('aria-expanded', open);
     menuToggle.textContent = open ? '✕' : '☰';
   }
-  menuToggle.addEventListener('click', function(){ setMenu(!mobileNav.classList.contains('open')); });
-  mobileNav.querySelectorAll('a').forEach(function(a){ a.addEventListener('click', function(){ setMenu(false); }); });
+  if (menuToggle && mobileNav) {
+    menuToggle.addEventListener('click', function(){ setMenu(!mobileNav.classList.contains('open')); });
+    mobileNav.querySelectorAll('a').forEach(function(a){ a.addEventListener('click', function(){ setMenu(false); }); });
+  }
 
   /* ================= TOAST ================= */
   var toastEl = document.getElementById('toast'), toastTimer;
   function toast(msg){
+    if (!toastEl) return;
     toastEl.textContent = msg; toastEl.classList.add('show');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function(){ toastEl.classList.remove('show'); }, 2600);
   }
-  // Signed out, Sign in and Get started open the account chooser: patients,
-  // pharmacies and suppliers each have their own sign-in and registration.
-  var chooser = document.getElementById('accountChooser');
-  var withLang = function(href){
-    var i = href.indexOf('#'), base = i === -1 ? href : href.slice(0, i), hash = i === -1 ? '' : href.slice(i);
-    return base + '?lang=' + encodeURIComponent(lang) + hash;
-  };
-  var CHOICES = {
-    signin: { patient: 'reservations.html#signin', pharmacy: 'pharmacy-sign-in.html', supplier: 'suppliers.html#signin' },
-    start: { patient: 'reservations.html#register', pharmacy: 'pharmacies.html', supplier: 'suppliers.html' }
-  };
-  var chooserMode = 'signin';
-  function paintChooser(){
-    var m = chooserMode;
-    [['accountChooserTitle', 'ac_title_'], ['accountChooserLede', 'ac_lede_'], ['acPatientText', 'ac_patient_'],
-     ['acPharmacyText', 'ac_pharmacy_'], ['acSupplierText', 'ac_supplier_']].forEach(function(pair){
-      var el = document.getElementById(pair[0]); if (!el) return;
-      el.setAttribute('data-i18n', pair[1] + m); el.textContent = t(pair[1] + m);
-    });
-    document.getElementById('acPatient').href = withLang(CHOICES[m].patient);
-    document.getElementById('acPharmacy').href = withLang(CHOICES[m].pharmacy);
-    document.getElementById('acSupplier').href = withLang(CHOICES[m].supplier);
-  }
-  function openChooser(mode){
-    chooserMode = mode; paintChooser(); setMenu(false);
-    if (chooser && typeof chooser.showModal === 'function') {
-      chooser.showModal();
-      var first = document.getElementById('acPatient'); if (first) first.focus();
-    } else {
-      location.href = withLang(CHOICES[mode].patient); // no <dialog> support: the patient pages list the others
-    }
-  }
-  if (chooser) {
-    // A click on the backdrop closes it, like Escape.
-    chooser.addEventListener('click', function(e){ if (e.target === chooser) chooser.close(); });
-    chooser.querySelectorAll('a').forEach(function(a){ a.addEventListener('click', function(){ chooser.close(); }); });
-  }
-  ['signInBtn','signInBtnMobile'].forEach(function(id){
-    document.getElementById(id).addEventListener('click', function(){
-      if (!(window.ApexAPI && ApexAPI.session.isSignedIn())) { openChooser('signin'); return; }
-      // Signed in: the account's own place. Pharmacy and supplier members go to their
-      // workspace; an account with no organization is a patient, whose place is their
-      // reservations, never the pharmacy onboarding.
-      var mine = withLang('reservations.html');
-      ApexAPI.auth.me().then(function(me){
-        var types = (me.memberships || []).map(function(m){ return m.organization_type; });
-        if (types.indexOf('pharmacy') !== -1 || me.is_platform_admin) location.href = withLang('pharmacy-sign-in.html');
-        else if (types.indexOf('supplier') !== -1) location.href = withLang('suppliers.html');
-        else location.href = mine;
-      }, function(err){ if (!err || err.status !== 401) location.href = mine; });
-    });
-  });
-  ['getStartedBtn','getStartedBtnMobile'].forEach(function(id){
-    document.getElementById(id).addEventListener('click', function(){
-      // Signed in: this button signs out (only this session; see js/api.js).
-      if (window.ApexAPI && ApexAPI.session.isSignedIn()) { ApexAPI.auth.logout(); return; }
-      openChooser('start');
-    });
-  });
-  // When this tab is signed in, the header says who it is: "Sign in" becomes
-  // the account (opening the workspace) and "Get started" becomes "Sign out".
-  function paintAccountButtons(){
-    var api = window.ApexAPI, email = api && api.session.isSignedIn() && api.session.email();
-    var signedIn = !!(api && api.session.isSignedIn());
-    ['signInBtn','signInBtnMobile'].forEach(function(id){
-      var b = document.getElementById(id);
-      if (signedIn) {
-        b.removeAttribute('data-i18n');
-        b.textContent = email || t('signed_in_as');
-        b.title = t('signed_in_as') + ' ' + (email || '');
-        b.classList.add('signed-in-chip');
-      } else {
-        b.setAttribute('data-i18n', 'btn_signin'); b.textContent = t('btn_signin'); b.removeAttribute('title');
-        b.classList.remove('signed-in-chip');
-      }
-    });
-    ['getStartedBtn','getStartedBtnMobile'].forEach(function(id){
-      var b = document.getElementById(id);
-      b.setAttribute('data-i18n', signedIn ? 'btn_signout' : 'btn_start');
-      b.textContent = t(signedIn ? 'btn_signout' : 'btn_start');
-    });
-  }
-  window.addEventListener('apexrx:signed-out', function(){ paintAccountButtons(); toast(t('btn_signout') + ' ✓'); });
+  // The public header has no Sign in / Get started and never shows who is signed
+  // in: each group starts from its own registration page (header navigation).
 
   /* ================= MOTION PREFERENCE ================= */
   var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -467,23 +390,184 @@
     reveals.forEach(function(el){ rio.observe(el); });
   } else { reveals.forEach(function(el){ el.classList.add('in'); }); }
 
+  /* The hero map exists only on the landing page; other public pages
+     (how-it-works.html, about.html, legal.html) share this script for the
+     header, footer, menu and translations. */
+  var labelHeroPins = function(){};
+  if(document.getElementById('mapLayer') && document.getElementById('mapFx')) initHeroMap();
+  function initHeroMap(){
+  /* ================= ANIMATED KIGALI MAP =================
+     Restored from before 7845078 (which removed it with the made-up pharmacy
+     names and stock figures on the cards). The interactions are the original
+     ones; the cards now only name the area of Kigali under each pin.
+     Pins sit on the pharmacy icons drawn in the map image.
+     The image uses object-fit:cover + object-position:center 38%,
+     so we reproduce that math to keep pins aligned at every width.
+     A canvas draws the live network: arcs between pharmacies with
+     "stock updates" travelling along them in the Rwanda colours. */
+  var IMG_W = 1672, IMG_H = 941, POS_Y = 0.38;
+  var layer = document.getElementById('mapLayer');
+  var fx = document.getElementById('mapFx'), ctx = fx.getContext('2d');
+  var heroInner = document.querySelector('.hero-inner');
+  var pins = Array.prototype.slice.call(document.querySelectorAll('.pin'));
+  var nodes = [], edges = [], particles = [], ripples = [], W = 0, H = 0, DPR = 1;
+  var COLORS = ['0,161,222', '250,210,1', '58,208,127'];
+
+  pins.forEach(function(pin){
+    var st = pin.querySelector('.stock');
+    st.setAttribute('data-name', st.textContent);
+    pin.addEventListener('click', function(){
+      var was = pin.classList.contains('show-card');
+      pins.forEach(function(p){ p.classList.remove('show-card'); });
+      if(!was){ pin.classList.add('show-card'); ripple(pins.indexOf(pin)); }
+      pauseCycle();
+    });
+    pin.addEventListener('mouseenter', pauseCycle);
+  });
+
+  function layout(){
+    W = layer.clientWidth; H = layer.clientHeight; DPR = Math.min(window.devicePixelRatio || 1, 2);
+    fx.width = W * DPR; fx.height = H * DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+    var s = Math.max(W / IMG_W, H / IMG_H);
+    var ox = (W - IMG_W * s) / 2, oy = (H - IMG_H * s) * POS_Y;
+    nodes = pins.map(function(pin){
+      var x = ox + parseFloat(pin.getAttribute('data-x')) * s;
+      var y = oy + parseFloat(pin.getAttribute('data-y')) * s;
+      pin.style.left = x + 'px'; pin.style.top = y + 'px';
+      pin.hidden = (x < 10 || x > W - 10 || y < 10 || y > H - 10);
+      return {x:x, y:y};
+    });
+    // each pharmacy links to its 2 nearest neighbours
+    var seen = {}; edges = [];
+    nodes.forEach(function(a, i){
+      nodes.map(function(b, j){ return {j:j, d:(a.x-b.x)*(a.x-b.x)+(a.y-b.y)*(a.y-b.y)}; })
+        .filter(function(o){ return o.j !== i; })
+        .sort(function(p, q){ return p.d - q.d; }).slice(0, 2)
+        .forEach(function(o){
+          var k = Math.min(i, o.j) + '-' + Math.max(i, o.j);
+          if(seen[k]) return; seen[k] = 1;
+          var b = nodes[o.j], mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+          var dx = b.x - a.x, dy = b.y - a.y, bend = 0.18;
+          edges.push({a:i, b:o.j, cx:mx - dy * bend, cy:my + dx * bend});
+        });
+    });
+    if(reduce) draw(0);
+  }
+  function qpt(e, t){
+    var a = nodes[e.a], b = nodes[e.b], u = 1 - t;
+    return {x:u*u*a.x + 2*u*t*e.cx + t*t*b.x, y:u*u*a.y + 2*u*t*e.cy + t*t*b.y};
+  }
+  function spawn(){
+    if(!edges.length) return;
+    var e = edges[Math.floor(Math.random() * edges.length)];
+    particles.push({e:e, t:0, dir:Math.random() < .5 ? 1 : -1, v:0.0035 + Math.random() * 0.004, c:COLORS[Math.floor(Math.random() * 3)]});
+  }
+  function ripple(i){ if(nodes[i]) ripples.push({x:nodes[i].x, y:nodes[i].y, r:0, a:.9}); }
+
+  var last = 0, spawnAcc = 0;
+  function draw(ts){
+    var dt = Math.min(ts - last, 50) || 16; last = ts;
+    ctx.clearRect(0, 0, W, H);
+    // network arcs
+    ctx.lineWidth = 1.2; ctx.setLineDash([4, 6]);
+    ctx.strokeStyle = 'rgba(160,230,200,.28)';
+    edges.forEach(function(e){
+      var a = nodes[e.a], b = nodes[e.b];
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(e.cx, e.cy, b.x, b.y); ctx.stroke();
+    });
+    ctx.setLineDash([]);
+    if(reduce) return;
+    // travelling stock updates
+    spawnAcc += dt;
+    if(spawnAcc > 260 && particles.length < 26){ spawn(); spawnAcc = 0; }
+    particles = particles.filter(function(p){
+      p.t += p.v * dt / 16;
+      if(p.t >= 1){ ripple(p.dir > 0 ? p.e.b : p.e.a); return false; }
+      var tt = p.dir > 0 ? p.t : 1 - p.t;
+      for(var k = 0; k < 7; k++){               // glowing tail
+        var q = qpt(p.e, Math.max(0, Math.min(1, tt - p.dir * k * 0.018)));
+        ctx.fillStyle = 'rgba(' + p.c + ',' + (0.9 - k * 0.12) + ')';
+        ctx.beginPath(); ctx.arc(q.x, q.y, Math.max(0.6, 3 - k * 0.35), 0, 6.283); ctx.fill();
+      }
+      var h = qpt(p.e, tt);
+      var g = ctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, 12);
+      g.addColorStop(0, 'rgba(' + p.c + ',.55)'); g.addColorStop(1, 'rgba(' + p.c + ',0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(h.x, h.y, 12, 0, 6.283); ctx.fill();
+      return true;
+    });
+    // arrival ripples
+    ripples = ripples.filter(function(r){
+      r.r += 0.9 * dt / 16; r.a -= 0.018 * dt / 16;
+      if(r.a <= 0) return false;
+      ctx.strokeStyle = 'rgba(58,208,127,' + r.a + ')'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(r.x, r.y, 14 + r.r, 0, 6.283); ctx.stroke();
+      return true;
+    });
+    raf = requestAnimationFrame(draw);
+  }
+  var raf = null;
+  function start(){ if(!raf && !reduce) raf = requestAnimationFrame(draw); }
+  function stop(){ if(raf){ cancelAnimationFrame(raf); raf = null; } }
+
+  // only animate while the hero is on screen
+  if('IntersectionObserver' in window){
+    new IntersectionObserver(function(en){ en[0].isIntersecting ? start() : stop(); }).observe(document.querySelector('.hero'));
+  } else start();
+  document.addEventListener('visibilitychange', function(){ document.hidden ? stop() : start(); });
+
+  // cycle the "live stock" cards on pharmacies that are not under the headline
+  var cycleIdx = -1, cycleTimer = null, pausedUntil = 0;
+  function freePins(){
+    var box = heroInner.getBoundingClientRect(), pad = 30;
+    return pins.filter(function(pin){
+      if(pin.hidden || pin.offsetParent === null) return false;
+      var r = pin.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      return !(cx > box.left - pad && cx < box.right + pad && cy > box.top - 90 && cy < box.bottom + pad);
+    });
+  }
+  function nextCard(){
+    if(Date.now() < pausedUntil) return;
+    var free = freePins(); if(!free.length) return;
+    cycleIdx = (cycleIdx + 1) % free.length;
+    pins.forEach(function(p){ p.classList.remove('show-card'); });
+    free[cycleIdx].classList.add('show-card');
+    ripple(pins.indexOf(free[cycleIdx]));
+  }
+  function pauseCycle(){ pausedUntil = Date.now() + 6000; }
+  function startCycle(){ if(!cycleTimer){ nextCard(); cycleTimer = setInterval(nextCard, 3200); } }
+
+  function labelPins(){
+    pins.forEach(function(pin){
+      var st = pin.querySelector('.stock'), med = pin.querySelector('.med');
+      st.textContent = st.getAttribute('data-name');
+      med.textContent = t('map_card');
+      pin.setAttribute('aria-label', st.textContent + ': ' + med.textContent);
+    });
+  }
+  layout();
+  var rt; window.addEventListener('resize', function(){ clearTimeout(rt); rt = setTimeout(layout, 120); });
+  var bg = layer.querySelector('.map-bg-img');
+  if(bg && !bg.complete) bg.addEventListener('load', layout);
+  setTimeout(startCycle, 900);
+  labelHeroPins = labelPins;
+  }
+
   /* ================= LANGUAGE ================= */
   var h1Pre = document.getElementById('h1Pre'), h1Accent = document.getElementById('h1Accent');
   function applyLang(l){
     lang = STRINGS[l] ? l : 'en';
     if(h1Pre && h1Accent){ h1Pre.textContent = t('h1_pre'); h1Accent.textContent = t('h1_accent'); }
+    labelHeroPins();
     document.querySelectorAll('[data-i18n]').forEach(function(el){ el.textContent = t(el.getAttribute('data-i18n')); });
     document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el){ el.setAttribute('placeholder', t(el.getAttribute('data-i18n-placeholder'))); });
     document.querySelectorAll('[data-i18n-aria]').forEach(function(el){ el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria'))); });
     document.documentElement.lang = lang === 'rw' ? 'rw' : lang;
     try{ localStorage.setItem('apexrx_lang', lang); }catch(e){}
-    // Carry the language to the account pages, keeping any #signin / #register.
-    document.querySelectorAll('a[href^="pharmacies.html"], a[href^="pharmacy-sign-in.html"], a[href^="suppliers.html"], a[href^="reservations.html"]').forEach(function(a){
+    // Carry the language to the account pages, keeping any #fragment.
+    document.querySelectorAll('a[href^="pharmacies.html"], a[href^="pharmacy-sign-in.html"], a[href^="suppliers.html"], a[href^="patient-register.html"], a[href^="patient-sign-in.html"]').forEach(function(a){
       var raw = a.getAttribute('href'), hash = raw.indexOf('#') === -1 ? '' : raw.slice(raw.indexOf('#'));
       a.setAttribute('href', raw.split(/[?#]/)[0] + '?lang=' + encodeURIComponent(lang) + hash);
     });
-    paintAccountButtons();
-    if (chooser) paintChooser();
     try { window.dispatchEvent(new CustomEvent('apexrx:lang', { detail: lang })); } catch (e) { /* old browsers */ }
   }
   var langSelect = document.getElementById('langSelect');
@@ -536,6 +620,11 @@
   function expandedHref(query){
     return 'search.html?q=' + encodeURIComponent(query) + '&lang=' + encodeURIComponent(lang);
   }
+  // One result: that pharmacy branch's page for that exact medicine (same page as
+  // "View pharmacy" on search.html), so the patient never lands on another branch.
+  function pharmacyHref(query, m){
+    return 'search.html?' + new URLSearchParams({ q: query, pharmacy: m.location_id, product: m.product_id, lang: lang });
+  }
 
   if (searchForm && searchInput && searchResults && searchStatus && window.ApexAPI) {
     // Set when the search comes from the address bar (search.html's "Back to search"):
@@ -552,6 +641,8 @@
       activeSearch = controller;
 
       searchStatus.textContent = t('t_searching');
+      // Keep the search in the address, so Back from a pharmacy shows it again.
+      try { history.replaceState(history.state, '', 'index.html?' + new URLSearchParams({ q: query, lang: lang }) + '#hero-search'); } catch (e) { /* ignore */ }
       searchResults.classList.add('open');
       searchResults.replaceChildren();
 
@@ -570,8 +661,10 @@
           searchResults.appendChild(textRow('result-empty', t('t_results') + ' "' + query + '"'));
 
           matches.forEach(function (m) {
-            var row = document.createElement('div');
+            // The whole row is one link (no nested controls): this medicine at this branch.
+            var row = document.createElement('a');
             row.className = 'result-row';
+            row.href = pharmacyHref(query, m);
             var details = document.createElement('div');
             var place = m.location_name && m.location_name !== m.pharmacy_name
               ? m.pharmacy_name + ' (' + m.location_name + ')' : m.pharmacy_name;
@@ -587,6 +680,7 @@
 
             row.appendChild(details);
             row.appendChild(stock);
+            row.setAttribute('aria-label', medicineLabel(m) + ', ' + meta + ', ' + t(status[1]));
             searchResults.appendChild(row);
           });
           // The homepage stays short; comparing, filtering and directions are on search.html.

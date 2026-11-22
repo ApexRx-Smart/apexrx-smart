@@ -155,6 +155,27 @@ def main():
         more = page.locator("#medicineSearchMore")
         check("1-2. homepage search shows the real results and a 'See more' link",
               rows == 4 and more.is_visible() and more.get_attribute("href") == f"search.html?q={urllib.parse.quote(MED)}&lang=en", (rows, more.get_attribute("href")))
+        check("   'See more' says only that", more.inner_text().strip() == "See more", more.inner_text())
+        first = page.locator("#medicineSearchResults a.result-row").first
+        href = first.get_attribute("href")
+        check("   each homepage result is one link to that pharmacy for that medicine (no nested controls)",
+              page.locator("#medicineSearchResults a.result-row").count() == 4 and "pharmacy=" in href and "product=" in href
+              and page.locator("#medicineSearchResults a.result-row a, #medicineSearchResults a.result-row button").count() == 0, href)
+        check("   the search is kept in the homepage address (for Back)", f"q={urllib.parse.quote_plus(MED)}" in page.url, page.url)
+        loc_id = urllib.parse.parse_qs(urllib.parse.urlparse(href).query)["pharmacy"][0]
+        row_text = first.inner_text()
+        first.click()
+        page.wait_for_selector("#ps-detail-title")
+        detail = page.inner_text("#ps-info")
+        check("   clicking a homepage result opens that branch, with that medicine selected",
+              f"pharmacy={loc_id}" in page.url and row_text.split("\n")[1].split(" · ")[0].split(" (")[0] in detail
+              and page.locator(".ps-searched").count() == 1, (row_text[:80], detail[:120]))
+        page.click("#ps-back")
+        page.wait_for_url("**/index.html*")
+        page.wait_for_selector("#medicineSearchResults .result-row")
+        check("   the back arrow returns to the homepage results for the same search",
+              page.input_value("#medicineSearchInput") == MED and page.locator("#medicineSearchResults .result-row").count() == 4)
+        more = page.locator("#medicineSearchMore")
         check("   the homepage search is counted once in search insights", insights_count(admin) == before + 1)
         searches = []
         page.on("request", lambda r: searches.append(r.url) if "/search/pharmacies" in r.url else None)
@@ -162,6 +183,13 @@ def main():
         page.wait_for_url("**/search.html?*")
         page.wait_for_selector(".ps-card")
         check("3-4. the expanded page keeps the query", page.input_value("#ps-q") == MED and MED in urllib.parse.unquote_plus(page.url))
+        back = page.locator("#ps-back")
+        check("   one back arrow, to the homepage search with this query",
+              page.locator("#ps-back, #ps-back-results").count() == 1 and back.get_attribute("aria-label") == "Back to search"
+              and back.get_attribute("href").startswith("index.html?q=") and back.get_attribute("href").endswith("#hero-search"))
+        card = page.locator(".ps-card-link").first
+        check("   result cards are single links (keyboard focusable, no nested buttons)",
+              card.evaluate("e => e.tagName") == "A" and page.locator(".ps-card button, .ps-card-link a").count() == 0)
         got = prices(page)
         check("   all four pharmacies, lowest price first (backend sort)", got == ["RWF 700", "RWF 900", "RWF 1,200", "RWF 1,500"], got)
         check("   the lowest price is marked", page.locator(".ps-card").first.locator(".ps-best").count() == 1
@@ -215,7 +243,7 @@ def main():
         # =============================================== 9-11 a pharmacy, with the patient's location
         page.click("#ps-geo"); wait_text(page, "#ps-origin-text", "current location"); settle(page)
         rem_card = page.locator(f".ps-card[data-location='{ph['rem']['loc']}']")
-        rem_card.locator("button").click()
+        rem_card.locator(".ps-card-link").click()
         page.wait_for_selector("#ps-detail-title")
         info = page.inner_text("#ps-info")
         check("9-10. selecting a pharmacy shows its details from GET /search/pharmacies/{id}",
@@ -228,19 +256,23 @@ def main():
               and page.locator("#ps-map path.leaflet-interactive").count() >= 1 and "1.8 km" in page.inner_text("#ps-route-msg"), page.inner_text("#ps-route-msg"))
         check("   the route was asked for from the patient's position to the pharmacy (car)",
               any("routed-car" in u and "30.124,-1.953;30.1127,-1.9577" in u for u in ctx.routes_seen), ctx.routes_seen[-1:])
-        g = page.get_attribute("#ps-dir-google", "href")
-        check("   Google Maps directions carry origin, destination and mode",
-              "origin=-1.95300%2C30.12400" in g and "destination=-1.9577%2C30.1127" in g and "travelmode=driving" in g, g)
-        check("   OpenStreetMap directions from the patient", "route=-1.95300,30.12400;-1.9577,30.1127" in page.get_attribute("#ps-dir-osm", "href"))
+        acts = page.locator("#ps-actions .ps-action")
+        d = page.locator("#ps-directions-link")
+        check("   exactly two contact actions: Call pharmacy and Get directions (no Google/OSM pair)",
+              acts.all_inner_texts() == ["Call pharmacy", "Get directions"]
+              and page.locator("#ps-dir-google, #ps-dir-osm").count() == 0, acts.all_inner_texts())
+        check("   Call pharmacy is a tel: link to the branch's number", page.get_attribute("#ps-call", "href") == "tel:+250788123456")
+        check("   Get directions goes to the branch's own coordinates (desktop: browser map)",
+              "-1.9577%2C30.1127" in d.get_attribute("data-web") and d.get_attribute("href") == d.get_attribute("data-web")
+              and d.get_attribute("target") == "_blank", d.get_attribute("href"))
         page.click("#ps-mode-foot"); wait_text(page, "#ps-route-msg", "km")
-        check("   on foot: the walking route and walking directions",
-              any("routed-foot" in u for u in ctx.routes_seen) and "travelmode=walking" in page.get_attribute("#ps-dir-google", "href"))
+        check("   on foot: the walking route", any("routed-foot" in u for u in ctx.routes_seen))
         ctx.route_fail = True
         page.click("#ps-mode-car"); wait_text(page, "#ps-route-msg", "could not be calculated")
-        check("routing unavailable: a labelled straight line, directions buttons still there",
-              page.locator("#ps-map path[stroke-dasharray]").count() == 1 and page.is_visible("#ps-dir-google"))
+        check("routing unavailable: a labelled straight line, the directions action still there",
+              page.locator("#ps-map path[stroke-dasharray]").count() == 1 and page.is_visible("#ps-directions-link"))
         ctx.route_fail = False
-        page.click("#ps-back-results")
+        page.click("#ps-back")
         page.wait_for_selector("#ps-list-view:not([hidden])")
         check("back to results keeps the filters and the list", "pharmacy=" not in page.url and len(prices(page)) == 4)
         page.go_forward(); page.wait_for_selector("#ps-detail-title")
@@ -248,18 +280,18 @@ def main():
         check("browser Back and Forward move between the list and the pharmacy", True)
 
         # Missing coordinates
-        page.locator(f".ps-card[data-location='{ph['nomap']['loc']}'] button").click()
+        page.locator(f".ps-card[data-location='{ph['nomap']['loc']}'] .ps-card-link").click()
         page.wait_for_selector("#ps-detail-title")
         wait_text(page, "#ps-map-empty", "not added its map location")
-        g = page.get_attribute("#ps-dir-google", "href")
-        check("missing coordinates: no map or distance, directions use the address",
-              page.is_hidden("#ps-map") and "destination=KN+4+Ave%2C+Kigali%2C+Rwanda" in g and page.locator("#ps-dir-osm").count() == 0, g)
-        page.click("#ps-back-results"); page.wait_for_selector("#ps-list-view:not([hidden])")
-        page.locator(f".ps-card[data-location='{ph['kim']['loc']}'] button").click()
+        g = page.get_attribute("#ps-directions-link", "data-web")
+        check("missing coordinates: no map or route tools, directions use the encoded address",
+              page.is_hidden("#ps-map") and page.is_hidden("#ps-route") and "query=KN%204%20Ave%2C%20Kigali%2C%20Rwanda" in g, g)
+        page.click("#ps-back"); page.wait_for_selector("#ps-list-view:not([hidden])")
+        page.locator(f".ps-card[data-location='{ph['kim']['loc']}'] .ps-card-link").click()
         page.wait_for_selector("#ps-map .leaflet-marker-icon")
         check("   opening a pharmacy with coordinates afterwards shows its map again, without the message",
               page.is_visible("#ps-map") and page.is_hidden("#ps-map-empty"))
-        page.click("#ps-back-results"); page.wait_for_selector("#ps-list-view:not([hidden])")
+        page.click("#ps-back"); page.wait_for_selector("#ps-list-view:not([hidden])")
 
         # Language
         page.select_option("#langSelect", "fr")
@@ -296,9 +328,9 @@ def main():
         wait_text(page, "#ps-origin-text", "Kimironko"); settle(page)
         check("   a typed place (Nominatim) is used instead: nearest first from it",
               names(page)[0].startswith(ph["kim"]["name"]) and "km away" in page.locator(".ps-card").first.inner_text())
-        page.locator(f".ps-card[data-location='{ph['kim']['loc']}'] button").click()
+        page.locator(f".ps-card[data-location='{ph['kim']['loc']}'] .ps-card-link").click()
         page.wait_for_selector("#ps-map .ps-pin.origin")
-        check("   the pharmacy map routes from the typed place", page.get_attribute("#ps-dir-google", "href").count("origin=-1.94960") == 1)
+        check("   the pharmacy map routes from the typed place", any("-1.9496" in u for u in ctx.routes_seen), ctx.routes_seen[-1:])
         page.click("#ps-origin-clear") if page.is_visible("#ps-origin-clear") else None
         box = page.locator("#ps-map").bounding_box()
         page.mouse.click(box["x"] + box["width"] * 0.3, box["y"] + box["height"] * 0.7)
@@ -318,10 +350,11 @@ def main():
         page.goto(f"{SITE}/search.html?q={urllib.parse.quote(MED)}&pharmacy={ph['kim']['loc']}")
         page.wait_for_selector("#ps-detail-title")
         check("a shared pharmacy link opens it and highlights the searched medicine",
-              ph["kim"]["name"] in page.inner_text("#ps-info") and page.locator(".ps-medlist li.match").count() == 1)
-        page.click("#ps-back-results")
+              ph["kim"]["name"] in page.inner_text("#ps-info") and page.locator(".ps-searched").count() == 1
+              and MED in page.inner_text(".ps-searched"))
+        page.click("#ps-back")
         page.wait_for_selector("#ps-list-view:not([hidden])")
-        check("   'Back to results' from a shared link stays on the page", "search.html" in page.url and len(prices(page)) == 4)
+        check("   the back arrow from a shared link shows the results for that search", "search.html" in page.url and len(prices(page)) == 4)
         ctx.close()
 
         # API failure and loading state
@@ -340,20 +373,42 @@ def main():
         page.wait_for_selector(".ps-card")
         wide = lambda: page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1")  # noqa: E731
         list_ok = not wide()
+        check("mobile: the filters fold away so the first result is on the first screen",
+              page.is_hidden("#ps-filter-body") and page.locator(".ps-card").first.bounding_box()["y"] < 844)
+        page.click("#ps-filter-toggle")
+        check("mobile: 'Filter and sort' opens them", page.is_visible("#ps-geo") and page.get_attribute("#ps-filter-toggle", "aria-expanded") == "true")
         page.click("#ps-geo"); wait_text(page, "#ps-origin-text", "current location"); settle(page)
-        page.locator(".ps-card button").first.click()
+        page.locator(".ps-card-link").first.click()
         page.wait_for_selector("#ps-map .leaflet-marker-icon")
         mbox = page.locator("#ps-map").bounding_box(); ibox = page.locator("#ps-info").bounding_box()
-        check("mobile: no sideways scroll; the map comes first, full width, above the details",
-              list_ok and not wide() and mbox["height"] >= 250 and mbox["width"] >= 330 and mbox["y"] < ibox["y"], (mbox, ibox))
+        check("mobile: no sideways scroll; the pharmacy, its medicine and the actions first, then a full-width map",
+              list_ok and not wide() and mbox["height"] >= 250 and mbox["width"] >= 330 and ibox["y"] < mbox["y"], (mbox, ibox))
         # Measure once the page has stopped scrolling (opening a pharmacy scrolls smoothly
         # to it; measuring mid-scroll made this check depend on the machine's speed).
         page.wait_for_function("""() => new Promise(done => { const y = scrollY;
           requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => done(scrollY === y), 150))); })""")
-        covered = page.evaluate("""() => { const b = document.querySelector('#ps-back-results').getBoundingClientRect();
+        covered = page.evaluate("""() => { const b = document.querySelector('#ps-back').getBoundingClientRect();
           const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
-          return !(hit && (hit.id === 'ps-back-results' || hit.closest('#ps-back-results'))); }""")
-        check("mobile: 'Back to results' is not hidden under the floating header", not covered)
+          return !(hit && (hit.id === 'ps-back' || hit.closest('#ps-back'))); }""")
+        check("mobile: the back arrow is not hidden under the floating header", not covered)
+        ctx.close()
+
+        # Get directions hands off to the device: geo: on Android, Apple Maps on iPhone.
+        for ua, expect in (("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/126 Mobile Safari/537.36", "geo:-1.9577,30.1127?q="),
+                           ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Version/17.5 Mobile/15E148 Safari/604.1", "https://maps.apple.com/?daddr=-1.9577%2C30.1127")):
+            ctx = context(browser, viewport={"width": 390, "height": 844})
+            ctx2 = ctx.browser.new_context(user_agent=ua, viewport={"width": 390, "height": 844})
+            ctx.close()
+            ctx2.route("**/js/config.js", lambda r: r.fulfill(content_type="application/javascript",
+                                                            body=f'window.APEX_CONFIG = {{ API_BASE_URL: "{API}" }};'))
+            page = ctx2.new_page()
+            page.goto(f"{SITE}/search.html?q={urllib.parse.quote(MED)}&pharmacy={ph['rem']['loc']}")
+            page.wait_for_selector("#ps-directions-link")
+            native = page.get_attribute("#ps-directions-link", "data-native")
+            check(f"directions on {'Android' if 'Android' in ua else 'iPhone'}: the device's maps app ({expect.split(':')[0]})",
+                  native.startswith(expect), native)
+            ctx2.close()
+        ctx = context(browser)
         ctx.close()
 
         check("no page errors or unexpected console errors", not errors, errors[:3])

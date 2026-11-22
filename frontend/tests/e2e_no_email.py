@@ -169,7 +169,7 @@ def main():
         staff.click("#invite-continue")
         on_dashboard(staff)
         check("invitations: the employee joins with their own account and the Staff role",
-              name in staff.inner_text("#me-name") and staff.inner_text("#dash-user") == f"{staff_email} · Staff")
+              name in staff.inner_text("#me-name") and staff.evaluate("[...document.querySelectorAll('.am-head > *')].map(e => e.textContent)")[1:] == [staff_email, f"{name} · Staff"])
         staff_token = staff.evaluate("JSON.parse(sessionStorage.getItem('apexrx_session')).token")
         me = call("GET", "/auth/me", token=staff_token)[1]
         check("invitations: joining by a shared link does not mark the address verified", me["email_verified"] is False)

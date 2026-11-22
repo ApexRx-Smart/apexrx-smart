@@ -51,6 +51,7 @@
 .rs-context{font-weight:600; margin:6px 0;}
 .rs-flash{border-radius:12px; padding:12px 14px; background:var(--tint); font-weight:600;}
 .rs-flash.ok{background:rgba(26,148,88,.12); color:#11683d;}
+.rs-flash.warn{background:#fbefd3; color:#6b4500;}
 
 /* Facts */
 .rs-facts{display:grid; grid-template-columns:minmax(0,190px) minmax(0,1fr); gap:8px 16px; margin:12px 0;}
@@ -107,3 +108,11 @@
 .rs-reserve-box p{margin:0; font-size:14px;}
 .rs-forgot{margin:0; font-size:.92rem;}
 .rs-forgot[hidden]{display:none;}
+
+/* Phones: a compact dashboard heading. */
+@media (max-width:560px){
+  .rs-hero{padding-block:calc(88px + env(safe-area-inset-top,0px)) 18px;}
+  .rs-hero h1{font-size:26px;}
+  .rs-hero p{font-size:14.5px;}
+}
+#rs-list:not([hidden]){display:flex; flex-direction:column; gap:14px;}

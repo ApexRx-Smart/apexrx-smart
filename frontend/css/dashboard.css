@@ -275,3 +275,17 @@ background:radial-gradient(70% 50% at 100% 0,#0da7de1f,transparent 70%),var(--bg
 .rv-dlg{margin:8px 0 12px}
 .rv-inline{display:inline-flex;gap:8px;align-items:center;font-weight:600;margin-bottom:8px;flex-wrap:wrap}
 @media(max-width:860px){.rv-filters{grid-template-columns:1fr}.rv-card .kv{grid-template-columns:1fr}}
+
+/* Phones: a compact workspace. The greeting keeps its words and buttons; the
+   illustration and its counters (shown again in the cards below) step aside. */
+@media(max-width:560px){
+  .hero{padding:18px 16px;border-radius:16px;gap:10px}
+  .hero-art{display:none}
+  .hero-copy{padding:0}
+  .hero h2,.hero-copy h2{font-size:22px;line-height:1.18}
+  .hero-copy p{font-size:13.5px}
+  .hero-cta{gap:8px}
+  .hero-cta button{padding:9px 12px;font-size:13.5px}
+  .top h1,#title{font-size:22px}
+  .who{gap:8px}
+}

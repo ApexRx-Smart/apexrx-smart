@@ -24,8 +24,8 @@
        reservations.html                        your reservations and updates
        reservations.html?ref=RX-…               one reservation, its history, cancel
        reservations.html?location=…&product=…   reserve this medicine at this branch
-     Signed out, every view first shows the sign-in / create-account panel and then
-     continues where the patient was. Only public ids (branch, product, reference)
+     Signed out, every view goes to patient-sign-in.html?next=<this view> first and
+     continues where the patient was after signing in. Only public ids (branch, product, reference)
      are ever in the address; the phone and note stay in this tab. -->
 <main id="top" class="page-reservations">
 
@@ -38,40 +38,7 @@
 </section>
 
 <section class="wrap rs-body">
-  <p class="rs-account" id="rs-account" hidden>
-    <span id="rs-account-text"></span>
-    <button type="button" class="rs-link" id="rs-signout" data-i18n="rs_signout">Sign out</button>
-  </p>
   <div class="rs-flash" id="rs-flash" role="status" aria-live="polite" hidden></div>
-
-  <!-- ===================== Sign in / create account ===================== -->
-  <section class="rs-panel" id="rs-auth" hidden aria-labelledby="rs-auth-title">
-    <h2 id="rs-auth-title" tabindex="-1" data-i18n="rs_auth_title_list">Sign in to see your reservations</h2>
-    <p class="rs-context" id="rs-auth-context" hidden></p>
-    <p class="rs-muted" data-i18n="rs_auth_lede">Use your ApexRX account, or create one. Your reservations are private to you.</p>
-    <div class="rs-tabs" role="group" aria-label="Account">
-      <button type="button" class="rs-tab" id="rs-tab-signin" aria-pressed="true" data-i18n="rs_tab_signin">Sign in</button>
-      <button type="button" class="rs-tab" id="rs-tab-create" aria-pressed="false" data-i18n="rs_tab_create">Create an account</button>
-    </div>
-    <form class="rs-form" id="rs-auth-form" novalidate>
-      <div class="rs-field" id="rs-name-field" hidden>
-        <label for="rs-name" data-i18n="rs_name">Your name</label>
-        <input id="rs-name" name="name" type="text" autocomplete="name" maxlength="150">
-      </div>
-      <div class="rs-field">
-        <label for="rs-email" data-i18n="rs_email">Email</label>
-        <input id="rs-email" name="email" type="email" autocomplete="email" maxlength="255" required>
-      </div>
-      <div class="rs-field">
-        <label for="rs-password" data-i18n="rs_password">Password</label>
-        <input id="rs-password" name="password" type="password" autocomplete="current-password" minlength="8" required aria-describedby="rs-password-hint">
-        <small class="rs-hint" id="rs-password-hint" data-i18n="rs_password_hint">At least 8 characters.</small>
-      </div>
-      <p class="rs-forgot" id="rs-forgot-row"><a href="reset-password.html?next=patient" id="rs-forgot" data-i18n="rs_forgot">Forgot your password?</a></p>
-      <p class="rs-error" id="rs-auth-error" role="alert"></p>
-      <button type="submit" class="rs-btn primary" id="rs-auth-submit" data-i18n="rs_signin_btn">Sign in</button>
-    </form>
-  </section>
 
   <!-- ===================== Reserve ===================== -->
   <section class="rs-panel" id="rs-reserve" hidden aria-labelledby="rs-form-title">
@@ -134,6 +101,7 @@
 <script src="js/reservations-i18n.js"></script>
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
+<script src="js/account-menu.js"></script>
 <script src="js/script.js"></script>
 <script src="js/reservations.js"></script>
 </body>

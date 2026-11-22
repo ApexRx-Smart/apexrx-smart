@@ -2,10 +2,15 @@
  * about.html and legal.html so the navigation is defined once.
  *
  * Include it where each part belongs; it renders synchronously at that spot,
- * before js/script.js runs (which adds translations, the mobile menu and the
- * Sign in / Get started buttons, which open the account chooser below: patients,
- * pharmacies and suppliers each have their own sign-in and registration):
- *   <body data-page="home|how|about|legal">
+ * before js/script.js runs (which adds translations and the mobile menu):
+ *   <body data-page="home|how|about|legal|search">
+ *
+ * The public header is the same for every visitor, signed in or not: it never
+ * shows who is signed in. Each group starts from its own registration page
+ * (For Patients, For Pharmacies, For Suppliers), whose "Already have an account?"
+ * link leads to that group's sign-in. The patient reservations page
+ * (data-page="reservations") is a signed-in workspace: it gets a compact app bar
+ * (brand, language, account menu) instead of the public navigation.
  *   <script src="js/site-layout.js" data-part="header"></script>
  *   ...page content...
  *   <script src="js/site-layout.js" data-part="footer"></script>
@@ -25,55 +30,47 @@
 
   function current(name) { return page === name ? ' aria-current="page"' : ''; }
 
-  // One entry point per group: patients (an account to reserve medicines),
-  // pharmacies and suppliers (registration pages).
+  // One entry point per group: its registration page.
   var NAV =
-    '<a href="reservations.html#register" data-i18n="nav_patients"' + current('reservations') + '>For Patients</a>' +
+    '<a href="patient-register.html" data-i18n="nav_patients">For Patients</a>' +
     '<a href="pharmacies.html" data-i18n="nav_pharmacies">For Pharmacies</a>' +
     '<a href="suppliers.html" data-i18n="nav_suppliers">For Suppliers</a>' +
     '<a href="how-it-works.html" data-i18n="nav_how"' + current('how') + '>How it works</a>' +
     '<a href="about.html" data-i18n="nav_about"' + current('about') + '>About</a>';
 
-  var HEADER =
-    '<header class="site" id="siteHeader">' +
-    '  <div class="header-pill">' +
-    '    <a class="brand" href="' + brandHref + '" aria-label="ApexRX_Smart, home">' +
-    '      <img class="brand-mark" src="assets/logos/logo-mark.svg" alt="" width="40" height="38">' +
-    '      <span class="brand-name">ApexRX_Smart</span>' +
-    '    </a>' +
-    '    <nav class="main-nav" aria-label="Main">' + NAV + '</nav>' +
-    '    <div class="header-actions">' +
+  var LANG =
     '      <select class="lang-select" id="langSelect" aria-label="Language">' +
     '        <option value="en">EN</option><option value="fr">FR</option><option value="rw">RW</option>' +
-    '      </select>' +
-    '      <button class="btn-link" id="signInBtn" data-i18n="btn_signin">Sign in</button>' +
-    '      <button class="btn btn-pill" id="getStartedBtn" data-i18n="btn_start">Get started</button>' +
-    '      <button class="menu-toggle" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="mobileNav">☰</button>' +
-    '    </div>' +
-    '  </div>' +
-    '  <nav class="mobile-nav" id="mobileNav" aria-label="Mobile">' + NAV +
-    '    <div class="mobile-actions">' +
-    '      <button class="btn btn-ghost-light" id="signInBtnMobile" data-i18n="btn_signin">Sign in</button>' +
-    '      <button class="btn btn-pill" id="getStartedBtnMobile" data-i18n="btn_start">Get started</button>' +
-    '    </div>' +
-    '  </nav>' +
-    // Sign in / Get started: which account (js/script.js sets the links for the mode).
-    '  <dialog class="account-chooser" id="accountChooser" aria-labelledby="accountChooserTitle">' +
-    '    <form method="dialog" class="ac-close-row"><button class="ac-close" value="close" data-i18n-aria="ac_close" aria-label="Close">✕</button></form>' +
-    '    <h2 id="accountChooserTitle" data-i18n="ac_title_signin">Sign in to ApexRX</h2>' +
-    '    <p class="ac-lede" id="accountChooserLede" data-i18n="ac_lede_signin">Choose your account type.</p>' +
-    '    <ul class="ac-options">' +
-    '      <li><a class="ac-option" id="acPatient" href="reservations.html#signin"><strong data-i18n="ac_patient">Patient</strong><span id="acPatientText" data-i18n="ac_patient_signin">Your medicine reservations</span></a></li>' +
-    '      <li><a class="ac-option" id="acPharmacy" href="pharmacy-sign-in.html"><strong data-i18n="ac_pharmacy">Pharmacy</strong><span id="acPharmacyText" data-i18n="ac_pharmacy_signin">Owners, managers and staff</span></a></li>' +
-    '      <li><a class="ac-option" id="acSupplier" href="suppliers.html#signin"><strong data-i18n="ac_supplier">Supplier</strong><span id="acSupplierText" data-i18n="ac_supplier_signin">Medicine wholesalers and distributors</span></a></li>' +
-    '    </ul>' +
-    '  </dialog>' +
-    '</header>';
+    '      </select>';
+
+  var HEADER = page === 'reservations'
+    ? '<header class="site app-bar" id="siteHeader">' +
+      '  <div class="header-pill">' +
+      '    <a class="brand" href="index.html" aria-label="ApexRX_Smart, home">' +
+      '      <img class="brand-mark" src="assets/logos/logo-mark.svg" alt="" width="40" height="38">' +
+      '      <span class="brand-name">ApexRX_Smart</span>' +
+      '    </a>' +
+      '    <div class="header-actions">' + LANG + '<span id="accountHost"></span></div>' +
+      '  </div>' +
+      '</header>'
+    : '<header class="site" id="siteHeader">' +
+      '  <div class="header-pill">' +
+      '    <a class="brand" href="' + brandHref + '" aria-label="ApexRX_Smart, home">' +
+      '      <img class="brand-mark" src="assets/logos/logo-mark.svg" alt="" width="40" height="38">' +
+      '      <span class="brand-name">ApexRX_Smart</span>' +
+      '    </a>' +
+      '    <nav class="main-nav" aria-label="Main">' + NAV + '</nav>' +
+      '    <div class="header-actions">' + LANG +
+      '      <button class="menu-toggle" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="mobileNav">☰</button>' +
+      '    </div>' +
+      '  </div>' +
+      '  <nav class="mobile-nav" id="mobileNav" aria-label="Mobile">' + NAV + '</nav>' +
+      '</header>';
 
   var SOCIAL =
     '<a href="https://www.linkedin.com/company/136934009/" target="_blank" rel="noopener" aria-label="LinkedIn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.2 7.6a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4ZM3.4 9.2H7V21H3.4V9.2Zm5.9 0h3.5v1.6h.1a3.8 3.8 0 0 1 3.4-1.9c3.7 0 4.4 2.4 4.4 5.5V21h-3.6v-5.8c0-1.4 0-3.2-2-3.2s-2.2 1.5-2.2 3.1V21H9.3V9.2Z"/></svg></a>' +
     '<a href="https://x.com/Apexrxsmar1ogc" target="_blank" rel="noopener" aria-label="X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 2H22l-6.8 7.8L23.2 22H17l-4.9-7.4L5.6 22H2.4l8.2-9.5L2.9 2h6.3l4.5 6.8L18.9 2ZM17.8 20h1.7L8.1 4H6.3l11.5 16Z"/></svg></a>' +
-    '<a href="https://studio.youtube.com/channel/UCS3w0RILCJPdfTgQaqm1AwQ/videos/upload?filter=%5B%5D&amp;sort=%7B%22columnType%22%3A%22date%22%2C%22sortOrder%22%3A%22DESCENDING%22%7D" target="_blank" rel="noopener" aria-label="YouTube"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 7.1a3 3 0 0 0-2.1-2.2C18 4.4 12 4.4 12 4.4s-6 0-7.9.5A3 3 0 0 0 2 7.1a31 31 0 0 0-.5 4.9 31 31 0 0 0 .5 4.9A3 3 0 0 0 4.1 19c1.9.6 7.9.6 7.9.6s6 0 7.9-.6a3 3 0 0 0 2.1-2.1 31 31 0 0 0 .5-4.9 31 31 0 0 0-.5-4.9ZM9.8 15.4V8.6l5.7 3.4-5.7 3.4Z"/></svg></a>';
+    '<a href="https://www.youtube.com/channel/UCS3w0RILCJPdfTgQaqm1AwQ" target="_blank" rel="noopener" aria-label="YouTube"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 7.1a3 3 0 0 0-2.1-2.2C18 4.4 12 4.4 12 4.4s-6 0-7.9.5A3 3 0 0 0 2 7.1a31 31 0 0 0-.5 4.9 31 31 0 0 0 .5 4.9A3 3 0 0 0 4.1 19c1.9.6 7.9.6 7.9.6s6 0 7.9-.6a3 3 0 0 0 2.1-2.1 31 31 0 0 0 .5-4.9 31 31 0 0 0-.5-4.9ZM9.8 15.4V8.6l5.7 3.4-5.7 3.4Z"/></svg></a>';
 
   var FOOTER =
     '<footer class="site footer-wide" id="footer">' +
@@ -103,9 +100,8 @@
     '        <div class="footer-cols">' +
     '          <div class="footer-col">' +
     '            <h4 data-i18n="f_product">Product</h4>' +
-    '            <a href="reservations.html#register" data-i18n="nav_patients">For Patients</a>' +
+    '            <a href="patient-register.html" data-i18n="nav_patients">For Patients</a>' +
     '            <a href="' + searchHref + '" data-i18n="nav_find">Find a medicine</a>' +
-    '            <a href="reservations.html" data-i18n="nav_reservations">My reservations</a>' +
     '            <a href="pharmacies.html" data-i18n="nav_pharmacies">For Pharmacies</a>' +
     '            <a href="suppliers.html" data-i18n="nav_suppliers">For Suppliers</a>' +
     '            <a href="how-it-works.html" data-i18n="nav_how">How it works</a>' +
@@ -141,5 +137,6 @@
 
   var part = script.getAttribute('data-part');
   if (part === 'header') script.insertAdjacentHTML('beforebegin', HEADER);
-  else if (part === 'footer') script.insertAdjacentHTML('beforebegin', FOOTER);
+  // The patient workspace has no public footer, only the status message area.
+  else if (part === 'footer') script.insertAdjacentHTML('beforebegin', page === 'reservations' ? '<div data-toast id="toast" role="status"></div>' : FOOTER);
 })();

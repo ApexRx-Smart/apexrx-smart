@@ -195,9 +195,9 @@ def main():
               "administrator" in page.inner_text("#account-panel-text") and page.is_hidden("#verify-email")
               and page.is_hidden("#details"))
         page.click("#sign-out")
-        visible(page, "#account")
-        check("bug: 'Sign out' clears the session and shows sign in, without a false 'session expired'",
-              page.evaluate("sessionStorage.getItem('apexrx_session')") is None and page.inner_text("#form-error") == ""
+        page.wait_for_url("**/index.html*")
+        check("bug: 'Sign out' clears the session and opens the landing page, without a false 'session expired'",
+              page.evaluate("sessionStorage.getItem('apexrx_session')") is None
               and page.is_hidden("#signed-in-as"))
         ctx.close()
 
@@ -498,8 +498,10 @@ def main():
         wait_text(page, "#review-status", "Approved")
         check("review: approval in the admin console shows on the supplier page", True)
         page.click("#sign-out")
+        page.wait_for_url("**/index.html*")
+        check("supplier: sign out opens the landing page", page.evaluate("sessionStorage.getItem('apexrx_session')") is None)
+        page.goto(SITE + "/suppliers.html#signin")
         visible(page, "#account")
-        check("supplier: sign out returns to sign in", page.inner_text("#form-error") == "")
         fill_account(page, supplier_email, confirm=False)
         on_dashboard(page)
         check("sign in: an existing supplier opens the supplier dashboard",
@@ -520,9 +522,8 @@ def main():
               page.get_attribute("#account-panel-link", "href").split("?")[0] == "index.html"
               and "suppliers.html" not in page.inner_html("#onboarding"))
         page.click("#sign-out")
-        page.wait_for_url("**/pharmacy-sign-in.html*")
-        visible(page, "#account")
-        check("sign in: ...signing out returns to the pharmacy sign-in form",
+        page.wait_for_url("**/index.html*")
+        check("sign in: ...signing out opens the landing page",
               page.evaluate("sessionStorage.getItem('apexrx_session')") is None)
         ctx.close()
 
