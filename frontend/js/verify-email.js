@@ -16,7 +16,8 @@
   const API = window.ApexAPI;
   const params = new URLSearchParams(location.search);
   const next = params.get('next') === 'supplier' ? 'supplier' : 'pharmacy';
-  const page = next === 'supplier' ? 'suppliers.html' : 'pharmacies.html';
+  // The pharmacy sign-in page continues a registration in progress (with or without a session here).
+  const page = next === 'supplier' ? 'suppliers.html' : 'pharmacy-sign-in.html';
   const token = new URLSearchParams(location.hash.slice(1)).get('token') || '';
 
   // Remove the token from the address bar and the history entry.
@@ -42,7 +43,7 @@
     $('#verify-email-row').hidden = !email;
     $('#verify-email').textContent = email || '';
     const link = $('#verify-continue');
-    link.href = page + (ok ? '' : '#signin');
+    link.href = page + (ok || next !== 'supplier' ? '' : '#signin');
     link.firstChild.nodeValue = (ok ? 'Continue registration' : 'Go to sign in') + ' ';
     $('#verify-actions').hidden = false;
     $('#verify-help').hidden = ok;

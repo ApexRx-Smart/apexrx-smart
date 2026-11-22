@@ -101,33 +101,70 @@ def suspend_via_api(w):
 
 
 # 1 -------------------------------------------------------------------------
-def test_01_two_confirmations_for_the_last_units(client):
+def test_01_two_requests_for_the_last_units(client):
+    """Requests hold stock from submission: the second waits for the first's
+    stock lock, then finds nothing left to reserve."""
+    w = ResWorld(client, quantity=8)
+    first = Held(w.patient, reservations.submit, **submit_args(w, quantity=5))
+    second = in_background(outcome, w.patient2, reservations.submit, **submit_args(w, quantity=5))
+    wait_blocked()
+    first.commit()
+    assert error_code(result_of(second)) == ("insufficient_stock", "no_reservable_stock")
+    assert scalar("SELECT coalesce(sum(quantity), 0) FROM reservation WHERE status = 'requested'") == 5
+
+
+def test_01b_simultaneous_requests_never_overallocate(client):
+    w = ResWorld(client, quantity=8)
+    w.set_min_stock(1)  # 7 reservable
+    barrier = threading.Barrier(3)
+
+    def go(patient, quantity):
+        barrier.wait()
+        return outcome(patient, reservations.submit, **submit_args(w, quantity=quantity))
+
+    futures = [in_background(go, p, q) for p, q in ((w.patient, 5), (w.patient2, 5), (w.outsider, 4))]
+    results = [result_of(f) for f in futures]
+    held = scalar("SELECT coalesce(sum(quantity), 0) FROM reservation WHERE status = 'requested'")
+    assert held <= 7 and sum(r[0] == "ok" for r in results) == 1
+    assert all(r[0] == "ok" or error_code(r) == ("insufficient_stock", "no_reservable_stock") for r in results)
+    assert scalar("SELECT reservation_allocated(:l, :p, NULL)", l=w.branch, p=w.product) == held
+
+
+def test_01c_two_confirmations_keep_what_their_requests_hold(client):
     w = ResWorld(client, quantity=8)
     a = w.submit(quantity=5)
-    b = w.submit(patient=w.patient2, quantity=5)
+    b = w.submit(patient=w.patient2, quantity=3)
     first = Held(w.staff, reservations.confirm, w.org, a.reservation_id)
     second = in_background(outcome, w.manager, reservations.confirm, w.org, b.reservation_id)
     wait_blocked()
     first.commit()
-    assert error_code(result_of(second))[0] == "insufficient_stock"
-    assert (w.status(a.reservation_id), w.status(b.reservation_id)) == ("confirmed", "requested")
+    ok(result_of(second))
+    assert (w.status(a.reservation_id), w.status(b.reservation_id)) == ("confirmed", "confirmed")
+    assert scalar("SELECT sum(quantity) FROM reservation WHERE status = 'confirmed'") == 8
 
 
-def test_01b_simultaneous_confirmations_never_overallocate(client):
-    w = ResWorld(client, quantity=8)
-    ids = [w.submit(patient=p, quantity=q).reservation_id
-           for p, q in ((w.patient, 5), (w.patient2, 5), (w.outsider, 4))]
-    barrier = threading.Barrier(len(ids))
+def test_01d_minimum_raised_then_request(client):
+    w = ResWorld(client)
+    tx = HeldSQL(w.owner)
+    tx.execute("UPDATE location SET reservation_min_stock = 9 WHERE location_id = :l", l=w.branch)
+    submit = in_background(outcome, w.patient, reservations.submit, **submit_args(w, quantity=2))
+    wait_blocked()
+    tx.commit()
+    assert error_code(result_of(submit)) == ("insufficient_stock", "no_reservable_stock")
 
-    def go(rid, actor):
-        barrier.wait()
-        return outcome(actor, reservations.confirm, w.org, rid)
 
-    futures = [in_background(go, rid, actor) for rid, actor in zip(ids, (w.staff, w.manager, w.owner), strict=False)]
-    results = [result_of(f) for f in futures]
-    allocated = scalar("SELECT coalesce(sum(quantity), 0) FROM reservation WHERE status = 'confirmed'")
-    assert allocated <= 8 and sum(r[0] == "ok" for r in results) >= 1
-    assert all(r[0] == "ok" or error_code(r)[0] == "insufficient_stock" for r in results)
+def test_01e_request_then_minimum_raised(client):
+    w = ResWorld(client)
+    submit = Held(w.patient, reservations.submit, **submit_args(w, quantity=2))
+    change = in_background(api_call, w.owner, organizations_api.update_location, w.org, w.branch,
+                           LocationUpdate(reservation_min_stock=9))
+    wait_blocked()
+    submit.commit()
+    assert ok(result_of(change)).reservation_min_stock == 9
+    # The request made before the change stays valid and can be confirmed.
+    assert w.confirm(submit.result.reservation.reservation_id).status == "confirmed"
+    with pytest.raises(AppError):
+        w.submit(patient=w.patient2, quantity=1)
 
 
 # 2 -------------------------------------------------------------------------
@@ -143,12 +180,26 @@ def test_02a_stock_reduction_first_then_confirmation(client):
     assert w.status(r.reservation_id) == "requested"
 
 
+def test_02c_request_first_then_unconfirmed_stock_reduction(client):
+    """A stock edit below what open reservations hold waits for the request,
+    then is refused unless the pharmacy confirms the count is right."""
+    w = ResWorld(client)
+    submit = Held(w.patient, reservations.submit, **submit_args(w, quantity=5))
+    reduce = in_background(api_call, w.owner, inventory_api.upsert_stock, w.org, w.branch, w.product,
+                           StockUpsert(quantity=4))
+    wait_blocked()
+    submit.commit()
+    kind, exc = result_of(reduce)
+    assert kind == "error" and exc.extra["code"] == "below_reserved" and exc.extra["held_quantity"] == 5
+    assert w.stock_quantity() == 10
+
+
 def test_02b_confirmation_first_then_stock_reduction(client):
     w = ResWorld(client)
     r = w.submit(quantity=5)
     confirm = Held(w.staff, reservations.confirm, w.org, r.reservation_id)
     reduce = in_background(api_call, w.owner, inventory_api.upsert_stock, w.org, w.branch, w.product,
-                           StockUpsert(quantity=2))
+                           StockUpsert(quantity=2, allow_below_reserved=True))
     wait_blocked()
     confirm.commit()
     ok(result_of(reduce))
@@ -227,13 +278,13 @@ def test_05_unlisting_and_confirmation(client):
 
 
 # 6 and 22 ------------------------------------------------------------------
-def test_06a_disable_then_submission(client):
+def test_06a_reclassification_then_submission(client):
     w = ResWorld(client)
-    disable = Held(w.admin, reservations.configure_product, w.product, reservation_enabled=False)
+    reclassify = Held(w.admin, reservations.configure_product, w.product, dispensing_class="prescription_only")
     submit = in_background(outcome, w.patient, reservations.submit, **submit_args(w))
     wait_blocked()
-    disable.commit()
-    assert error_code(result_of(submit)) == ("not_reservable", "disabled")
+    reclassify.commit()
+    assert error_code(result_of(submit)) == ("not_reservable", "prescription_only")
 
 
 def test_06b_submission_then_unit_change(client):
@@ -245,24 +296,25 @@ def test_06b_submission_then_unit_change(client):
     assert error_code(result_of(change))[0] == "open_reservations"
 
 
-def test_22a_disable_then_confirmation(client):
+def test_22a_reclassification_then_confirmation(client):
     w = ResWorld(client)
     r = w.submit()
-    disable = Held(w.admin, reservations.configure_product, w.product, reservation_enabled=False)
+    reclassify = Held(w.admin, reservations.configure_product, w.product, dispensing_class="prescription_only")
     confirm = in_background(outcome, w.staff, reservations.confirm, w.org, r.reservation_id)
     wait_blocked()
-    disable.commit()
-    assert error_code(result_of(confirm)) == ("not_reservable", "disabled")
+    reclassify.commit()
+    assert error_code(result_of(confirm)) == ("not_reservable", "prescription_only")
 
 
-def test_22b_confirmation_then_disable(client):
+def test_22b_confirmation_then_reclassification(client):
     w = ResWorld(client)
     r = w.submit()
     confirm = Held(w.staff, reservations.confirm, w.org, r.reservation_id)
-    disable = in_background(outcome, w.admin, reservations.configure_product, w.product, reservation_enabled=False)
+    reclassify = in_background(outcome, w.admin, reservations.configure_product, w.product,
+                               dispensing_class="prescription_only")
     wait_blocked()
     confirm.commit()
-    ok(result_of(disable))
+    ok(result_of(reclassify))
     assert w.collect(confirm.result.reservation).reservation.status == "collected"
 
 
@@ -471,8 +523,8 @@ def test_16_override_and_concurrent_stock_correction(client):
 def test_17_override_and_confirmation_on_the_same_stock(client):
     w = ResWorld(client)
     r1 = w.confirmed(quantity=5)
+    r2 = w.submit(patient=w.patient2, quantity=2)  # requested before the correction: it holds 2
     w.set_stock(w.product, 3)
-    r2 = w.submit(patient=w.patient2, quantity=2)
     override = Held(w.manager, reservations.collect, w.org, r1.reservation_id, reference=r1.reference,
                     override=CollectionOverride(8, 3, "Delivery not entered yet", True))
     confirm = in_background(outcome, w.staff, reservations.confirm, w.org, r2.reservation_id)
@@ -525,41 +577,12 @@ def test_20_expiry_job_in_parallel(client):
     assert scalar("SELECT count(*) FROM notification WHERE kind = 'reservation_request_lapsed'") == 2
 
 
-# 23 ------------------------------------------------------------------------
-def test_23a_unit_change_then_acknowledgement(client):
-    w = ResWorld(client)
-    product = w.medicine("Ibuprofen", "Brufen 200mg", ack=False)
-    info = rows("SELECT unit_version, stock_unit, unit_label, pack_size FROM product WHERE product_id = :p",
-                p=product)[0]
-    change = Held(w.admin, reservations.configure_product, product, unit_label="carton")
-    ack = in_background(outcome, w.owner, reservations.acknowledge_unit, w.org, w.branch, product,
-                        unit_version=info[0], stock_unit=info[1], unit_label=info[2], pack_size=info[3])
-    wait_blocked()
-    change.commit()
-    assert error_code(result_of(ack))[0] == "unit_changed"
-
-
-def test_23b_acknowledgement_then_unit_change(client):
-    w = ResWorld(client)
-    product = w.medicine("Ibuprofen", "Brufen 200mg", ack=False)
-    info = rows("SELECT unit_version, stock_unit, unit_label, pack_size FROM product WHERE product_id = :p",
-                p=product)[0]
-    ack = Held(w.owner, reservations.acknowledge_unit, w.org, w.branch, product,
-               unit_version=info[0], stock_unit=info[1], unit_label=info[2], pack_size=info[3])
-    change = in_background(outcome, w.admin, reservations.configure_product, product, unit_label="carton")
-    wait_blocked()
-    ack.commit()
-    ok(result_of(change))
-    assert run(None, reservations.eligibility_problem, w.branch, product) == "unit_not_acknowledged"
-
-
 # Exact stock-adjustment association under concurrent stock activity ---------
 @pytest.mark.parametrize("round_", range(3))
 def test_collections_reference_their_own_adjustments(client, round_):
     w = ResWorld(client, quantity=20)
     other = w.medicine("Ibuprofen", "Brufen 200mg", quantity=20)
     put_stock(client, w.owner_headers, w.org, w.branch2, w.product, 20, "500.00")
-    w.acknowledge(w.product, w.branch2)
     r1 = w.confirmed(quantity=3)  # branch 1, product 1
     r2 = run(w.patient2, reservations.submit, location_id=w.branch2, product_id=w.product, quantity=4,
              contact_phone=PHONE, client_request_id=uuid.uuid4()).reservation
@@ -582,8 +605,8 @@ def test_collections_reference_their_own_adjustments(client, round_):
                        l=location_id, p=product_id, q=quantity)
             tx.commit()
 
-    churn_products = [w.medicine("Cetirizine", f"Zyrtec {round_}", enable=False, ack=False),
-                      w.medicine("Loratadine", f"Clarityn {round_}", enable=False, ack=False, branch=w.branch2)]
+    churn_products = [w.medicine("Cetirizine", f"Zyrtec {round_}", classify=False),
+                      w.medicine("Loratadine", f"Clarityn {round_}", classify=False, branch=w.branch2)]
     futures = [
         in_background(collect, r1, w.staff),
         in_background(collect, r2, w.manager),

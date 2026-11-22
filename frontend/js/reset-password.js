@@ -5,13 +5,15 @@
  *   #token=…  -> from the reset email: POST /auth/password/reset/check, then
  *                POST /auth/password/reset. The token is removed from the
  *                address bar. Success signs out every session of the account.
- * ?next=pharmacy|supplier|admin chooses where "Back to sign in" leads.
+ * ?next=pharmacy|supplier|patient|admin chooses where "Back to sign in" leads:
+ * each group's own sign-in, never another group's.
  */
 (function () {
   const $ = s => document.querySelector(s);
   const API = window.ApexAPI;
   const next = new URLSearchParams(location.search).get('next');
-  const signIn = next === 'supplier' ? 'suppliers.html#signin' : next === 'admin' ? 'ops-console-7f3k9q.html' : 'pharmacies.html#signin';
+  const signIn = next === 'supplier' ? 'suppliers.html#signin' : next === 'admin' ? 'ops-console-7f3k9q.html'
+    : next === 'patient' ? 'reservations.html#signin' : 'pharmacy-sign-in.html';
   const token = new URLSearchParams(location.hash.slice(1)).get('token') || '';
   try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* ignore */ }
   $('#back-to-signin').href = signIn;

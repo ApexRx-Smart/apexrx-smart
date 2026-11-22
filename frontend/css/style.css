@@ -606,3 +606,23 @@ footer.site.footer-wide{background:#121329;padding:76px 0 26px;}
 .footer-bottom .footer-legal{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;}
 /* Header when signed in: the account email instead of "Sign in" */
 .signed-in-chip{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ===== Account chooser (Sign in / Get started: patient, pharmacy, supplier) ===== */
+dialog.account-chooser{
+  /* The header is pointer-events:none (only its pill takes clicks): the dialog must opt back in. */
+  pointer-events:auto;
+  width:min(440px, calc(100vw - 32px)); max-height:calc(100vh - 32px); overflow:auto;
+  border:0; border-radius:20px; padding:22px 22px 18px; color:var(--text); background:var(--bg);
+  box-shadow:0 24px 60px rgba(15,26,61,.28);
+}
+dialog.account-chooser::backdrop{background:rgba(15,26,61,.45);}
+.account-chooser h2{font-family:var(--font-display); font-size:1.35rem; margin:0 0 4px; color:var(--ink);}
+.account-chooser .ac-lede{margin:0 0 14px; color:var(--text-dim);}
+.account-chooser .ac-close-row{display:flex; justify-content:flex-end; margin:-8px -8px 0 0;}
+.account-chooser .ac-close{border:0; background:transparent; font-size:1.1rem; line-height:1; padding:8px; border-radius:10px; cursor:pointer; color:var(--text-dim);}
+.account-chooser .ac-close:hover, .account-chooser .ac-close:focus-visible{background:var(--tint); color:var(--ink);}
+.account-chooser .ac-options{list-style:none; margin:0; padding:0; display:grid; gap:10px;}
+.account-chooser .ac-option{display:flex; flex-direction:column; gap:2px; padding:14px 16px; border:1px solid var(--line); border-radius:14px; text-decoration:none; color:var(--text); background:var(--tint);}
+.account-chooser .ac-option strong{font-size:1.02rem; color:var(--ink);}
+.account-chooser .ac-option span{font-size:.92rem; color:var(--text-dim);}
+.account-chooser .ac-option:hover, .account-chooser .ac-option:focus-visible{border-color:var(--green); background:#fff; outline:none; box-shadow:0 0 0 3px rgba(26,148,88,.18);}

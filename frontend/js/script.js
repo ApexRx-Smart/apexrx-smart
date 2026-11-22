@@ -8,6 +8,11 @@
       community_tag:'Closer to care.', community_caption:'Connecting people, pharmacies and possibilities.', how_map_label:'One city. A connected medicine network.', footer_invite:'Better access starts with connection.', footer_connect:'Connect with us ↗',
       nav_patients:'For Patients', nav_pharmacies:'For Pharmacies', nav_suppliers:'For Suppliers', nav_how:'How it works', nav_about:'About', nav_reservations:'My reservations',
       btn_signin:'Sign in', btn_start:'Get started', btn_signout:'Sign out', signed_in_as:'Signed in as',
+      nav_find:'Find a medicine', ac_close:'Close', ac_title_signin:'Sign in to ApexRX', ac_title_start:'Get started with ApexRX',
+      ac_lede_signin:'Choose your account type.', ac_lede_start:'Choose the account that fits you.',
+      ac_patient:'Patient', ac_patient_signin:'Your medicine reservations', ac_patient_start:'Create a free account to reserve medicines',
+      ac_pharmacy:'Pharmacy', ac_pharmacy_signin:'Owners, managers and staff', ac_pharmacy_start:'Register your pharmacy',
+      ac_supplier:'Supplier', ac_supplier_signin:'Medicine wholesalers and distributors', ac_supplier_start:'Register your business',
       h1_pre:'Find the medicines you need in ', h1_accent:'Kigali.',
       hero_lede:'See which pharmacies in Kigali report having a medicine, its price, and when each pharmacy last updated its stock.',
       hero_search_ph:'Search for a medicine, e.g. Amoxicillin 500mg',
@@ -112,6 +117,11 @@
       community_tag:'Plus près des soins.', community_caption:'Relier les habitants, les pharmacies et les possibilités.', how_map_label:'Une ville. Un réseau de pharmacies connecté.', footer_invite:'Un meilleur accès commence par un lien.', footer_connect:'Restons en contact ↗',
       nav_patients:'Patients', nav_pharmacies:'Pharmacies', nav_suppliers:'Fournisseurs', nav_how:'Comment ça marche', nav_about:'À propos', nav_reservations:'Mes réservations',
       btn_signin:'Se connecter', btn_start:'Commencer', btn_signout:'Se déconnecter', signed_in_as:'Connecté en tant que',
+      nav_find:'Trouver un médicament', ac_close:'Fermer', ac_title_signin:'Se connecter à ApexRX', ac_title_start:'Commencer avec ApexRX',
+      ac_lede_signin:'Choisissez votre type de compte.', ac_lede_start:'Choisissez le compte qui vous correspond.',
+      ac_patient:'Patient', ac_patient_signin:'Vos réservations de médicaments', ac_patient_start:'Créez un compte gratuit pour réserver des médicaments',
+      ac_pharmacy:'Pharmacie', ac_pharmacy_signin:'Propriétaires, gérants et personnel', ac_pharmacy_start:'Inscrivez votre pharmacie',
+      ac_supplier:'Fournisseur', ac_supplier_signin:'Grossistes et distributeurs de médicaments', ac_supplier_start:'Inscrivez votre entreprise',
       h1_pre:'Trouvez les médicaments dont vous avez besoin à ', h1_accent:'Kigali.',
       hero_lede:'Voyez quelles pharmacies de Kigali déclarent avoir un médicament, à quel prix, et quand chaque pharmacie a mis à jour son stock pour la dernière fois.',
       hero_search_ph:'Recherchez un médicament, ex. Amoxicilline 500mg',
@@ -217,6 +227,11 @@
       community_tag:'Hafi y’ubuvuzi.', community_caption:'Guhuza abantu na farumasi.', how_map_label:'Umujyi umwe. Farumasi zihujwe.', footer_invite:'Guhuzwa bituma kubona imiti byoroha.', footer_connect:'Tuvugishe ↗',
       nav_patients:'Abarwayi', nav_pharmacies:'Farumasi', nav_suppliers:'Abatanga imiti', nav_how:'Uko bikora', nav_about:'Abo turi bo', nav_reservations:'Ibyo nabikishije',
       btn_signin:'Injira', btn_start:'Tangira', btn_signout:'Sohoka', signed_in_as:'Winjiye nka',
+      nav_find:'Shaka umuti', ac_close:'Funga', ac_title_signin:'Injira kuri ApexRX', ac_title_start:'Tangira kuri ApexRX',
+      ac_lede_signin:'Hitamo ubwoko bwa konti yawe.', ac_lede_start:'Hitamo konti ikubereye.',
+      ac_patient:'Umurwayi', ac_patient_signin:'Imiti wabikishije', ac_patient_start:'Fungura konti y’ubuntu ubikishe imiti',
+      ac_pharmacy:'Farumasi', ac_pharmacy_signin:'Ba nyirabyo, abayobozi n’abakozi', ac_pharmacy_start:'Andikisha farumasi yawe',
+      ac_supplier:'Utanga imiti', ac_supplier_signin:'Abacuruzi barangura n’abakwirakwiza imiti', ac_supplier_start:'Andikisha ubucuruzi bwawe',
       h1_pre:'Shaka imiti ukeneye i ', h1_accent:'Kigali.',
       hero_lede:'Reba farumasi zo muri Kigali zivuga ko zifite umuti, igiciro cyawo, n’igihe buri farumasi iheruka kuvugurura ububiko bwayo.',
       hero_search_ph:'Shakisha umuti, urugero: Amoxicillin 500mg',
@@ -345,22 +360,54 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function(){ toastEl.classList.remove('show'); }, 2600);
   }
-  // Sign in and Get started both open the pharmacy/supplier account flow.
-  // Entering an existing account's email and password there signs you in.
-  function openAccountFlow(hash){ location.href = 'pharmacies.html?lang=' + encodeURIComponent(lang) + hash; }
+  // Signed out, Sign in and Get started open the account chooser: patients,
+  // pharmacies and suppliers each have their own sign-in and registration.
+  var chooser = document.getElementById('accountChooser');
+  var withLang = function(href){
+    var i = href.indexOf('#'), base = i === -1 ? href : href.slice(0, i), hash = i === -1 ? '' : href.slice(i);
+    return base + '?lang=' + encodeURIComponent(lang) + hash;
+  };
+  var CHOICES = {
+    signin: { patient: 'reservations.html#signin', pharmacy: 'pharmacy-sign-in.html', supplier: 'suppliers.html#signin' },
+    start: { patient: 'reservations.html#register', pharmacy: 'pharmacies.html', supplier: 'suppliers.html' }
+  };
+  var chooserMode = 'signin';
+  function paintChooser(){
+    var m = chooserMode;
+    [['accountChooserTitle', 'ac_title_'], ['accountChooserLede', 'ac_lede_'], ['acPatientText', 'ac_patient_'],
+     ['acPharmacyText', 'ac_pharmacy_'], ['acSupplierText', 'ac_supplier_']].forEach(function(pair){
+      var el = document.getElementById(pair[0]); if (!el) return;
+      el.setAttribute('data-i18n', pair[1] + m); el.textContent = t(pair[1] + m);
+    });
+    document.getElementById('acPatient').href = withLang(CHOICES[m].patient);
+    document.getElementById('acPharmacy').href = withLang(CHOICES[m].pharmacy);
+    document.getElementById('acSupplier').href = withLang(CHOICES[m].supplier);
+  }
+  function openChooser(mode){
+    chooserMode = mode; paintChooser(); setMenu(false);
+    if (chooser && typeof chooser.showModal === 'function') {
+      chooser.showModal();
+      var first = document.getElementById('acPatient'); if (first) first.focus();
+    } else {
+      location.href = withLang(CHOICES[mode].patient); // no <dialog> support: the patient pages list the others
+    }
+  }
+  if (chooser) {
+    // A click on the backdrop closes it, like Escape.
+    chooser.addEventListener('click', function(e){ if (e.target === chooser) chooser.close(); });
+    chooser.querySelectorAll('a').forEach(function(a){ a.addEventListener('click', function(){ chooser.close(); }); });
+  }
   ['signInBtn','signInBtnMobile'].forEach(function(id){
     document.getElementById(id).addEventListener('click', function(){
-      // On the patient reservations page the account is the patient's: stay there.
-      var mine = 'reservations.html?lang=' + encodeURIComponent(lang);
-      if (document.body.getAttribute('data-page') === 'reservations') { location.href = mine; return; }
-      if (!(window.ApexAPI && ApexAPI.session.isSignedIn())) { openAccountFlow('#signin'); return; }
+      if (!(window.ApexAPI && ApexAPI.session.isSignedIn())) { openChooser('signin'); return; }
       // Signed in: the account's own place. Pharmacy and supplier members go to their
-      // workspace (as before); an account with no organization is a patient, whose
-      // place is their reservations, never the pharmacy onboarding.
+      // workspace; an account with no organization is a patient, whose place is their
+      // reservations, never the pharmacy onboarding.
+      var mine = withLang('reservations.html');
       ApexAPI.auth.me().then(function(me){
         var types = (me.memberships || []).map(function(m){ return m.organization_type; });
-        if (types.indexOf('pharmacy') !== -1 || me.is_platform_admin) openAccountFlow('');
-        else if (types.indexOf('supplier') !== -1) location.href = 'suppliers.html?lang=' + encodeURIComponent(lang);
+        if (types.indexOf('pharmacy') !== -1 || me.is_platform_admin) location.href = withLang('pharmacy-sign-in.html');
+        else if (types.indexOf('supplier') !== -1) location.href = withLang('suppliers.html');
         else location.href = mine;
       }, function(err){ if (!err || err.status !== 401) location.href = mine; });
     });
@@ -369,7 +416,7 @@
     document.getElementById(id).addEventListener('click', function(){
       // Signed in: this button signs out (only this session; see js/api.js).
       if (window.ApexAPI && ApexAPI.session.isSignedIn()) { ApexAPI.auth.logout(); return; }
-      openAccountFlow('');
+      openChooser('start');
     });
   });
   // When this tab is signed in, the header says who it is: "Sign in" becomes
@@ -430,12 +477,13 @@
     document.querySelectorAll('[data-i18n-aria]').forEach(function(el){ el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria'))); });
     document.documentElement.lang = lang === 'rw' ? 'rw' : lang;
     try{ localStorage.setItem('apexrx_lang', lang); }catch(e){}
-    // Carry the language to the registration pages, keeping any #signin.
-    document.querySelectorAll('a[href^="pharmacies.html"], a[href^="suppliers.html"]').forEach(function(a){
+    // Carry the language to the account pages, keeping any #signin / #register.
+    document.querySelectorAll('a[href^="pharmacies.html"], a[href^="pharmacy-sign-in.html"], a[href^="suppliers.html"], a[href^="reservations.html"]').forEach(function(a){
       var raw = a.getAttribute('href'), hash = raw.indexOf('#') === -1 ? '' : raw.slice(raw.indexOf('#'));
       a.setAttribute('href', raw.split(/[?#]/)[0] + '?lang=' + encodeURIComponent(lang) + hash);
     });
     paintAccountButtons();
+    if (chooser) paintChooser();
     try { window.dispatchEvent(new CustomEvent('apexrx:lang', { detail: lang })); } catch (e) { /* old browsers */ }
   }
   var langSelect = document.getElementById('langSelect');

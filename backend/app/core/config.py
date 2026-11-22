@@ -88,6 +88,8 @@ class Settings(BaseSettings):
     # Patient reservations: open (pending or confirmed) reservations one patient
     # may hold at once, a spam control. The value awaits product-owner approval.
     reservation_max_open_per_patient: int = Field(default=3, ge=1, le=50)
+    # Most one reservation may ask for, when the medicine has no limit of its own.
+    reservation_default_max_quantity: int = Field(default=5, ge=1, le=1000)
     # Reservations recorded as expired per transaction by app/scripts/expire_reservations.py.
     reservation_expiry_batch_size: int = Field(default=200, ge=1, le=1000)
 

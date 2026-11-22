@@ -3,7 +3,8 @@ dashboard: access for each kind of account, groups and counts, server-side
 filters, sorting and pages, the detail (deadlines, patient phone while open,
 stock and shortfall), confirm / decline / cancel / collect, the owner-or-manager
 physical-count override and its stale-count refusal, duplicate submissions, the
-branch unit acknowledgement, notifications, suspension (read only), the three
+reservation settings (the branch minimum kept for walk-in customers and each
+medicine's stock breakdown), notifications, suspension (read only), the three
 languages, a 390px phone and basic accessibility.
 
 LOCAL backend and throwaway database only - never a shared environment.
@@ -14,8 +15,7 @@ LOCAL backend and throwaway database only - never a shared environment.
   3. E2E_ADMIN_EMAIL=... E2E_ADMIN_PASSWORD=... python frontend/tests/e2e_pharmacy_reservations.py
 
 Everything is created through the API as the application does it (the admin
-classifies medicines, the owner stocks them, adds members and acknowledges units,
-patients reserve). Nothing is written to the database directly. One case cannot
+classifies medicines, the owner stocks them and adds members, patients reserve). Nothing is written to the database directly. One case cannot
 happen live in a test - a 24-hour deadline passing - so it is replayed by
 answering one request in the browser with the API's documented 409 response.
 """
@@ -27,6 +27,9 @@ import sys
 import uuid
 
 from playwright.sync_api import sync_playwright
+
+THRESHOLD_TEXT = ('Set the minimum quantity of each medicine you want to retain for walk-in customers. Medicines will a'
+                  'utomatically become unavailable for public reservations when their remaining unallocated stock reaches this threshold.')
 
 sys.path.insert(0, os.path.dirname(__file__))
 import e2e_dashboards as D  # noqa: E402  (shared API and UI helpers)
@@ -40,12 +43,6 @@ INTERNAL = {"patient_user_id", "deduction_adjustment_id", "correction_adjustment
 
 def settings(admin, product):
     return call("GET", f"/catalogue/products/{product}/reservation-settings", token=admin)
-
-
-def acknowledge(owner, org, loc, product, admin):
-    s = settings(admin, product)
-    call("POST", f"/organizations/{org}/locations/{loc}/products/{product}/unit-acknowledgement",
-         {k: s[k] for k in ("unit_version", "stock_unit", "unit_label", "pack_size")}, owner)
 
 
 def reserve(token, admin, loc, product, quantity):
@@ -63,10 +60,10 @@ def seed():
                                   ("setup", "125mg", True), ("stale", "750mg", True), ("off", "50mg", False)):
         pid = call("POST", "/catalogue/products", {"drug_id": drug, "product_name": f"Reservamol {RUN} {strength}",
                                                    "strength": strength, "pack_size": "B/20"}, admin)["product_id"]
-        if enable:
+        if enable:  # classified: reservable wherever a branch lists it with stock above its minimum
             call("PATCH", f"/catalogue/products/{pid}/reservation-settings",
                  {"dispensing_class": "non_prescription", "stock_unit": "pack", "unit_label": "box",
-                  "max_reservation_quantity": 5, "reservation_enabled": True}, admin)
+                  "max_reservation_quantity": 5}, admin)
         w[key] = pid
     w["owner_email"] = f"pr-owner-{RUN}@example.com"
     w["owner"], w["org"], (w["b1"], w["b2"]) = D.org_with_owner(
@@ -88,8 +85,6 @@ def seed():
         for key in products:
             call("PUT", base(loc, w[key]), {"quantity": 10}, w["owner"])
             call("PUT", base(loc, w[key]) + "/offer", {"unit_price": "1200"}, w["owner"])
-    for loc, key in ((w["b1"], "main"), (w["b1"], "two"), (w["b1"], "three"), (w["b2"], "main")):
-        acknowledge(w["owner"], w["org"], loc, w[key], admin)
 
     patients = {}
     for n in range(1, 6):
@@ -120,7 +115,7 @@ def stock_of(w, loc, product):
 
 
 def set_stock(w, loc, product, qty):
-    call("PUT", f"/organizations/{w['org']}/locations/{loc}/stock/{product}", {"quantity": qty}, w["owner"])
+    call("PUT", f"/organizations/{w['org']}/locations/{loc}/stock/{product}", {"quantity": qty, "allow_below_reserved": True}, w["owner"])
 
 
 def page_for(browser, email, viewport=None, kind="pharmacy"):
@@ -221,8 +216,8 @@ def main():
         # ========================================================= access
         anon = page_for(browser, None)
         anon.goto(f"{D.SITE}/pharmacy-dashboard.html")
-        anon.wait_for_url("**/pharmacies.html*", timeout=15000)
-        check("access: signed out, the dashboard sends you to sign in", "#signin" in anon.url)
+        anon.wait_for_url("**/pharmacy-sign-in.html*", timeout=15000)
+        check("access: signed out, the dashboard sends you to the pharmacy sign-in page", "pharmacy-sign-in.html" in anon.url)
         anon.context.close()
 
         patient = page_for(browser, f"pr-patient1-{RUN}@example.com")
@@ -313,14 +308,14 @@ def main():
         txt = detail_text(staff)
         check("detail: a request, its response deadline, the patient's phone while open, stock figures",
               "Patient request: no stock is committed yet" in txt and "Response deadline" in txt and PHONE in txt
-              and "Recorded stock" in txt and "Available to reserve" in txt and "Collection deadline" not in txt, txt[:400])
+              and "Recorded stock" in txt and "Unallocated" in txt and "Collection deadline" not in txt, txt[:400])
         check("detail: staff may confirm or decline, not cancel or override",
               staff.locator("#rv-detail [data-x=confirm]").count() == 1 and staff.locator("#rv-detail [data-x=decline]").count() == 1
               and staff.locator("#rv-detail [data-x=cancel]").count() == 0 and staff.locator("#rv-detail [data-x=override]").count() == 0)
         act(staff, "confirm", submit=False)
         dlg = staff.inner_text("#dlgf")
         check("confirm: the dialog shows medicine, quantity, branch, stock, availability, deadline and the commitment",
-              "2 × box (B/20)" in dlg and "Kimihurura Branch" in dlg and "Recorded stock" in dlg and "Available to reserve" in dlg
+              "2 × box (B/20)" in dlg and "Kimihurura Branch" in dlg and "Recorded stock" in dlg and "Unallocated" in dlg
               and "Respond by" in dlg and "full 2 × box" in dlg)
         staff.uncheck("#dlgf input[name=sure]"); staff.click("#dlgf button.solid")
         check("confirm: nothing happens without the explicit check", staff.locator("#dlg[open]").count() == 1)
@@ -332,8 +327,11 @@ def main():
         check("confirm: one request; the reservation is now a confirmed commitment with a collection deadline",
               len([u for u in posts if u.endswith("/confirm")]) == 1 and "Collection deadline" in detail_text(staff)
               and call("GET", f"{org_path}/{w['r_confirm']}", token=w["owner"])["status"] == "confirmed")
-        check("confirm: stock figures refreshed (2 held, 8 available)",
-              "Held by confirmed reservations\n2" in detail_text(staff) or "\t2" in detail_text(staff))
+        st = call("GET", f"{org_path}/{w['r_confirm']}", token=w["owner"])["stock"]
+        txt = detail_text(staff).replace("\t", "\n")
+        check("confirm: stock figures refreshed from the API (held by open requests and confirmed reservations)",
+              f"Held by reservations\n{st['allocated_quantity']}" in txt and f"Unallocated\n{st['available_to_reserve']}" in txt
+              and f"Reservable now\n{st['reservable_quantity']}" in txt, (st, txt[:400]))
 
         # Conflict: the stock fell after the page was opened.
         open_ref(staff, w["r_short"])
@@ -344,7 +342,7 @@ def main():
         wait_detail(staff, "Not confirmed")
         txt = detail_text(staff)
         check("confirm conflict: the API refuses, the reason and current availability are shown, figures refreshed",
-              "only 4 is available" in txt and "New request" in txt and "Available to reserve\n4" in txt.replace("\t", "\n"), txt[:500])
+              "covers only 4" in txt and "New request" in txt and "Recorded stock\n6" in txt.replace("\t", "\n"), txt[:500])
         act(staff, "confirm", submit=False)
         check("confirm: the dialog warns when unreserved stock is too low", warned and "will be refused" in staff.inner_text("#dlgf"))
         staff.click("#dlg-x")
@@ -455,47 +453,66 @@ def main():
         check("privacy: no internal ids (adjustments, transactions, user ids) in any reservation response", not leaked, leaked[:5])
         check("privacy: the patient's email never appears", "pr-patient" not in manager.content())
 
-        # ========================================================= setup and acknowledgement
+        # ========================================================= reservation settings
         manager.click("[data-a=rvback]"); manager.wait_for_selector("#rv-filters")
         manager.click("[data-a=rvmode][data-m=setup]")
-        manager.wait_for_selector("#rv-units .rv-card")
+        manager.wait_for_selector("#rv-meds table")
         manager.select_option("#rv-setup-loc", str(w["b1"]))
-        manager.wait_for_function("() => document.querySelectorAll('#rv-units .rv-card').length >= 6")
-        card = manager.locator("#rv-units .rv-card", has_text=f"Reservamol {RUN} 125mg")
-        txt = card.inner_text()
-        check("setup: unit, name, pack size, version, not acknowledged, why not",
-              "Packs" in txt and "box" in txt and "B/20" in txt and "Unit version" in txt and "No" in txt
-              and "has not acknowledged" in txt, txt)
-        off = manager.locator("#rv-units .rv-card", has_text=f"Reservamol {RUN} 50mg").inner_text()
-        check("setup: a medicine ApexRX has not classified says so", "not classified" in off)
-        card.locator("[data-a=rvack]").click()
-        manager.check("#dlgf input[name=sure]"); manager.click("#dlgf button.solid")
-        manager.wait_for_function(f"() => [...document.querySelectorAll('#rv-units .rv-card')].some(c => c.textContent.includes('{RUN} 125mg') && c.textContent.includes('Can be reserved here'))")
-        check("setup: a manager acknowledges the current unit; the medicine becomes reservable here", True)
-        stale = manager.locator("#rv-units .rv-card", has_text=f"Reservamol {RUN} 750mg")
-        call("PATCH", f"/catalogue/products/{w['stale']}/reservation-settings", {"unit_label": "carton"}, w["admin"])
-        stale.locator("[data-a=rvack]").click()
-        manager.check("#dlgf input[name=sure]"); manager.click("#dlgf button.solid")
-        manager.wait_for_function("() => document.querySelector('#toast').textContent.includes('unit changed')")
-        manager.wait_for_function(f"() => [...document.querySelectorAll('#rv-units .rv-card')].some(c => c.textContent.includes('{RUN} 750mg') && c.textContent.includes('carton'))")
-        check("setup: a stale acknowledgement is refused and the new unit is shown", True)
-        manager.locator("#rv-units .rv-card", has_text=f"Reservamol {RUN} 750mg").locator("[data-a=rvsettings]").click()
+        manager.wait_for_function("() => document.querySelectorAll('#rv-meds tbody tr').length >= 6")
+        check("settings: the branch minimum is explained in the words agreed",
+              THRESHOLD_TEXT in manager.inner_text("#rv-setup"), manager.inner_text(".rv-min"))
+        check("settings: the minimum starts at 0", manager.input_value("#rv-min") == "0")
+
+        def med_row(page, strength):
+            return page.locator("#rv-meds tbody tr", has_text=f"Reservamol {RUN} {strength}").inner_text()
+
+        row = med_row(manager, "125mg")
+        check("settings: each medicine shows recorded, held, unallocated, kept back and reservable stock",
+              re.search(r"\b10\s+0\s+10\s+0\s+10\b", row) is not None and "Reservable" in row and "Up to 5" in row, row)
+        off = med_row(manager, "50mg")
+        check("settings: a medicine ApexRX has not classified says so", "Not reservable" in off and "not classified" in off, off)
+
+        manager.fill("#rv-min", "10"); manager.click("#rv-min-f button")
+        manager.wait_for_function("() => document.querySelector('#toast').textContent.includes('keeps 10')")
+        manager.wait_for_function(f"() => [...document.querySelectorAll('#rv-meds tbody tr')].some(r => r.textContent.includes('{RUN} 125mg') && r.textContent.includes('Not reservable'))")
+        row = med_row(manager, "125mg")
+        check("settings: at the minimum the medicine is no longer reservable, and the reason is given",
+              "minimum kept for walk-in customers" in row, row)
+        opts = call("GET", f"/reservations/options?location_id={w['b1']}&product_id={w['setup']}", token=w["patients"][1])
+        check("settings: patients see it as not reservable (no stock figures)",
+              opts["reservable"] is False and opts["reason"] == "no_reservable_stock" and "quantity" not in opts, opts)
+        other_branch = call("GET", f"/organizations/{w['org']}/locations", token=w["owner"])
+        check("settings: the minimum is per branch",
+              {loc["location_id"]: loc["reservation_min_stock"] for loc in other_branch}.get(w["b2"]) == 0)
+        manager.fill("#rv-min", "-1"); manager.click("#rv-min-f button")
+        check("settings: a negative minimum is refused in the page",
+              call("GET", f"/organizations/{w['org']}/locations", token=w["owner"])[0]["reservation_min_stock"] in (0, 10))
+        manager.fill("#rv-min", "0"); manager.click("#rv-min-f button")
+        manager.wait_for_function("() => document.querySelector('#toast').textContent.includes('keeps 0')")
+        manager.wait_for_function(f"() => [...document.querySelectorAll('#rv-meds tbody tr')].some(r => r.textContent.includes('{RUN} 125mg') && r.textContent.includes('Up to 5'))")
+        check("settings: back at 0, the medicine is reservable again", True)
+
+        manager.locator("#rv-meds tbody tr", has_text=f"Reservamol {RUN} 750mg").locator("[data-a=rvsettings]").click()
         manager.wait_for_selector("#dlg[open]")
         dlg = manager.inner_text("#dlgf")
-        check("setup: catalogue settings are read only for pharmacies",
+        check("settings: catalogue settings are read only for pharmacies",
               "Only ApexRX administrators" in dlg and manager.locator("#dlgf input:not([type=hidden]), #dlgf select, #dlgf textarea").count() == 0)
         manager.click("#dlg-x")
         status, _ = call("PATCH", f"/catalogue/products/{w['main']}/reservation-settings", {"max_reservation_quantity": 1},
                          w["owner"], expect_error=True)
-        check("setup: the API refuses a pharmacy owner editing shared settings", status == 403)
+        check("settings: the API refuses a pharmacy owner editing shared settings", status == 403)
         check("accessibility: every visible control in the workspace has a name", not unlabeled(manager), unlabeled(manager))
         manager.context.close()
 
         staff = page_for(browser, w["staff_email"])
         workspace(staff)
-        staff.click("[data-a=rvmode][data-m=setup]"); staff.wait_for_selector("#rv-units .rv-card")
-        check("setup: staff see the status but cannot acknowledge",
-              staff.locator("#rv-units [data-a=rvack]").count() == 0 and "Owners and managers acknowledge units" in staff.inner_text("#rv-setup"))
+        staff.click("[data-a=rvmode][data-m=setup]"); staff.wait_for_selector("#rv-meds table")
+        check("settings: staff see the minimum and the breakdown but cannot change the minimum",
+              staff.locator("#rv-min").count() == 0 and "Owners and managers change this." in staff.inner_text("#rv-setup"))
+        staff_token = call("POST", "/auth/login", {"email": w["staff_email"], "password": D.PW})["access_token"]
+        status, _ = call("PATCH", f"/organizations/{w['org']}/locations/{w['b1']}", {"reservation_min_stock": 3},
+                         staff_token, expect_error=True)
+        check("settings: the API refuses a staff member changing the minimum", status == 403)
         staff.context.close()
 
         # ========================================================= notifications, languages, phone

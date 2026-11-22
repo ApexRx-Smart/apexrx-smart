@@ -135,10 +135,12 @@ def main():
         check("home: the decorative Kigali map background stays", page.locator("#mapLayer img.map-bg-img").count() == 1)
         nav = page.locator("nav.main-nav a")
         labels = [a.strip() for a in nav.all_inner_texts()]
-        check("nav: 'For Patients' removed from the main navigation", "For Patients" not in labels, labels)
+        check("nav: For Patients, For Pharmacies, For Suppliers, How it works, About",
+              labels == ["For Patients", "For Pharmacies", "For Suppliers", "How it works", "About"], labels)
         hrefs = {a: page.get_attribute(f"nav.main-nav a:has-text('{a}')", "href") for a in labels}
-        check("nav: links go to the registration, How it works and About pages",
-              hrefs.get("For Pharmacies", "").startswith("pharmacies.html") and hrefs.get("For Suppliers", "").startswith("suppliers.html")
+        check("nav: For Patients opens patient registration; the others their registration, How it works and About pages",
+              hrefs.get("For Patients", "").startswith("reservations.html") and hrefs["For Patients"].endswith("#register")
+              and hrefs.get("For Pharmacies", "").startswith("pharmacies.html") and hrefs.get("For Suppliers", "").startswith("suppliers.html")
               and hrefs.get("How it works") == "how-it-works.html" and hrefs.get("About") == "about.html", hrefs)
         check("landing: the two information sections are gone",
               page.locator("#audience").count() == 0 and page.locator("section#how").count() == 0)
@@ -163,13 +165,21 @@ def main():
                   "[...document.images].every(i => !i.complete || i.naturalWidth > 0)"))
 
         # Refreshing on the new pages works (static files).
-        for path in ("how-it-works.html", "about.html", "legal.html#cookies", "suppliers.html", "pharmacies.html#signin"):
+        for path in ("how-it-works.html", "about.html", "legal.html#cookies", "suppliers.html", "pharmacies.html",
+                     "pharmacy-sign-in.html", "reservations.html#register"):
             r = page.goto(SITE + "/" + path)
             check(f"refresh: /{path} loads", r.status == 200)
+        page.goto(SITE + "/pharmacies.html?lang=en#signin")
+        page.wait_for_url("**/pharmacy-sign-in.html?lang=en")
+        check("old link: pharmacies.html#signin opens the dedicated sign-in page, keeping the language", True)
+        page.goto(SITE + "/pharmacies.html#staff")
+        page.wait_for_url("**/pharmacy-sign-in.html")
+        check("old link: pharmacies.html#staff opens the dedicated sign-in page", True)
 
         # ---------------------------------------------------- footer links
         expected = {
-            "For Patients": "index.html#hero-search", "For Pharmacies": "pharmacies.html", "For Suppliers": "suppliers.html",
+            "For Patients": "reservations.html#register", "Find a medicine": "index.html#hero-search",
+            "For Pharmacies": "pharmacies.html", "For Suppliers": "suppliers.html",
             "How it works": "how-it-works.html", "About": "about.html", "Careers": "about.html", "Blog": "about.html",
             "Contact": "about.html", "Privacy": "legal.html#privacy", "Terms of Service": "legal.html#terms",
             "Cookie Policy": "legal.html#cookies",
@@ -178,18 +188,19 @@ def main():
         bad = {}
         for label, target in expected.items():
             href = page.get_attribute(f"footer .footer-col a:has-text('{label}')", "href")
-            if href.split("?")[0] != target and not href.startswith(target.split("#")[0] + "?"):
+            if href.split("?")[0] != target and not (href.startswith(target.split("#")[0] + "?")
+                                                       and href.endswith("#" + target.split("#")[1] if "#" in target else "")):
                 bad[label] = href
         check("footer: every link has a destination (from another page)", not bad, bad)
-        page.click("footer .footer-col a:has-text('For Patients')")
+        page.click("footer .footer-col a:has-text('Find a medicine')")
         page.wait_for_url("**/index.html#hero-search")
         page.wait_for_timeout(800)
-        check("footer: 'For Patients' from another page lands on the medicine search",
+        check("footer: 'Find a medicine' from another page lands on the medicine search",
               page.evaluate("(() => { const r = document.querySelector('#medicineSearchInput').getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })()"))
         page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        check("footer: on the landing page 'For Patients' is an in-page link",
-              page.get_attribute("footer .footer-col a:has-text('For Patients')", "href") == "#hero-search")
-        page.click("footer .footer-col a:has-text('For Patients')")
+        check("footer: on the landing page 'Find a medicine' is an in-page link",
+              page.get_attribute("footer .footer-col a:has-text('Find a medicine')", "href") == "#hero-search")
+        page.click("footer .footer-col a:has-text('Find a medicine')")
         page.wait_for_timeout(900)
         check("footer: ...and scrolls up to the search", page.evaluate("scrollY") < 300)
         page.goto(SITE + "/index.html")
@@ -223,7 +234,17 @@ def main():
         page.click("#menuToggle")
         page.wait_for_selector("#mobileNav.open")
         mobile = [a.strip() for a in page.locator("#mobileNav > a").all_inner_texts()]
-        check("mobile: menu has the same items, without For Patients", mobile == ["For Pharmacies", "For Suppliers", "How it works", "About"], mobile)
+        check("mobile: menu has the same items, with For Patients",
+              mobile == ["For Patients", "For Pharmacies", "For Suppliers", "How it works", "About"], mobile)
+        page.click("#signInBtnMobile")
+        page.wait_for_selector("#accountChooser[open]")
+        check("mobile: Sign in opens the account chooser, which fits the screen",
+              page.locator("#accountChooser .ac-option").count() == 3
+              and page.evaluate("document.querySelector('#accountChooser').getBoundingClientRect().right <= innerWidth"))
+        page.keyboard.press("Escape")
+        page.wait_for_selector("#accountChooser:not([open])", state="attached")
+        page.click("#menuToggle")
+        page.wait_for_selector("#mobileNav.open")
         page.click("#mobileNav a:has-text('About')")
         page.wait_for_url("**/about.html")
         wide = []
@@ -250,13 +271,24 @@ def main():
         confirm_eye.click()
         check("pharmacy: the confirm field has its own toggle", page.get_attribute("#account [name=confirm]", "type") == "text")
         confirm_eye.click()
-        page.click("#auth-switch")
-        check("pharmacy: 'Already have an account? Sign in' switches to sign in",
-              page.is_hidden("#confirm-field") and page.inner_text("#step-title") == "Staff sign-in"
-              and page.evaluate("location.hash") == "#signin"
-              and page.get_attribute("#tab-signin", "aria-selected") == "true" and page.is_visible("#forgot-link"))
-        page.click("#auth-switch")
-        check("pharmacy: ...and back to create account", page.is_visible("#confirm-field"))
+        check("pharmacy: the registration page has no sign-in form, tabs or other groups' links",
+              page.locator("[data-auth-tab], #tab-signin").count() == 0 and page.is_hidden("#forgot-row")
+              and page.locator("#onboarding a[href*='suppliers.html'], #onboarding a[href*='reservations.html']").count() == 0)
+        page.click("#auth-switch-link")
+        page.wait_for_url("**/pharmacy-sign-in.html*")
+        page.wait_for_selector("#account:not([hidden])")
+        check("pharmacy: 'Sign in to your pharmacy' opens the dedicated sign-in page",
+              page.is_hidden("#confirm-field") and page.inner_text("#step-title") == "Pharmacy sign-in"
+              and page.is_visible("#forgot-link") and page.title().startswith("Pharmacy sign-in"))
+        check("pharmacy sign-in: no tabs and no other groups' links",
+              page.locator("[data-auth-tab]").count() == 0
+              and page.locator("#onboarding a[href*='suppliers.html'], #onboarding a[href*='reservations.html']").count() == 0)
+        check("pharmacy sign-in: forgot password leads to recovery that returns here",
+              page.get_attribute("#forgot-link", "href") == "reset-password.html?next=pharmacy")
+        page.click("#auth-switch-link")
+        page.wait_for_url("**/pharmacies.html*")
+        page.wait_for_selector("#account:not([hidden])")
+        check("pharmacy: ...and 'Register your pharmacy' returns to registration", page.is_visible("#confirm-field"))
         steps = [s.strip() for s in page.locator(".steps li").all_inner_texts()]
         check("pharmacy: steps are Account, Verify email, Details, Documents, Review (no plan or payment)",
               steps == ["Account", "Verify email", "Details", "Documents", "Review"], steps)
@@ -267,8 +299,44 @@ def main():
         watch(page, errors)
         page.goto(SITE + "/index.html")
         page.click("#signInBtn")
-        page.wait_for_url("**/pharmacies.html*#signin")
-        check("sign in: header button opens sign-in mode", page.is_hidden("#confirm-field") and page.inner_text("#account-submit").startswith("Sign in"))
+        page.wait_for_selector("#accountChooser[open]")
+        options = {page.locator(f"#{i} strong").inner_text(): page.get_attribute(f"#{i}", "href") for i in ("acPatient", "acPharmacy", "acSupplier")}
+        check("sign in: the header opens a chooser for patients, pharmacies and suppliers, each to its own sign-in",
+              page.inner_text("#accountChooserTitle") == "Sign in to ApexRX"
+              and options == {"Patient": "reservations.html?lang=en#signin", "Pharmacy": "pharmacy-sign-in.html?lang=en",
+                              "Supplier": "suppliers.html?lang=en#signin"}, options)
+        page.click("#acPharmacy")
+        page.wait_for_url("**/pharmacy-sign-in.html*")
+        page.wait_for_selector("#account:not([hidden])")
+        check("sign in: Pharmacy opens the dedicated sign-in page", page.is_hidden("#confirm-field") and page.inner_text("#account-submit").startswith("Sign in"))
+        page.goto(SITE + "/index.html")
+        page.click("#getStartedBtn")
+        page.wait_for_selector("#accountChooser[open]")
+        options = {page.locator(f"#{i} strong").inner_text(): page.get_attribute(f"#{i}", "href") for i in ("acPatient", "acPharmacy", "acSupplier")}
+        check("get started: the chooser leads to each group's registration",
+              page.inner_text("#accountChooserTitle") == "Get started with ApexRX"
+              and options == {"Patient": "reservations.html?lang=en#register", "Pharmacy": "pharmacies.html?lang=en",
+                              "Supplier": "suppliers.html?lang=en"}, options)
+        page.keyboard.press("Escape")
+        check("get started: Escape closes the chooser", page.locator("#accountChooser[open]").count() == 0)
+        page.click("#getStartedBtn"); page.wait_for_selector("#accountChooser[open]")
+        page.click("#acPatient")
+        page.wait_for_url("**/reservations.html*#register")
+        page.wait_for_selector("#rs-auth:not([hidden])")
+        check("get started: Patient opens patient account creation, with no business sign-in links",
+              page.get_attribute("#rs-tab-create", "aria-pressed") == "true" and page.is_visible("#rs-name")
+              and page.locator(".rs-body a[href*='pharmac'], .rs-body a[href*='suppliers']").count() == 0)
+        page.click("#rs-tab-signin")
+        check("patient: sign-in shows a forgot-password link to patient recovery",
+              page.is_visible("#rs-forgot") and page.get_attribute("#rs-forgot", "href") == "reset-password.html?next=patient")
+        page.click("#rs-forgot")
+        page.wait_for_url("**/reset-password.html?next=patient")
+        page.wait_for_selector("#back-to-signin")
+        check("patient recovery: 'Back to sign in' returns to the patient sign-in",
+              page.get_attribute("#back-to-signin", "href") == "reservations.html#signin")
+        page.goto(SITE + "/reservations.html#signin")
+        page.wait_for_selector("#rs-auth:not([hidden])")
+        check("patient: #signin opens the patient sign-in", page.get_attribute("#rs-tab-signin", "aria-pressed") == "true")
         page.goto(SITE + "/index.html")
         page.click("nav.main-nav a:has-text('For Suppliers')")
         page.wait_for_url("**/suppliers.html*")
@@ -276,8 +344,11 @@ def main():
         check("supplier: For Suppliers opens the supplier registration",
               "SUPPLIER" in page.inner_text(".story .eyebrow") and page.inner_text("#step-title") == "Create your supplier account")
         password_toggle_checks(page, "#account", "supplier create")
+        check("supplier: no link to the pharmacy or patient sign-in",
+              page.locator("#onboarding a[href*='pharmac'], #onboarding a[href*='reservations.html']").count() == 0)
         page.click("#auth-switch")
-        check("supplier: 'Already have an account? Sign in' switches to sign in", page.is_hidden("#confirm-field"))
+        check("supplier: 'Already have an account? Sign in' switches to sign in, with password recovery",
+              page.is_hidden("#confirm-field") and page.get_attribute("#forgot-link", "href") == "reset-password.html?next=supplier")
         ctx.close()
 
         # Admin sign-in has the toggle too, and still works.

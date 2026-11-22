@@ -174,7 +174,7 @@ def main():
         ctx = new_context(browser)
         page = ctx.new_page()
         watch(page, errors, allowed=("status of 401",))
-        page.goto(SITE + "/pharmacies.html#signin")
+        page.goto(SITE + "/pharmacy-sign-in.html")
         fill_account(page, f"nobody-{RUN}@example.com", confirm=False)
         wait_text(page, "#form-error", "Incorrect email or password")
         check("bug: an email without an account cannot sign in",
@@ -229,9 +229,9 @@ def main():
               status == 403 and body.get("reason") == "email_unverified")
 
         tab = open_link(ctx, mail["link"], errors)
-        check("verify page: success message, masked address, continue link to the pharmacy page",
+        check("verify page: success message, masked address, continue link to the pharmacy sign-in page",
               tab.inner_text("#verify-title") == "Your email address is verified."
-              and tab.get_attribute("#verify-continue", "href") == "pharmacies.html"
+              and tab.get_attribute("#verify-continue", "href") == "pharmacy-sign-in.html"
               and email not in tab.inner_text("body") and tab.is_visible("#verify-email-row"))
         check("verify page: the token is removed from the address bar", "token" not in tab.url)
         tab.close()
@@ -317,7 +317,7 @@ def main():
         check("dashboard: the uploaded documents are listed with their status",
               f"pharmacy-license-{RUN}.pdf" in page.inner_text("#docs") and "Pending verification" in page.inner_text("#docs"))
         page.click("#open-registration")
-        page.wait_for_url("**/pharmacies.html*")
+        page.wait_for_url("**/pharmacy-sign-in.html*#review")
         visible(page, "#review")
         check("dashboard: 'Registration details' leads back to the review", page.inner_text("#review-status") == "Pending review")
         ctx.close()
@@ -326,7 +326,7 @@ def main():
         ctx = new_context(browser)
         page = ctx.new_page()
         watch(page, errors)
-        page.goto(SITE + "/pharmacies.html#signin")
+        page.goto(SITE + "/pharmacy-sign-in.html")
         fill_account(page, email, confirm=False)
         on_dashboard(page)
         check("sign in: a registered pharmacy opens its dashboard", name in page.inner_text("#me-name"))
@@ -358,7 +358,7 @@ def main():
         tab = open_link(ctx, first["link"], errors, allowed=("status of 400",))
         check("verify page: the older link is refused as replaced by a newer email",
               tab.inner_text("#verify-title") == "A newer verification email was sent."
-              and tab.get_attribute("#verify-continue", "href") == "pharmacies.html#signin" and tab.is_visible("#verify-help"))
+              and tab.get_attribute("#verify-continue", "href") == "pharmacy-sign-in.html" and tab.is_visible("#verify-help"))
         tab.goto(SITE + "/verify-email.html?next=supplier#token=" + "A" * 43)
         tab.wait_for_function("!document.querySelector('#verify-actions').hidden")
         check("verify page: an unknown link is refused", tab.inner_text("#verify-title") == "This verification link is not valid."
@@ -392,7 +392,7 @@ def main():
         ctx = new_context(browser)
         page = ctx.new_page()
         watch(page, errors)
-        page.goto(SITE + "/pharmacies.html#signin")
+        page.goto(SITE + "/pharmacy-sign-in.html")
         fill_account(page, email2, confirm=False)
         visible(page, "#verify-email")
         check("resume: an unverified account returns to email verification", page.inner_text("#verify-address") == email2)
@@ -411,7 +411,7 @@ def main():
         ctx = new_context(browser)
         page = ctx.new_page()
         watch(page, errors)
-        page.goto(SITE + "/pharmacies.html#signin")
+        page.goto(SITE + "/pharmacy-sign-in.html")
         fill_account(page, email3, confirm=False)
         visible(page, "#details")
         check("resume: an organization without an address returns to the details, filled in",
@@ -506,19 +506,24 @@ def main():
               page.url.split("?")[0].endswith("/supplier-dashboard.html") and supplier in page.inner_text("#me-name"))
         ctx.close()
 
-        # A supplier who signs in on the pharmacy page is pointed to the supplier page.
+        # A supplier who signs in on the pharmacy sign-in page is told so, with no
+        # link into the supplier sign-in (no cross-group auth links): only home or sign out.
         ctx = new_context(browser)
         page = ctx.new_page()
         watch(page, errors)
-        page.goto(SITE + "/pharmacies.html#signin")
+        page.goto(SITE + "/pharmacy-sign-in.html")
         fill_account(page, supplier_email, confirm=False)
         visible(page, "#account-panel")
-        check("sign in: a supplier on the pharmacy page is not asked to register a pharmacy",
-              "belongs to a supplier" in page.inner_text("#account-panel-text") and page.is_hidden("#verify-email"))
-        page.click("#account-panel-link")
-        on_dashboard(page)
-        check("sign in: ...and continues to the supplier dashboard, still signed in",
-              page.url.split("?")[0].endswith("/supplier-dashboard.html") and supplier in page.inner_text("#me-name"))
+        check("sign in: a supplier on the pharmacy sign-in page is not asked to register a pharmacy",
+              "registered as a medicine supplier" in page.inner_text("#account-panel-text") and page.is_hidden("#verify-email"))
+        check("sign in: ...and is offered the home page, not the supplier sign-in",
+              page.get_attribute("#account-panel-link", "href").split("?")[0] == "index.html"
+              and "suppliers.html" not in page.inner_html("#onboarding"))
+        page.click("#sign-out")
+        page.wait_for_url("**/pharmacy-sign-in.html*")
+        visible(page, "#account")
+        check("sign in: ...signing out returns to the pharmacy sign-in form",
+              page.evaluate("sessionStorage.getItem('apexrx_session')") is None)
         ctx.close()
 
         # ======================================= translations and mobile layout

@@ -1,5 +1,5 @@
 """Reservation API and security (Phase 2): patient, pharmacy, catalogue
-settings and branch acknowledgement endpoints, over the Phase 1 engine.
+settings and branch medicine endpoints, over the Phase 1 engine.
 
 Local *_test database only (see conftest). Concurrency tests use real
 separate HTTP requests from threads, each with its own database session.
@@ -15,7 +15,7 @@ from sqlalchemy import text
 from app.core.database import engine
 from app.core.rate_limit import reservation_limiter
 from tests.helpers import approve, location, organization, user
-from tests.reservation_support import PHONE, ResWorld, backdate, rows, scalar
+from tests.reservation_support import PHONE, ResWorld, backdate, scalar
 
 REFERENCE = re.compile(r"^RX-[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{10}$")
 # Keys that must never appear in a patient-facing or public response.
@@ -109,9 +109,8 @@ def test_every_reservation_endpoint_requires_authentication(w):
         ("post", f"/organizations/{org}/reservations/{ref}/decline"),
         ("post", f"/organizations/{org}/reservations/{ref}/cancel"),
         ("post", f"/organizations/{org}/reservations/{ref}/collect"),
-        ("get", f"/organizations/{org}/locations/{loc}/reservation-units"),
-        ("get", f"/organizations/{org}/locations/{loc}/products/{prod}/unit-acknowledgement"),
-        ("post", f"/organizations/{org}/locations/{loc}/products/{prod}/unit-acknowledgement"),
+        ("get", f"/organizations/{org}/locations/{loc}/reservation-medicines"),
+        ("patch", f"/organizations/{org}/locations/{loc}"),
         ("get", f"/catalogue/products/{prod}/reservation-settings"),
         ("patch", f"/catalogue/products/{prod}/reservation-settings"),
         ("get", f"/catalogue/products/{prod}/reservation-settings/history"),
@@ -145,10 +144,7 @@ def test_only_the_expected_reservation_routes_exist(client):
         "/organizations/{organization_id}/reservations/{reference}/decline": {"post"},
         "/organizations/{organization_id}/reservations/{reference}/cancel": {"post"},
         "/organizations/{organization_id}/reservations/{reference}/collect": {"post"},
-        "/organizations/{organization_id}/locations/{location_id}/reservation-units": {"get"},
-        "/organizations/{organization_id}/locations/{location_id}/products/{product_id}/unit-acknowledgement": {
-            "get", "post"
-        },
+        "/organizations/{organization_id}/locations/{location_id}/reservation-medicines": {"get"},
         "/catalogue/products/{product_id}/reservation-settings": {"get", "patch"},
         "/catalogue/products/{product_id}/reservation-settings/history": {"get"},
     }
@@ -264,23 +260,30 @@ def test_phone_is_required_and_defaults_to_the_account_phone(w):
 
 
 def test_ineligible_medicines_are_refused_with_a_reason(w):
-    unacknowledged = w.medicine("Ibuprofen", "Brufen 200mg", ack=False)
-    disabled = w.medicine("Cetirizine", "Zyrtec 10mg")
-    w.configure(disabled, reservation_enabled=False)
-    prescription = w.medicine("Amoxicillin", "Amoxil 250mg", enable=False, ack=False)
-    w.configure(prescription, dispensing_class="prescription_only", reservation_enabled=False)
-    for product, reason in ((unacknowledged, "unit_not_acknowledged"), (disabled, "disabled"),
-                            (prescription, "prescription_only")):
+    unclassified = w.medicine("Ibuprofen", "Brufen 200mg", classify=False)
+    prescription = w.medicine("Amoxicillin", "Amoxil 250mg", classify=False)
+    w.configure(prescription, dispensing_class="prescription_only")
+    for product, reason in ((unclassified, "unclassified"), (prescription, "prescription_only")):
         r = submit(w, product=product)
         assert r.status_code == 409, r.text
         assert (r.json()["code"], r.json()["reason"]) == ("not_reservable", reason)
-    # The branch of another product without a stock record.
+    # A branch without a stock record (and so no listed offer).
     r = submit(w, branch=w.branch2)
-    assert r.status_code == 409 and r.json()["reason"] in ("offer_unlisted", "unit_not_acknowledged")
+    assert r.status_code == 409 and r.json()["reason"] == "offer_unlisted"
     # Pharmacy staff cannot reserve at their own pharmacy.
     r = submit(w, patient=w.staff)
     assert r.status_code == 409 and r.json()["code"] == "own_pharmacy"
     assert db_count("SELECT count(*) FROM reservation") == 0
+
+
+def test_not_enough_reservable_stock_is_refused_with_a_reason(w):
+    w.set_min_stock(9)  # 10 recorded: 1 reservable
+    r = submit(w, quantity=2)
+    assert r.status_code == 409, r.text
+    assert (r.json()["code"], r.json()["reason"]) == ("insufficient_stock", "no_reservable_stock")
+    assert "available_to_reserve" not in r.json() and "quantity" not in r.json()  # no stock figures for patients
+    assert submit(w, quantity=1).status_code == 201
+    assert db_count("SELECT count(*) FROM reservation") == 1
 
 
 def test_options_show_eligibility_and_unit_without_quantities(w):
@@ -295,10 +298,11 @@ def test_options_show_eligibility_and_unit_without_quantities(w):
     data = options(w.product)
     assert data["reservable"] is True and data["max_quantity"] == 5
     assert data["unit"]["unit_version"] == unit_version(w.product) and data["availability_status"] == "in_stock"
-    assert not keys(data) & {"quantity", "recorded_quantity", "allocated_quantity", "available_to_reserve"}
-    other = w.medicine("Ibuprofen", "Brufen 200mg", ack=False)
+    assert not keys(data) & {"quantity", "recorded_quantity", "allocated_quantity", "available_to_reserve",
+                             "reservable_quantity", "min_stock"}
+    other = w.medicine("Ibuprofen", "Brufen 200mg", classify=False)
     data = options(other)
-    assert (data["reservable"], data["reason"], data["max_quantity"]) == (False, "unit_not_acknowledged", None)
+    assert (data["reservable"], data["reason"], data["max_quantity"]) == (False, "unclassified", None)
     assert options(w.product, w.staff)["reason"] == "own_pharmacy"
     anonymous = w.client.get("/reservations/options", params={"location_id": w.branch, "product_id": w.product}).json()
     assert anonymous["reservable"] is True and not keys(anonymous) & {"quantity", "allocated_quantity"}
@@ -307,6 +311,9 @@ def test_options_show_eligibility_and_unit_without_quantities(w):
     again = submit(w)
     assert again.status_code == 409 and again.json()["code"] == "open_reservation_exists"
     assert again.json()["reference"] == r.json()["reference"] and "reservation_id" not in again.json()
+    w.set_min_stock(8)  # 10 recorded, 2 held: nothing left for new requests
+    data = options(w.product, w.patient2)
+    assert (data["reservable"], data["reason"], data["max_quantity"]) == (False, "no_reservable_stock", None)
     r = w.client.get("/reservations/options", params={"location_id": 999999, "product_id": w.product},
                      headers=w.headers[w.patient])
     assert r.status_code == 404
@@ -397,14 +404,14 @@ def test_expired_reservations_show_as_expired_and_cannot_be_cancelled(w):
     assert w.status(scalar("SELECT reservation_id FROM reservation")) == "expired"  # recorded
 
 
-def test_disabled_medicine_keeps_confirmed_reservations_collectable(w):
+def test_reclassified_medicine_keeps_confirmed_reservations_collectable(w):
     ref = reserve(w)
     confirm(w, ref)
     assert w.client.patch(
-        f"/catalogue/products/{w.product}/reservation-settings", json={"reservation_enabled": False},
+        f"/catalogue/products/{w.product}/reservation-settings", json={"dispensing_class": "prescription_only"},
         headers=w.admin_headers,
     ).status_code == 200
-    assert submit(w, patient=w.patient2).json()["reason"] == "disabled"
+    assert submit(w, patient=w.patient2).json()["reason"] == "prescription_only"
     assert pharmacy(w, ref, "collect").json()["status"] == "collected"
 
 
@@ -550,9 +557,11 @@ def test_pharmacy_list_filters_ordering_and_phone_visibility(w):
 
 def test_pharmacy_detail_shows_deadlines_history_and_allocation(w):
     ref = reserve(w, quantity=3)
+    w.set_min_stock(2)
     before = pharmacy(w, ref).json()
     assert before["stock"] == {
-        "recorded_quantity": 10, "allocated_quantity": 0, "available_to_reserve": 10, "shortfall": 0,
+        "recorded_quantity": 10, "allocated_quantity": 3, "available_to_reserve": 7, "min_stock": 2,
+        "reservable_quantity": 5, "shortfall": 0,
         "last_updated": before["stock"]["last_updated"], "this_reservation_at_risk": False,
     }
     stock_updated = before["stock"]["last_updated"]
@@ -573,18 +582,18 @@ def test_pharmacy_detail_shows_deadlines_history_and_allocation(w):
 def test_confirm_conflicts_are_structured_and_roll_back(w):
     big = reserve(w, quantity=5)
     other = reserve(w, quantity=5, patient=w.patient2)
-    w.set_stock(w.product, 8)
     confirm(w, big)
+    w.set_stock(w.product, 8)  # a deliberate correction below the 10 held
     r = pharmacy(w, other, "confirm")
     assert r.status_code == 409 and r.json()["code"] == "insufficient_stock"
     assert r.json()["available_to_reserve"] == 3
     assert db_count("SELECT count(*) FROM notification WHERE kind = 'reservation_confirmed'") == 1
     assert pharmacy(w, other).json()["status"] == "requested"
 
-    w.configure(w.product, reservation_enabled=False)
+    w.configure(w.product, dispensing_class="prescription_only")
     r = pharmacy(w, other, "confirm")
-    assert r.status_code == 409 and (r.json()["code"], r.json()["reason"]) == ("not_reservable", "disabled")
-    w.configure(w.product, reservation_enabled=True)
+    assert r.status_code == 409 and (r.json()["code"], r.json()["reason"]) == ("not_reservable", "prescription_only")
+    w.configure(w.product, dispensing_class="non_prescription")
 
     backdate(scalar("SELECT reservation_id FROM reservation WHERE reference = :r", r=other))
     r = pharmacy(w, other, "confirm")
@@ -592,18 +601,31 @@ def test_confirm_conflicts_are_structured_and_roll_back(w):
     assert pharmacy(w, other).json()["status"] == "expired"
 
 
-def test_confirmation_requires_a_current_acknowledgement(w):
-    ref = reserve(w)
-    # Remove the branch acknowledgement row the request relied on (direct SQL,
-    # simulating data drift); confirmation must re-check it.
-    with engine.begin() as conn:
-        conn.execute(text("SET LOCAL session_replication_role = replica"))
-        conn.execute(text("DELETE FROM offer_unit_acknowledgement"))
-    r = pharmacy(w, ref, "confirm")
-    assert r.status_code == 409 and r.json()["reason"] == "unit_not_acknowledged"
+def test_concurrent_requests_over_http_never_overallocate(w):
+    w.set_min_stock(2)  # 10 recorded: 8 reservable, two requests of 5
+    patients = (w.patient, w.patient2)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda who: submit(w, patient=who, quantity=5), patients))
+    assert sorted(r.status_code for r in results) == [201, 409]
+    assert [r.json()["reason"] for r in results if r.status_code == 409] == ["no_reservable_stock"]
+    assert db_count("SELECT coalesce(sum(quantity), 0) FROM reservation WHERE status = 'requested'") == 5
 
 
-def test_concurrent_confirmations_over_http_never_overallocate(w):
+def test_concurrent_confirmations_over_http_keep_what_requests_hold(w):
+    """Requests already hold their stock, so confirming them together succeeds
+    and never takes more than was recorded; after a correction below what is
+    held, neither may be confirmed."""
+    first = reserve(w, quantity=5)
+    second = reserve(w, quantity=5, patient=w.patient2)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(
+            lambda pair: pharmacy(w, pair[0], "confirm", by=pair[1]), [(first, w.staff), (second, w.manager)]
+        ))
+    assert [r.status_code for r in results] == [200, 200]
+    assert db_count("SELECT coalesce(sum(quantity), 0) FROM reservation WHERE status = 'confirmed'") == 10
+
+
+def test_confirmation_after_a_correction_below_what_is_held(w):
     first = reserve(w, quantity=5)
     second = reserve(w, quantity=5, patient=w.patient2)
     w.set_stock(w.product, 8)
@@ -611,9 +633,9 @@ def test_concurrent_confirmations_over_http_never_overallocate(w):
         results = list(pool.map(
             lambda pair: pharmacy(w, pair[0], "confirm", by=pair[1]), [(first, w.staff), (second, w.manager)]
         ))
-    assert sorted(r.status_code for r in results) == [200, 409]
-    assert [r.json()["code"] for r in results if r.status_code == 409] == ["insufficient_stock"]
-    assert db_count("SELECT coalesce(sum(quantity), 0) FROM reservation WHERE status = 'confirmed'") == 5
+    assert [r.status_code for r in results] == [409, 409]
+    assert {r.json()["code"] for r in results} == {"insufficient_stock"}
+    assert db_count("SELECT count(*) FROM reservation WHERE status = 'confirmed'") == 0
 
 
 def test_collection_normal_insufficient_and_override(w):
@@ -756,7 +778,8 @@ def test_patient_phone_never_reaches_public_supplier_or_other_views(w, client):
 def test_inventory_shows_allocation_and_filters_on_unreserved_stock(w):
     ref = reserve(w, quantity=5)
     confirm(w, ref)
-    w.set_stock(w.product, 9)  # 9 recorded, 5 allocated, 4 unreserved <= threshold 5
+    w.set_stock(w.product, 9)  # 9 recorded, 5 allocated, 4 unreserved <= low-stock threshold 5
+    w.set_min_stock(1)
 
     def listing(availability=None):
         params = {"location_id": w.branch}
@@ -767,8 +790,9 @@ def test_inventory_shows_allocation_and_filters_on_unreserved_stock(w):
         return [i for i in r.json()["items"] if i["product_id"] == w.product]
 
     [item] = listing()
-    assert (item["quantity"], item["allocated_quantity"], item["available_to_reserve"],
-            item["reservation_shortfall"], item["availability_status"]) == (9, 5, 4, 0, "low_stock")
+    assert (item["quantity"], item["allocated_quantity"], item["available_to_reserve"], item["reservation_min_stock"],
+            item["reservable_quantity"], item["reservation_shortfall"], item["availability_status"]) == (
+        9, 5, 4, 1, 3, 0, "low_stock")
     assert len(listing("low_stock")) == 1
     assert listing("in_stock") == [] and listing("unavailable") == []
 
@@ -785,79 +809,83 @@ def test_inventory_shows_allocation_and_filters_on_unreserved_stock(w):
 
 
 # ---------------------------------------------------------------------------
-# Catalogue reservation settings (platform admins) and acknowledgement
+# Catalogue reservation settings (platform admins) and branch medicines
 # ---------------------------------------------------------------------------
 def test_reservation_settings_are_admin_only_and_explain_problems(w):
-    product = w.medicine("Ibuprofen", "Brufen 200mg", enable=False, ack=False)
+    product = w.medicine("Ibuprofen", "Brufen 200mg", classify=False)
     url = f"/catalogue/products/{product}/reservation-settings"
     for who in (w.owner, w.manager, w.staff, w.patient):
-        assert w.client.patch(url, json={"reservation_enabled": True}, headers=w.headers[who]).status_code == 403
+        r = w.client.patch(url, json={"dispensing_class": "non_prescription"}, headers=w.headers[who])
+        assert r.status_code == 403
         assert w.client.get(f"{url}/history", headers=w.headers[who]).status_code == 403
     data = w.client.get(url, headers=w.owner_headers).json()
-    assert data["can_enable"] is False and data["reservation_enabled"] is False
-    assert [p["code"] for p in data["problems"]] == ["not_non_prescription", "unit_unknown", "no_quantity_limit"]
+    assert data["ready"] is False and "reservation_enabled" not in data
+    assert [p["code"] for p in data["problems"]] == ["not_non_prescription", "unit_unknown"]
+    assert data["max_reservation_quantity"] is None and data["effective_max_quantity"] == 5
 
-    r = w.client.patch(url, json={"reservation_enabled": True}, headers=w.admin_headers)
-    assert r.status_code == 422 and r.json()["code"] == "invalid_reservation_settings"
-    assert {p["code"] for p in r.json()["problems"]} == {"not_non_prescription", "unit_unknown", "no_quantity_limit"}
     for bad in ({"unit_label": "n/a", "stock_unit": "unit"}, {"unit_label": "123", "stock_unit": "unit"},
                 {"dispensing_class": "otc"}, {"stock_unit": "bottle"}, {"max_reservation_quantity": 0},
-                {"unit_version": 9}, {"reservation_enabled": None}):
+                {"unit_version": 9}, {"reservation_enabled": True}, {"dispensing_class": None}):
         assert w.client.patch(url, json=bad, headers=w.admin_headers).status_code == 422, bad
 
     r = w.client.patch(url, json={"dispensing_class": "non_prescription", "stock_unit": "pack", "unit_label": "box",
-                                  "max_reservation_quantity": 4, "reservation_enabled": True}, headers=w.admin_headers)
+                                  "max_reservation_quantity": 4}, headers=w.admin_headers)
     assert r.status_code == 200, r.text
-    assert (r.json()["can_enable"], r.json()["reservation_enabled"], r.json()["unit_version"]) == (True, True, 2)
+    assert (r.json()["ready"], r.json()["problems"], r.json()["effective_max_quantity"], r.json()["unit_version"]) == (
+        True, [], 4, 2)
     history = w.client.get(f"{url}/history", headers=w.admin_headers).json()
-    assert history[0]["changed_by_name"] == "Admin" and history[0]["reservation_enabled"] is True
-
-
-def test_branch_acknowledgement_api(w):
-    product = w.medicine("Ibuprofen", "Brufen 200mg", ack=False)
-    url = f"/organizations/{w.org}/locations/{w.branch}/products/{product}/unit-acknowledgement"
-    shown = {"unit_version": unit_version(product), "stock_unit": "pack", "unit_label": "box", "pack_size": "20 tablets"}
-
-    status = w.client.get(url, headers=w.headers[w.staff]).json()
-    assert (status["acknowledged"], status["reason"], status["current_unit"]["unit_label"]) == (
-        False, "unit_not_acknowledged", "box")
-    assert w.client.post(url, json=shown, headers=w.headers[w.staff]).status_code == 403
-    assert w.client.post(url, json=shown, headers=w.headers[w.outsider]).status_code == 404
-    for wrong in ({"unit_label": "strip"}, {"unit_version": shown["unit_version"] + 1}, {"pack_size": "10 tablets"},
-                  {"stock_unit": "unit"}):
-        r = w.client.post(url, json={**shown, **wrong}, headers=w.owner_headers)
-        assert r.status_code == 409 and r.json()["code"] == "unit_changed", wrong
-    assert w.client.post(url, json={**shown, "acknowledged_by": w.staff}, headers=w.owner_headers).status_code == 422
-    assert w.client.post(url, json={**shown, "stock_unit": "unknown"}, headers=w.owner_headers).status_code == 422
-
-    r = w.client.post(url, json=shown, headers=w.headers[w.manager])
-    assert r.status_code == 200, r.text
-    assert (r.json()["acknowledged"], r.json()["reservable"], r.json()["acknowledged_by_name"]) == (True, True, "Manager")
-    assert w.client.post(url, json=shown, headers=w.owner_headers).json()["acknowledged_by_name"] == "Manager"
-    assert db_count("SELECT count(*) FROM offer_unit_acknowledgement WHERE product_id = :p", p=product) == 1
-    # Branch-specific: the other branch has not acknowledged (and does not stock it).
-    other = w.client.get(url.replace(f"/locations/{w.branch}/", f"/locations/{w.branch2}/"), headers=w.owner_headers)
-    assert other.json()["acknowledged"] is False
-
-    # A unit change starts a new version: the acknowledgement no longer counts.
-    r = w.client.patch(f"/catalogue/products/{product}/reservation-settings", json={"unit_label": "carton"},
-                       headers=w.admin_headers)
-    assert r.status_code == 200 and r.json()["unit_version"] == shown["unit_version"] + 1
-    status = w.client.get(url, headers=w.owner_headers).json()
-    assert (status["acknowledged"], status["last_acknowledged_version"], status["reason"]) == (
-        False, shown["unit_version"], "unit_not_acknowledged")
-    assert submit(w, product=product).json()["reason"] == "unit_not_acknowledged"
-    assert w.client.post(url, json=shown, headers=w.owner_headers).json()["code"] == "unit_changed"
-    new = {**shown, "unit_version": shown["unit_version"] + 1, "unit_label": "carton"}
-    assert w.client.post(url, json=new, headers=w.owner_headers).json()["acknowledged"] is True
+    assert history[0]["changed_by_name"] == "Admin"
+    # Classified and listed with stock: reservable with nothing else to do.
     assert submit(w, product=product).status_code == 201
-    # Old acknowledgements are kept, never edited.
-    assert rows("SELECT unit_version, unit_label FROM offer_unit_acknowledgement WHERE product_id = :p "
-                "ORDER BY unit_version", p=product) == [(shown["unit_version"], "box"), (shown["unit_version"] + 1, "carton")]
 
-    units = w.client.get(f"/organizations/{w.org}/locations/{w.branch}/reservation-units", headers=w.headers[w.staff])
-    assert units.status_code == 200 and units.json()["total"] == 2
-    assert all(i["acknowledged"] for i in units.json()["items"])
+
+def test_branch_medicines_show_the_stock_breakdown(w):
+    unclassified = w.medicine("Ibuprofen", "Brufen 200mg", classify=False, quantity=3)
+    reserve(w, quantity=3)
+    w.set_min_stock(4)
+    url = f"/organizations/{w.org}/locations/{w.branch}/reservation-medicines"
+    for who in (w.owner, w.manager, w.staff):  # every active member sees it
+        assert w.client.get(url, headers=w.headers[who]).status_code == 200
+    assert w.client.get(url, headers=w.headers[w.outsider]).status_code == 404
+    assert w.client.get(url, headers=w.headers[w.patient]).status_code == 404
+    other = w.client.get(url.replace(f"/locations/{w.branch}/", "/locations/999999/"), headers=w.owner_headers)
+    assert other.status_code == 404
+    items = {i["product_id"]: i for i in w.client.get(url, headers=w.headers[w.staff]).json()["items"]}
+    main = items[w.product]
+    assert (main["recorded_quantity"], main["held_quantity"], main["unallocated_quantity"], main["min_stock"],
+            main["reservable_quantity"], main["max_quantity"], main["reservable"], main["listed"]) == (
+        10, 3, 7, 4, 3, 5, True, True)
+    assert (items[unclassified]["reservable"], items[unclassified]["reason"]) == (False, "unclassified")
+    w.set_min_stock(7)
+    main = {i["product_id"]: i for i in w.client.get(url, headers=w.owner_headers).json()["items"]}[w.product]
+    assert (main["reservable_quantity"], main["reservable"], main["reason"]) == (0, False, "no_reservable_stock")
+
+
+def test_branch_minimum_stock_endpoint_rules(w, client):
+    url = f"/organizations/{w.org}/locations/{w.branch}"
+    listed = w.client.get(f"/organizations/{w.org}/locations", headers=w.owner_headers).json()
+    assert all(loc["reservation_min_stock"] == 0 for loc in listed)
+    for who in (w.owner, w.manager):
+        r = w.client.patch(url, json={"reservation_min_stock": 3}, headers=w.headers[who])
+        assert r.status_code == 200 and r.json()["reservation_min_stock"] == 3, r.text
+    assert w.client.patch(url, json={"reservation_min_stock": 1}, headers=w.headers[w.staff]).status_code == 403
+    assert w.client.patch(url, json={"reservation_min_stock": 1}, headers=w.headers[w.outsider]).status_code == 404
+    assert w.client.patch(url, json={"reservation_min_stock": 1}, headers=w.headers[w.patient]).status_code == 404
+    assert w.client.patch(url, json={"reservation_min_stock": 1}, headers=w.admin_headers).status_code in (403, 404)
+    assert w.client.patch(url, json={"reservation_min_stock": 1}).status_code == 401
+    for bad in (-1, 1_000_001, "many", 2.5):
+        assert w.client.patch(url, json={"reservation_min_stock": bad}, headers=w.owner_headers).status_code == 422, bad
+    assert w.client.patch(url, json={"reservation_min_stock": None}, headers=w.owner_headers).status_code == 400
+    # Per branch: the other branch keeps its own value.
+    assert scalar("SELECT reservation_min_stock FROM location WHERE location_id = :l", l=w.branch) == 3
+    assert scalar("SELECT reservation_min_stock FROM location WHERE location_id = :l", l=w.branch2) == 0
+    # Suppliers keep no stock back from patients.
+    supplier = organization(client, w.owner_headers, "supplier", "Kigali Supplies")
+    approve(client, w.admin_headers, supplier)
+    depot = location(client, w.owner_headers, supplier, "Depot", -1.95, 30.06)
+    r = w.client.patch(f"/organizations/{supplier}/locations/{depot}", json={"reservation_min_stock": 2},
+                       headers=w.owner_headers)
+    assert r.status_code == 422
 
 
 def test_unit_change_refused_while_reservations_are_open(w):
@@ -869,3 +897,18 @@ def test_unit_change_refused_while_reservations_are_open(w):
     r = w.client.patch(f"/catalogue/products/{w.product}/reservation-settings", json={"max_reservation_quantity": 3},
                        headers=w.admin_headers)
     assert r.status_code == 200 and r.json()["unit_version"] == before
+
+
+def test_stock_edit_below_what_reservations_hold_needs_confirmation(w):
+    reserve(w, quantity=4)  # 10 recorded, 4 held by a request
+    url = f"/organizations/{w.org}/locations/{w.branch}/stock/{w.product}"
+    r = w.client.put(url, json={"quantity": 3}, headers=w.owner_headers)
+    assert r.status_code == 409 and r.json()["code"] == "below_reserved"
+    assert (r.json()["held_quantity"], r.json()["shortfall"]) == (4, 1)
+    assert w.stock_quantity() == 10  # nothing changed
+    assert w.client.put(url, json={"quantity": 4}, headers=w.owner_headers).status_code == 200  # exactly what is held
+    r = w.client.put(url, json={"quantity": 3, "allow_below_reserved": True}, headers=w.headers[w.staff])
+    assert r.status_code == 200, r.text
+    assert (r.json()["quantity"], r.json()["allocated_quantity"], r.json()["reservation_shortfall"]) == (3, 4, 1)
+    assert scalar("SELECT status FROM reservation") == "requested"  # a stock edit never changes a reservation
+    assert w.client.put(url, json={"quantity": 2, "allow_below_reserved": "maybe"}, headers=w.owner_headers).status_code == 422

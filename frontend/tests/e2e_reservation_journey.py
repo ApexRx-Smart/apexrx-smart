@@ -46,16 +46,13 @@ def seed():
                                                    "pack_size": "B/20"}, admin)["product_id"]
     call("PATCH", f"/catalogue/products/{product}/reservation-settings",
          {"dispensing_class": "non_prescription", "stock_unit": "pack", "unit_label": "box",
-          "max_reservation_quantity": 4, "reservation_enabled": True}, admin)
+          "max_reservation_quantity": 4}, admin)
     owner_email = f"journey-owner-{RUN}@example.com"
     owner, org, (loc,) = D.org_with_owner(owner_email, f"Owner Mugisha {RUN}", f"Nyarutarama Pharmacy {RUN}", "pharmacy",
                                           [{"name": "Nyarutarama Branch", "latitude": -1.94, "longitude": 30.1}], admin=admin)
     base = f"/organizations/{org}/locations/{loc}/stock/{product}"
     call("PUT", base, {"quantity": 10}, owner)
     call("PUT", base + "/offer", {"unit_price": "2500"}, owner)
-    s = call("GET", f"/catalogue/products/{product}/reservation-settings", token=admin)
-    call("POST", f"/organizations/{org}/locations/{loc}/products/{product}/unit-acknowledgement",
-         {k: s[k] for k in ("unit_version", "stock_unit", "unit_label", "pack_size")}, owner)
     return {"admin": admin, "owner": owner, "owner_email": owner_email, "org": org, "loc": loc, "product": product}
 
 
@@ -141,13 +138,13 @@ def main():
         pharmacy.wait_for_selector("#srows tr[data-product]")
         row = pharmacy.locator(f"#srows tr[data-product='{w['product']}']")
         # Opening My stock re-reads the branch from the API (the confirmation happened after the dashboard loaded).
-        wait_text(pharmacy, f"#srows tr[data-product='{w['product']}']", "Reserved 2 · free 8")
-        check("My stock: recorded quantity with reserved and free, re-read from the API", "Reserved 2 · free 8" in row.inner_text())
+        wait_text(pharmacy, f"#srows tr[data-product='{w['product']}']", "Held 2 · unallocated 8 · reservable 8")
+        check("My stock: recorded quantity with held, unallocated and reservable, re-read from the API", "Held 2 · unallocated 8 · reservable 8" in row.inner_text())
         qty = row.locator("input[data-f=qty]")
         qty.fill("1"); qty.dispatch_event("change")
         pharmacy.wait_for_selector("#dlg[open]")
         check("My stock: a quantity below the reservations asks first and explains",
-              "Stock below confirmed reservations" in pharmacy.inner_text("#dlgf") and "1 recorded, 2 reserved (1 short)" in pharmacy.inner_text("#dlgf"))
+              "Stock below what reservations hold" in pharmacy.inner_text("#dlgf") and "1 recorded, 2 reserved (1 short)" in pharmacy.inner_text("#dlgf"))
         pharmacy.click("#dlg-x")
         pharmacy.wait_for_timeout(500)
         check("My stock: cancelling saves nothing", stock(w)["quantity"] == 10)
@@ -190,7 +187,7 @@ def main():
         check("header: a signed-in patient's account button opens their reservations", "reservations.html" in patient.url)
         pharmacy.goto(f"{D.SITE}/index.html?lang=en")
         pharmacy.click("#signInBtn")
-        pharmacy.wait_for_url(re.compile(r".*(pharmacies\.html|pharmacy-dashboard\.html).*"), timeout=15000)
+        pharmacy.wait_for_url(re.compile(r".*(pharmacy-sign-in\.html|pharmacy-dashboard\.html).*"), timeout=15000)
         check("header: a pharmacy owner's account button still opens the pharmacy workspace", "pharmac" in pharmacy.url)
 
         check("no page errors", not errors, errors[:3])

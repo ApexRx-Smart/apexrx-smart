@@ -14,7 +14,7 @@ LOCAL backend and throwaway database only - never a shared environment.
 
 Each run creates its own medicines, pharmacy and accounts (suffixed with a random
 id) through the API, the way the application does: the admin classifies the
-medicines, the pharmacy owner stocks them and acknowledges their unit, the owner
+medicines, the pharmacy owner stocks them, the owner
 confirms and collects. Nothing is written to the database directly. js/config.js
 is replaced in the browser so pages call the local API, and the hosted backend's
 address is blocked.
@@ -82,8 +82,9 @@ def seed():
                                 ("off", f"{MED} Forte", "1g"), ("bulk", f"{MED} Junior", "250mg")):
         pid = call("POST", "/catalogue/products", {"drug_id": drug, "product_name": name, "strength": strength,
                                                     "pack_size": "B/20"}, admin)["product_id"]
-        settings = {"dispensing_class": "non_prescription", "stock_unit": "pack", "unit_label": "box",
-                    "max_reservation_quantity": 3, "reservation_enabled": key != "off"}
+        # "off": prescription-only, so it can never be reserved.
+        settings = {"dispensing_class": "prescription_only" if key == "off" else "non_prescription",
+                    "stock_unit": "pack", "unit_label": "box", "max_reservation_quantity": 3}
         call("PATCH", f"/catalogue/products/{pid}/reservation-settings", settings, admin)
         products[key] = pid
     call("POST", "/auth/register", {"name": OWNER_NAME, "email": f"res-owner-{RUN}@example.com", "password": PW})
@@ -96,17 +97,9 @@ def seed():
     for key, pid in products.items():
         call("PUT", f"/organizations/{org}/locations/{loc}/stock/{pid}", {"quantity": 40}, owner)
         call("PUT", f"/organizations/{org}/locations/{loc}/stock/{pid}/offer", {"unit_price": "1500"}, owner)
-        if key != "off":
-            acknowledge(owner, org, loc, pid, admin)
     for person in (PATIENT_B,):
         call("POST", "/auth/register", {**person, "password": PW})
     return {"admin": admin, "owner": owner, "org": org, "loc": loc, "products": products}
-
-
-def acknowledge(owner, org, loc, pid, admin):
-    s = call("GET", f"/catalogue/products/{pid}/reservation-settings", token=admin)
-    call("POST", f"/organizations/{org}/locations/{loc}/products/{pid}/unit-acknowledgement",
-         {k: s[k] for k in ("unit_version", "stock_unit", "unit_label", "pack_size")}, owner)
 
 
 def context(browser, viewport=None):
@@ -186,9 +179,9 @@ def main():
         check("public: the note says a reservation is a request and availability is not guaranteed",
               "not guaranteed" in page.locator("#ps-reserve").inner_text())
         open_reserve_from_search(page, f"{MED} Forte")
-        check("public: no Reserve for a medicine with reservations turned off, and the reason is given",
+        check("public: no Reserve for a prescription-only medicine, and the reason is given",
               page.locator("#ps-reserve-btn").count() == 0
-              and "turned off" in page.locator("#ps-reserve").inner_text(), page.locator("#ps-reserve").inner_text())
+              and "Prescription-only" in page.locator("#ps-reserve").inner_text(), page.locator("#ps-reserve").inner_text())
         public = [b for u, b in ctx.bodies if "/search/" in u or "/reservations/options" in u]
         check("public: search and options responses carry no stock quantity or private field",
               public and not any(keys(b) & (PRIVATE_KEYS | {"quantity"}) for b in public))
@@ -274,7 +267,6 @@ def main():
         page.goto(f"{SITE}/reservations.html?location={w['loc']}&product={pid['stale']}&lang=en")
         page.wait_for_selector("#rs-reserve-form")
         call("PATCH", f"/catalogue/products/{pid['stale']}/reservation-settings", {"unit_label": "carton"}, w["admin"])
-        acknowledge(w["owner"], w["org"], w["loc"], pid["stale"], w["admin"])
         page.fill("#rs-phone", "0788 123 456"); page.click("#rs-submit")
         page.wait_for_selector(".rs-notice")
         check("stale unit: the page reloads the unit and asks the patient to review it",
@@ -284,10 +276,10 @@ def main():
         ref_stale = page.locator("#rs-success .rs-reference").inner_text()
         check("stale unit: sending again after review works", REFERENCE.fullmatch(ref_stale) is not None)
 
-        # Disabled medicine reached directly.
+        # A prescription-only medicine reached directly.
         page.goto(f"{SITE}/reservations.html?location={w['loc']}&product={pid['off']}&lang=en")
-        wait_text(page, "#rs-reserve-body", "turned off")
-        check("disabled: no form, the reason is shown", page.locator("#rs-reserve-form").count() == 0)
+        wait_text(page, "#rs-reserve-body", "Prescription-only")
+        check("not reservable: no form, the reason is shown", page.locator("#rs-reserve-form").count() == 0)
 
         # ===================================================== 6 list, pages, filter, detail, history
         for _ in range(10):  # closed reservations (cancelled) for paging; open ones are capped

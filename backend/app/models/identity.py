@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     String,
     Text,
@@ -145,6 +146,11 @@ class Location(Base):
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
     phone: Mapped[str | None] = mapped_column(String(30))
     whatsapp_phone: Mapped[str | None] = mapped_column(String(30))
+    # Pharmacy branches: quantity of each medicine kept back from patient
+    # reservations (migration d4a7e2c9b1f8). Reservable = stock - held - this.
+    reservation_min_stock: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0"), default=0
+    )
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true"), default=True
     )

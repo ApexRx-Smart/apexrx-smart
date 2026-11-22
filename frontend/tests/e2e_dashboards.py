@@ -136,9 +136,20 @@ def new_page(browser, viewport=None):
     return page
 
 
-def sign_in(page, email, kind="pharmacy", org=None):
-    page.goto(f"{SITE}/{'pharmacies' if kind == 'pharmacy' else 'suppliers'}.html")
-    for field, value in (("email", email), ("password", PW), ("confirm", PW)):
+def sign_in(page, email, kind="pharmacy", org=None, new=False):
+    # Pharmacies sign in on their dedicated page (new=True: a new account, created
+    # on the registration page); the supplier page's create form signs an existing
+    # account in.
+    if kind == "pharmacy" and new:
+        page.goto(f"{SITE}/pharmacies.html")
+        fields = (("email", email), ("password", PW), ("confirm", PW))
+    elif kind == "pharmacy":
+        page.goto(f"{SITE}/pharmacy-sign-in.html")
+        fields = (("email", email), ("password", PW))
+    else:
+        page.goto(f"{SITE}/suppliers.html")
+        fields = (("email", email), ("password", PW), ("confirm", PW))
+    for field, value in fields:
         page.fill(f"#account [name={field}]", value)
     page.click("#account button.primary")
     page.wait_for_function("location.pathname.endsWith('-dashboard.html') || !document.querySelector('#org-choice').hidden"
@@ -190,7 +201,7 @@ def main():
         # ============================================================ owner
         owner = new_page(browser)
         sign_in(owner, w["owner_email"])
-        check("owner signs in on pharmacies.html and lands on the pharmacy dashboard",
+        check("owner signs in on pharmacy-sign-in.html and lands on the pharmacy dashboard",
               owner.url.split("?")[0].endswith("/pharmacy-dashboard.html") and owner.inner_text("#title") == "Overview")
         check("top bar: organization, verification and the signed-in user with their role",
               owner.inner_text("#me-name") == f"Kigali Care {RUN}" and "Approved by ApexRX" in owner.inner_text("#ver")
@@ -476,7 +487,7 @@ def main():
         # ============================================================ joining an existing pharmacy
         joiner = new_page(browser)
         email = f"db-joiner-{RUN}@example.com"
-        sign_in(joiner, email)
+        sign_in(joiner, email, new=True)
         joiner.click("#join-existing")
         joiner.wait_for_selector("#join-wait:not([hidden])")
         jw = joiner.inner_text("#join-wait")
@@ -497,11 +508,11 @@ def main():
 
         # ============================================================ sign-out and guards
         owner.click("#out")
-        owner.wait_for_url("**/pharmacies.html*")
-        check("sign out returns to sign-in and ends the session",
-              owner.evaluate("!sessionStorage.getItem('apexrx_session')") and "#signin" in owner.url)
+        owner.wait_for_url("**/pharmacy-sign-in.html*")
+        check("sign out returns to the pharmacy sign-in page and ends the session",
+              owner.evaluate("!sessionStorage.getItem('apexrx_session')"))
         owner.goto(SITE + "/pharmacy-dashboard.html")
-        owner.wait_for_url("**/pharmacies.html*")
+        owner.wait_for_url("**/pharmacy-sign-in.html*")
         check("a signed-out visit to a dashboard goes to sign-in", True)
         anon = new_page(browser)
         anon.goto(SITE + "/supplier-dashboard.html")

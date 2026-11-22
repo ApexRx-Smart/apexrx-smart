@@ -110,6 +110,9 @@ class LocationUpdate(_LocationFields):
     # Locations are deactivated, never deleted: their stock audit trail and
     # purchase orders keep referencing them.
     is_active: bool | None = None
+    # Pharmacy branches only: the quantity of each medicine kept back from
+    # patient reservations (owners and managers).
+    reservation_min_stock: int | None = Field(default=None, ge=0, le=1_000_000)
 
 
 class LocationResponse(ORMModel):
@@ -127,6 +130,7 @@ class LocationResponse(ORMModel):
     phone: str | None
     whatsapp_phone: str | None
     is_active: bool
+    reservation_min_stock: int = 0
     created_at: datetime
     updated_at: datetime
 

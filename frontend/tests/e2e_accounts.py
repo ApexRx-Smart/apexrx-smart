@@ -144,16 +144,14 @@ def is_dashboard(page):
 
 def staff_sign_in(page, email, password=PW):
     page.goto("about:blank")  # a fresh load (a hash change alone would not reload the page)
-    page.goto(SITE + "/pharmacies.html#staff")
+    page.goto(SITE + "/pharmacy-sign-in.html")
     # A signed-in tab goes straight on to its dashboard: sign out there first.
     page.wait_for_function("location.pathname.endsWith('-dashboard.html') || !!document.querySelector('#account:not([hidden])')")
     if is_dashboard(page):
         page.wait_for_selector("#out")
         page.click("#out")
-        page.wait_for_url("**/pharmacies.html*")
+        page.wait_for_url("**/pharmacy-sign-in.html*")
         page.wait_for_selector("#account:not([hidden])")
-    if page.get_attribute("#tab-signin", "aria-selected") != "true":
-        page.click("#tab-signin")
     page.fill("#account [name=email]", email)
     page.fill("#account [name=password]", password)
     page.click("#account-submit")
@@ -378,7 +376,7 @@ def main():
         ctx = context(browser)
         page = ctx.new_page()
         watch(page, errors)
-        page.goto(SITE + "/pharmacies.html#staff")
+        page.goto(SITE + "/pharmacy-sign-in.html")
         page.click("#forgot-link")
         page.wait_for_url("**/reset-password.html*")
         visible(page, "#forgot-form")

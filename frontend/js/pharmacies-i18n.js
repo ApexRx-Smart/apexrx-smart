@@ -783,6 +783,18 @@ Object.assign(workflowTranslations, {
 
 // Staff sign-in, invitations, sessions and password reset. Kinyarwanda needs review by a native speaker.
 Object.assign(workflowTranslations, {
+ "Pharmacy sign-in — ApexRX Smart": {"fr": "Connexion pharmacie — ApexRX Smart", "rw": "Kwinjira kwa farumasi — ApexRX Smart"},
+ "Register your pharmacy — ApexRX Smart": {"fr": "Inscrivez votre pharmacie — ApexRX Smart", "rw": "Andikisha farumasi yawe — ApexRX Smart"},
+ "Pharmacy sign-in": {"fr": "Connexion pharmacie", "rw": "Kwinjira kwa farumasi"},
+ "Owners, managers and staff of a pharmacy registered on ApexRX: sign in with your personal account to open your pharmacy workspace, or to continue your registration.": {"fr": "Propriétaires, gérants et personnel d’une pharmacie inscrite sur ApexRX : connectez-vous avec votre compte personnel pour ouvrir l’espace de votre pharmacie ou poursuivre votre inscription.", "rw": "Ba nyirabyo, abayobozi n’abakozi ba farumasi yanditse kuri ApexRX: injira ukoresheje konti yawe bwite ufungure aho farumasi yawe ikorera, cyangwa ukomeze kwiyandikisha."},
+ "Each person signs in with their own account. Never share passwords.": {"fr": "Chaque personne se connecte avec son propre compte. Ne partagez jamais les mots de passe.", "rw": "Buri muntu yinjira akoresheje konti ye bwite. Ntuzigere usangiza abandi ijambobanga."},
+ "Already registered, or working at a registered pharmacy?": {"fr": "Déjà inscrit, ou vous travaillez dans une pharmacie inscrite ?", "rw": "Usanzwe wiyandikishije, cyangwa ukora muri farumasi yanditse?"},
+ "Sign in to your pharmacy →": {"fr": "Connectez-vous à votre pharmacie →", "rw": "Injira muri farumasi yawe →"},
+ "New pharmacy?": {"fr": "Nouvelle pharmacie ?", "rw": "Farumasi nshya?"},
+ "Register your pharmacy →": {"fr": "Inscrivez votre pharmacie →", "rw": "Andikisha farumasi yawe →"},
+ "This account is registered as a medicine supplier, not a pharmacy. Sign out to use a pharmacy account.": {"fr": "Ce compte est inscrit comme fournisseur de médicaments, pas comme pharmacie. Déconnectez-vous pour utiliser un compte pharmacie.", "rw": "Iyi konti yanditswe nk’utanga imiti, si nka farumasi. Sohoka ukoreshe konti ya farumasi."},
+ "This account is registered as a pharmacy, not a medicine supplier. Sign out to use a supplier account.": {"fr": "Ce compte est inscrit comme pharmacie, pas comme fournisseur de médicaments. Déconnectez-vous pour utiliser un compte fournisseur.", "rw": "Iyi konti yanditswe nka farumasi, si nk’utanga imiti. Sohoka ukoreshe konti y’utanga imiti."},
+ "Back to the ApexRX home page →": {"fr": "Retour à l’accueil d’ApexRX →", "rw": "Subira ku rupapuro rw’ibanze rwa ApexRX →"},
  "Register a pharmacy": {"fr": "Inscrire une pharmacie", "rw": "Iyandikishe farumasi"},
  "Staff sign-in": {"fr": "Connexion du personnel", "rw": "Kwinjira kw’abakozi"},
  "Already working at a pharmacy registered on ApexRX? Sign in with your personal account to open your pharmacy workspace.": {"fr": "Vous travaillez déjà dans une pharmacie inscrite sur ApexRX ? Connectez-vous avec votre compte personnel pour ouvrir votre espace pharmacie.", "rw": "Usanzwe ukora muri farumasi yanditse kuri ApexRX? Injira ukoresheje konti yawe bwite ufungure aho farumasi yawe ikorera."},

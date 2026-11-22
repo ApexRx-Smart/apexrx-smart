@@ -170,12 +170,14 @@ class PatientContact(BaseModel):
 
 
 class StockAllocation(BaseModel):
-    """The branch's stock for this medicine against confirmed reservations."""
+    """The branch's stock for this medicine against open reservations."""
 
-    recorded_quantity: int | None = Field(description="Physical stock on record (null: no stock record).")
-    allocated_quantity: int = Field(description="Held by confirmed, unexpired reservations.")
-    available_to_reserve: int
-    shortfall: int = Field(description="Allocated beyond the recorded stock (after a stock correction).")
+    recorded_quantity: int | None = Field(description="Stock on record (null: no stock record).")
+    allocated_quantity: int = Field(description="Held by open requests and confirmed reservations.")
+    available_to_reserve: int = Field(description="Unallocated: recorded minus held (never negative).")
+    min_stock: int = Field(description="Kept back from new reservations at this branch.")
+    reservable_quantity: int = Field(description="What new requests may still take: unallocated minus min_stock.")
+    shortfall: int = Field(description="Held beyond the recorded stock (after a stock correction).")
     last_updated: datetime | None
     this_reservation_at_risk: bool
 
@@ -259,10 +261,10 @@ class ReservationSettings(UnitInfo):
     product_id: int
     is_active: bool
     dispensing_class: str
-    max_reservation_quantity: int | None
-    reservation_enabled: bool
-    can_enable: bool
-    problems: list[SettingsProblem] = Field(description="Why reservations cannot be enabled yet.")
+    max_reservation_quantity: int | None = Field(description="This medicine's own limit per reservation, if any.")
+    effective_max_quantity: int = Field(description="The limit that applies (its own, else the default).")
+    ready: bool = Field(description="The catalogue settings allow reservations; each branch then decides by stock.")
+    problems: list[SettingsProblem] = Field(description="Why this medicine cannot be reserved anywhere yet.")
 
 
 class ReservationSettingsUpdate(Strict):
@@ -271,7 +273,6 @@ class ReservationSettingsUpdate(Strict):
     unit_label: UnitLabel | None = None
     pack_size: PackSize | None = None
     max_reservation_quantity: int | None = Field(default=None, ge=1, le=1000)
-    reservation_enabled: bool | None = None
 
 
 class ReservationSettingsHistory(BaseModel):
@@ -286,22 +287,20 @@ class ReservationSettingsHistory(BaseModel):
     changed_at: datetime
 
 
-class UnitAcknowledgementRequest(Strict):
-    unit_version: int = Field(ge=1)
-    stock_unit: Literal["pack", "unit"]
-    unit_label: UnitLabel
-    pack_size: PackSize | None = None
+class BranchMedicine(BaseModel):
+    """One medicine a pharmacy branch has a stock record for, as reservations see it."""
 
-
-class UnitAcknowledgementStatus(BaseModel):
-    location_id: int
     product_id: int
     product_name: str
-    current_unit: UnitInfo
-    acknowledged: bool = Field(description="The branch acknowledged the CURRENT unit version.")
-    acknowledged_at: datetime | None
-    acknowledged_by_name: str | None
-    last_acknowledged_version: int | None
+    unit: UnitInfo
+    dispensing_class: str
+    listed: bool = Field(description="The branch lists it (price published).")
+    recorded_quantity: int
+    held_quantity: int = Field(description="Held by open requests and confirmed reservations.")
+    unallocated_quantity: int
+    min_stock: int
+    reservable_quantity: int
+    max_quantity: int = Field(description="The most one reservation may ask for.")
     reservable: bool
-    reason: str | None = Field(description="Why the medicine cannot be reserved at this branch, if not.")
+    reason: str | None = Field(description="Why it cannot be reserved here now, if not.")
     message: str | None

@@ -194,14 +194,15 @@ class ResWorld:
         self.outsider = person("outsider@example.com", "Other Pharmacist")
         self.product = self.medicine("Paracetamol", "Panadol 500mg", quantity=quantity, max_quantity=max_quantity)
 
-    def medicine(self, drug, name, *, quantity=10, max_quantity=5, branch=None, enable=True, ack=True):
+    def medicine(self, drug, name, *, quantity=10, max_quantity=5, branch=None, classify=True):
+        """A catalogue medicine stocked and listed at ``branch``. Classified for
+        reservations (non-prescription, counted in boxes) unless classify=False;
+        nothing else has to be enabled."""
         branch = branch or self.branch
         product = catalogue_product(self.client, self.admin_headers, drug, name, pack_size="20 tablets")
         stock(self.client, self.owner_headers, self.org, branch, product, quantity, "500.00")
-        if enable:
-            self.configure(product)
-        if ack:
-            self.acknowledge(product, branch)
+        if classify:
+            self.configure(product, max_reservation_quantity=max_quantity)
         return product
 
     def configure(self, product, **changes):
@@ -210,26 +211,16 @@ class ResWorld:
             stock_unit="pack",
             unit_label="box",
             max_reservation_quantity=5,
-            reservation_enabled=True,
         )
         settings.update(changes)
         return run(self.admin, reservations.configure_product, product, **settings)
 
-    def acknowledge(self, product, branch=None, by=None):
-        info = rows(
-            "SELECT unit_version, stock_unit, unit_label, pack_size FROM product WHERE product_id = :p", p=product
-        )[0]
-        return run(
-            by or self.owner,
-            reservations.acknowledge_unit,
-            self.org,
-            branch or self.branch,
-            product,
-            unit_version=info[0],
-            stock_unit=info[1],
-            unit_label=info[2],
-            pack_size=info[3],
-        )
+    def set_min_stock(self, quantity, branch=None, headers=None):
+        """The branch's minimum stock, through the branch endpoint (owners and managers)."""
+        r = self.client.patch(f"/organizations/{self.org}/locations/{branch or self.branch}",
+                              json={"reservation_min_stock": quantity}, headers=headers or self.owner_headers)
+        assert r.status_code == 200, r.text
+        return r.json()
 
     def submit(self, patient=None, product=None, quantity=2, branch=None, client_request_id=None):
         return run(
@@ -260,7 +251,11 @@ class ResWorld:
         )
 
     def set_stock(self, product, quantity, branch=None):
-        stock(self.client, self.owner_headers, self.org, branch or self.branch, product, quantity)
+        """A deliberate stock correction (it may go below what reservations hold)."""
+        base = f"/organizations/{self.org}/locations/{branch or self.branch}/stock/{product}"
+        r = self.client.put(base, json={"quantity": quantity, "allow_below_reserved": True}, headers=self.owner_headers)
+        assert r.status_code == 200, r.text
+        return r.json()
 
     def stock_quantity(self, product=None, branch=None):
         return scalar(

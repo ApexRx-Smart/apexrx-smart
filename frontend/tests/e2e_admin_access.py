@@ -29,7 +29,7 @@ ADMIN_EMAIL = os.environ["E2E_ADMIN_EMAIL"]
 ADMIN_PASSWORD = os.environ["E2E_ADMIN_PASSWORD"]
 PLAIN_EMAIL = f"plain-access-{uuid.uuid4().hex[:6]}@example.com"
 PLAIN_PASSWORD = "Plain-User-Pass-2026"
-PUBLIC_PAGES = ("index.html", "how-it-works.html", "about.html", "legal.html", "pharmacies.html", "suppliers.html")
+PUBLIC_PAGES = ("index.html", "how-it-works.html", "about.html", "legal.html", "pharmacies.html", "pharmacy-sign-in.html", "suppliers.html")
 failures = []
 
 
