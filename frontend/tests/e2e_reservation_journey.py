@@ -78,15 +78,18 @@ def main():
         patient.on("pageerror", lambda e: errors.append(str(e)))
         patient.goto(f"{D.SITE}/search.html?q={MED.replace(' ', '%20')}&lang=en")
         patient.wait_for_selector(".ps-card")
-        patient.locator(".ps-card button").first.click()
+        patient.locator(".ps-card-link").first.click()
         patient.wait_for_selector("#ps-reserve-btn")
         check("search: Reserve is offered, with the indicative-price note",
               "indicative" in patient.inner_text("#ps-reserve"))
         patient.click("#ps-reserve-btn")
-        patient.wait_for_selector("#rs-auth:not([hidden])")
-        patient.click("#rs-tab-create")
-        patient.fill("#rs-name", PATIENT["name"]); patient.fill("#rs-email", PATIENT["email"]); patient.fill("#rs-password", D.PW)
-        patient.click("#rs-auth-submit")
+        # Signed out: the patient sign-in page (keeping the reservation), then "Sign up".
+        patient.wait_for_url("**/patient-sign-in.html*")
+        patient.click("#auth-other")
+        patient.wait_for_url("**/patient-register.html*")
+        patient.fill("#patient-auth [name=name]", PATIENT["name"]); patient.fill("#patient-auth [name=email]", PATIENT["email"])
+        patient.fill("#patient-auth [name=password]", D.PW); patient.fill("#patient-auth [name=confirm]", D.PW)
+        patient.click("#auth-submit")
         patient.wait_for_selector("#rs-reserve-form")
         check("form: the price is the pharmacy's listed price, indicative, paid at the pharmacy",
               "indicative, not a guaranteed final price" in patient.inner_text("#rs-reserve-body"))
@@ -180,15 +183,20 @@ def main():
         wait_text(patient, "#rs-detail-body", "Collected", timeout=20000)
         check("patient: the open reservation updates to collected by itself", "You collected this medicine" in patient.inner_text("#rs-detail-body"))
 
-        # ------------------------------------------------ header account buttons
+        # ------------------------------------------------ signed in: public landing, own sign-in page
         patient.goto(f"{D.SITE}/index.html?lang=en")
-        patient.click("#signInBtn")
+        check("landing: no account identity shown to a signed-in patient",
+              PATIENT["email"] not in patient.inner_text("header") and patient.locator(".am-btn, #signInBtn").count() == 0)
+        patient.goto(f"{D.SITE}/patient-sign-in.html?lang=en")
         patient.wait_for_url("**/reservations.html*", timeout=15000)
-        check("header: a signed-in patient's account button opens their reservations", "reservations.html" in patient.url)
-        pharmacy.goto(f"{D.SITE}/index.html?lang=en")
-        pharmacy.click("#signInBtn")
-        pharmacy.wait_for_url(re.compile(r".*(pharmacy-sign-in\.html|pharmacy-dashboard\.html).*"), timeout=15000)
-        check("header: a pharmacy owner's account button still opens the pharmacy workspace", "pharmac" in pharmacy.url)
+        check("session: a signed-in patient visiting patient sign-in goes to their reservations", True)
+        pharmacy.goto(f"{D.SITE}/patient-sign-in.html?lang=en")
+        pharmacy.wait_for_selector("#account-panel:not([hidden])")
+        check("session: a pharmacy account is not taken into the patient workspace",
+              "not a patient account" in pharmacy.inner_text("#account-panel-text") and "reservations.html" not in pharmacy.url)
+        pharmacy.goto(f"{D.SITE}/pharmacy-sign-in.html?lang=en")
+        pharmacy.wait_for_url("**/pharmacy-dashboard.html*", timeout=15000)
+        check("session: a signed-in pharmacy owner visiting pharmacy sign-in goes to their workspace", True)
 
         check("no page errors", not errors, errors[:3])
         browser.close()

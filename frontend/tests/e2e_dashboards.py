@@ -136,6 +136,21 @@ def new_page(browser, viewport=None):
     return page
 
 
+def account_lines(page):
+    """The account menu's lines (name, email, organization · role), without opening it."""
+    return page.evaluate("[...document.querySelectorAll('.am-head > *')].map(e => e.textContent)")
+
+
+def role_of(page):
+    lines = account_lines(page)
+    return lines[-1].split(" · ")[-1] if lines else ""
+
+
+def sign_out_via_menu(page):
+    page.click(".am-btn")
+    page.click("[data-am=signout]")
+
+
 def sign_in(page, email, kind="pharmacy", org=None, new=False):
     # Pharmacies sign in on their dedicated page (new=True: a new account, created
     # on the registration page); the supplier page's create form signs an existing
@@ -206,7 +221,8 @@ def main():
         check("top bar: organization, verification and the signed-in user with their role",
               owner.inner_text("#me-name") == f"Kigali Care {RUN}" and "Approved by ApexRX" in owner.inner_text("#ver")
               and "NPC" not in owner.inner_text("#ver")
-              and owner.inner_text("#dash-user") == f"{w['owner_email']} · Owner" and owner.is_hidden("#org"))
+              and account_lines(owner)[1:] == [w['owner_email'], f"Kigali Care {RUN} · Owner"] and owner.is_hidden("#org")
+              and owner.locator("#out").count() == 0)
         home = owner.inner_text("#view")
         check("overview: live data, no sample strip, reservations from the API and expiry shown as not live",
               f"Kigali Care {RUN}" in home and "Preview with sample data" not in home
@@ -306,7 +322,7 @@ def main():
         # ============================================================ staff
         staff = new_page(browser)
         sign_in(staff, w["staff_email"])
-        check("staff land on the same pharmacy, labelled Staff", staff.inner_text("#dash-user") == f"{w['staff_email']} · Staff")
+        check("staff land on the same pharmacy, labelled Staff", account_lines(staff)[1:] == [w['staff_email'], f"Kigali Care {RUN} · Staff"])
         staff.select_option("#br", str(w["kim"]))
         open_view(staff, "stk")
         staff.wait_for_selector(row)
@@ -470,7 +486,7 @@ def main():
         open_view(mgr, "set")
         txt = mgr.inner_text("#view")
         check("switching: the dashboard uses the selected organization only",
-              f"Nyamirambo {RUN}" in txt and "Kimihurura Branch" not in txt and mgr.inner_text("#dash-user").endswith("· Manager"))
+              f"Nyamirambo {RUN}" in txt and "Kimihurura Branch" not in txt and role_of(mgr) == "Manager")
         mgr.reload()
         ready(mgr)
         check("switching: the choice is kept for this tab", mgr.inner_text("#me-name") == f"Second Pharmacy {RUN}")
@@ -507,9 +523,9 @@ def main():
               joiner.inner_text("#me-name") == f"Kigali Care {RUN}")
 
         # ============================================================ sign-out and guards
-        owner.click("#out")
-        owner.wait_for_url("**/pharmacy-sign-in.html*")
-        check("sign out returns to the pharmacy sign-in page and ends the session",
+        sign_out_via_menu(owner)
+        owner.wait_for_url("**/index.html*")
+        check("sign out (account menu) returns to the landing page and ends the session",
               owner.evaluate("!sessionStorage.getItem('apexrx_session')"))
         owner.goto(SITE + "/pharmacy-dashboard.html")
         owner.wait_for_url("**/pharmacy-sign-in.html*")

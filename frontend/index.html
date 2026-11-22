@@ -18,12 +18,27 @@
 <script src="js/site-layout.js" data-part="header"></script>
 
 <main id="top">
-<!-- ============ HERO: decorative Kigali map (not a live stock map) ============ -->
+<!-- ============ HERO: interactive Kigali map (illustration, not a live stock map) ============ -->
 <section class="hero" id="hero-search">
   <div class="map-canvas" id="mapCanvas">
     <div class="map-layer" id="mapLayer">
       <img class="map-bg-img" src="assets/images/kigali-map-bg.jpg" alt="" aria-hidden="true">
       <div class="map-overlay" aria-hidden="true"></div>
+      <canvas class="map-fx" id="mapFx" aria-hidden="true"></canvas>
+
+      <!-- Pins sit on the pharmacy icons drawn in the map (x/y in image pixels, 1672×941).
+           Their cards name the area only: no pharmacy names or stock claims (js/script.js). -->
+      <button type="button" class="pin" data-x="1117" data-y="228"><span class="pin-card"><span class="stock in">Kacyiru</span><span class="med"></span></span></button>
+      <button type="button" class="pin" data-x="1448" data-y="490" data-align="right"><span class="pin-card"><span class="stock in">Kicukiro</span><span class="med"></span></span></button>
+      <button type="button" class="pin" data-x="1082" data-y="508"><span class="pin-card"><span class="stock in">Kigali</span><span class="med"></span></span></button>
+      <button type="button" class="pin" data-x="770" data-y="410"><span class="pin-card"><span class="stock in">Nyarugenge</span><span class="med"></span></span></button>
+      <button type="button" class="pin" data-x="862" data-y="268"><span class="pin-card"><span class="stock in">Nyarugenge</span><span class="med"></span></span></button>
+      <button type="button" class="pin" data-x="690" data-y="80" data-align="below"><span class="pin-card"><span class="stock in">Gasabo</span><span class="med"></span></span></button>
+      <button type="button" class="pin" data-x="1322" data-y="258" data-align="right"><span class="pin-card"><span class="stock in">Airport Road</span><span class="med"></span></span></button>
+      <button type="button" class="pin" data-x="1210" data-y="748"><span class="pin-card"><span class="stock in">Rebero</span><span class="med"></span></span></button>
+      <button type="button" class="pin" data-x="513" data-y="348"><span class="pin-card"><span class="stock in">City centre</span><span class="med"></span></span></button>
+      <button type="button" class="pin" data-x="358" data-y="235" data-align="left"><span class="pin-card"><span class="stock in">Nyabugogo</span><span class="med"></span></span></button>
+      <button type="button" class="pin" data-x="365" data-y="700" data-align="left"><span class="pin-card"><span class="stock in">Nyamirambo</span><span class="med"></span></span></button>
     </div>
   </div>
 

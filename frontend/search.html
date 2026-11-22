@@ -41,12 +41,13 @@
 </section>
 
 <section class="wrap ps-body">
-  <a class="ps-back" id="ps-back" href="index.html#hero-search" data-i18n="ps_back">← Back to search</a>
+  <a class="ps-back" id="ps-back" href="index.html#hero-search" aria-label="Back to search" title="Back to search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6"/></svg></a>
 
   <!-- ===================== List view ===================== -->
   <div id="ps-list-view">
     <form class="ps-filters" id="ps-filters" novalidate aria-labelledby="ps-filters-title">
-      <h2 class="ps-filters-title" id="ps-filters-title" data-i18n="ps_filters">Filter and sort</h2>
+      <h2 class="ps-filters-title" id="ps-filters-title"><button type="button" class="ps-filter-toggle" id="ps-filter-toggle" aria-expanded="false" aria-controls="ps-filter-body"><span data-i18n="ps_filters">Filter and sort</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></h2>
+      <div class="ps-filter-body" id="ps-filter-body">
       <div class="ps-filter-grid">
         <fieldset class="ps-field ps-price">
           <legend><span data-i18n="ps_min">Min price</span> – <span data-i18n="ps_max">Max price</span> <span class="ps-cur" id="ps-cur">(RWF)</span></legend>
@@ -94,6 +95,7 @@
         <button type="reset" class="ps-link" id="ps-reset" data-i18n="ps_reset">Reset filters</button>
       </div>
       <p class="ps-privacy" data-i18n="ps_privacy">Your location stays in this tab. It is used only to find nearby pharmacies and to calculate the route (OpenStreetMap services). ApexRX does not store it.</p>
+      </div>
     </form>
 
     <p class="ps-count" id="ps-count" role="status" aria-live="polite"></p>
@@ -103,7 +105,6 @@
 
   <!-- ===================== Selected pharmacy ===================== -->
   <div id="ps-detail-view" hidden>
-    <button type="button" class="ps-link ps-back-results" id="ps-back-results" data-i18n="ps_back_results">← Back to results</button>
     <div class="ps-detail" aria-live="polite">
       <article class="ps-info" id="ps-info"></article>
       <div class="ps-mapcol">
@@ -124,7 +125,6 @@
           </div>
           <ul class="ps-places" id="ps-places-2" hidden></ul>
           <p class="ps-msg" id="ps-route-msg" role="status" aria-live="polite"></p>
-          <div class="ps-directions" id="ps-directions"></div>
         </div>
       </div>
     </div>

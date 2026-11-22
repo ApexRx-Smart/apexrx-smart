@@ -142,15 +142,27 @@ def is_dashboard(page):
     return "-dashboard.html" in page.url
 
 
+def acct(page):
+    """The account menu's lines: name, email, "Organization · Role"."""
+    return page.evaluate("[...document.querySelectorAll('.am-head > *')].map(e => e.textContent)")
+
+
+def sign_out(page):
+    """Sign out from the account menu: the session ends and the landing page opens."""
+    page.wait_for_selector(".am-btn")
+    page.click(".am-btn")
+    page.click("[data-am=signout]")
+    page.wait_for_url("**/index.html*")
+
+
 def staff_sign_in(page, email, password=PW):
     page.goto("about:blank")  # a fresh load (a hash change alone would not reload the page)
     page.goto(SITE + "/pharmacy-sign-in.html")
     # A signed-in tab goes straight on to its dashboard: sign out there first.
     page.wait_for_function("location.pathname.endsWith('-dashboard.html') || !!document.querySelector('#account:not([hidden])')")
     if is_dashboard(page):
-        page.wait_for_selector("#out")
-        page.click("#out")
-        page.wait_for_url("**/pharmacy-sign-in.html*")
+        sign_out(page)
+        page.goto(SITE + "/pharmacy-sign-in.html")
         page.wait_for_selector("#account:not([hidden])")
     page.fill("#account [name=email]", email)
     page.fill("#account [name=password]", password)
@@ -181,23 +193,21 @@ def main():
         on_dashboard(page)
         check("sign in: the owner reaches the workspace, identity shown",
               f"Accounts Pharmacy {RUN}" in page.inner_text("#me-name")
-              and page.inner_text("#dash-user") == f"{owner_email} · Owner" and page.inner_text("#out") == "Sign out")
+              and acct(page)[1:] == [owner_email, f"Accounts Pharmacy {RUN} · Owner"] and page.locator("#out").count() == 0)
         old_token = token_of(page)
         page.goto(SITE + "/index.html")
-        page.wait_for_function("document.querySelector('#signInBtn').textContent.includes('@')")
-        check("public site: the header shows who is signed in, and offers Sign out",
-              page.inner_text("#signInBtn") == owner_email and page.inner_text("#getStartedBtn") == "Sign out")
-        page.click("#signInBtn")
+        page.wait_for_timeout(800)
+        check("public site: the landing page never shows who is signed in, and has no Sign in / Get started",
+              owner_email not in page.inner_text("header") and page.locator("#signInBtn, #getStartedBtn, .am-btn").count() == 0)
+        page.goto(SITE + "/pharmacy-sign-in.html")
         on_dashboard(page)
-        check("public site: the account button returns to the workspace", True)
-        page.goto(SITE + "/index.html")
-        page.click("#getStartedBtn")
-        page.wait_for_function("document.querySelector('#signInBtn').textContent === 'Sign in'")
-        check("public site: Sign out from the header ends the session",
-              refused(old_token) and token_of(page) is None)
+        check("session: the pharmacy sign-in page takes a signed-in member straight to the workspace", True)
+        sign_out(page)
+        check("account menu: Sign out ends the session and opens the landing page",
+              refused(old_token) and token_of(page) is None and page.url.split("?")[0].endswith("/index.html"))
         page.go_back()
         page.wait_for_load_state("load")
-        visible(page, "#account")
+        page.wait_for_timeout(1500)
         check("back button: the workspace is not shown again after signing out",
               not is_dashboard(page) and f"Accounts Pharmacy {RUN}" not in page.inner_text("body"))
         page.goto(SITE + "/pharmacies.html")
@@ -208,9 +218,8 @@ def main():
         on_dashboard(page)
         second = token_of(page)
         other_session = login(owner_email)  # the same person on another device
-        page.click("#out")
-        visible(page, "#account")
-        check("workspace sign-out: back to sign in, this session ended on the server",
+        sign_out(page)
+        check("workspace sign-out: the landing page, this session ended on the server",
               refused(second) and token_of(page) is None)
         me = call("GET", "/auth/me", token=other_session)[1]
         check("workspace sign-out: other sessions, membership, role and pharmacy unchanged",
@@ -220,9 +229,8 @@ def main():
         staff_sign_in(page, other_email)
         on_dashboard(page)
         check("switching accounts: the second account sees only its own pharmacy",
-              f"Other Pharmacy {RUN}" in page.inner_text("#me-name") and page.inner_text("#dash-user").startswith(other_email))
-        page.click("#out")
-        visible(page, "#account")
+              f"Other Pharmacy {RUN}" in page.inner_text("#me-name") and acct(page)[1] == other_email)
+        sign_out(page)
         ctx.close()
 
         # ============================================ invitations (new account)
@@ -265,7 +273,7 @@ def main():
         inv.click("#invite-continue")
         on_dashboard(inv)
         check("staff: opens the right pharmacy with the Staff role, without registering a pharmacy",
-              f"Accounts Pharmacy {RUN}" in inv.inner_text("#me-name") and inv.inner_text("#dash-user") == f"{new_email} · Staff")
+              f"Accounts Pharmacy {RUN}" in inv.inner_text("#me-name") and acct(inv)[1:] == [new_email, f"Accounts Pharmacy {RUN} · Staff"])
         inv.click(".nav[data-v=set]")
         wait_text(inv, "#view", "Only owners and managers can invite")
         check("staff: cannot invite employees", inv.locator("#invite-form").count() == 0)
@@ -278,8 +286,7 @@ def main():
         on_dashboard(inv)
         check("staff: changing the stored pharmacy id in the browser does not open another pharmacy",
               f"Other Pharmacy {RUN}" not in inv.inner_text("#me-name"))
-        inv.click("#out")
-        visible(inv, "#account")
+        sign_out(inv)
         staff_sign_in(inv, new_email)
         on_dashboard(inv)
         check("staff sign-in: the employee signs in on their own and reaches the workspace", True)
@@ -337,13 +344,13 @@ def main():
         multi.click(f"#org-choice-list button[data-org='{org}']")
         on_dashboard(multi)
         check("several pharmacies: the chosen pharmacy opens with that role",
-              f"Accounts Pharmacy {RUN}" in multi.inner_text("#me-name") and multi.inner_text("#dash-user").endswith("Manager"))
+              f"Accounts Pharmacy {RUN}" in multi.inner_text("#me-name") and acct(multi)[-1].endswith("Manager"))
         with multi.expect_navigation():
             multi.select_option("#org", f"pharmacy:{other_org}")
         on_dashboard(multi)
         wait_text(multi, "#me-name", f"Other Pharmacy {RUN}")
         check("several pharmacies: switching without signing out loads the other role",
-              multi.inner_text("#dash-user").endswith("Owner"))
+              acct(multi)[-1].endswith("Owner"))
         ctx2.close()
 
         # Revoke and resend.
@@ -407,7 +414,7 @@ def main():
         check("reset: the link works only once", True)
         staff_sign_in(page, new_email, "Brand-New-Pass-77")
         on_dashboard(page)
-        check("reset: membership and role are unchanged", page.inner_text("#dash-user") == f"{new_email} · Staff")
+        check("reset: membership and role are unchanged", acct(page)[1:] == [new_email, f"Accounts Pharmacy {RUN} · Staff"])
         ctx.close()
 
         # ===================================== inactivity across two tabs (1 min)
@@ -465,7 +472,7 @@ def main():
             a.evaluate("window.open('pharmacies.html', '_blank')")
         c = opened.value
         on_dashboard(c)
-        a.click("#out")
+        sign_out(a)
         visible(c, "#account", timeout=10000)
         check("tabs: signing out in one tab signs out the other", "another tab" in c.inner_text("#form-error"))
         ctx.close()

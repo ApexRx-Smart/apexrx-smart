@@ -204,6 +204,7 @@
 ['Send request','Envoyer la demande','Ohereza icyifuzo'],
 ['Sent for review.','Envoyé pour examen.','Byoherejwe kugenzurwa.'],
 ['Sign out','Se déconnecter','Sohoka'],
+['Account menu','Menu du compte','Ibikubiyemo bya konti'],
 ['Something went wrong. Please try again.','Une erreur est survenue. Veuillez réessayer.','Habaye ikibazo. Ongera ugerageze.'],
 ['Sort','Trier','Tondeka'],
 ['Staff','Employé','Umukozi'],

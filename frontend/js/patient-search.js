@@ -1,5 +1,9 @@
 'use strict';
-/* Expanded patient search (search.html), opened from the homepage's "See more".
+/* Expanded patient search (search.html), opened from the homepage's "See more",
+ * and the pharmacy page (search.html?pharmacy=&product=), opened by clicking a
+ * result here or on the homepage. One back arrow: on the pharmacy page it goes
+ * back to the results it came from; on the results it goes to the homepage
+ * search (index.html?q=#hero-search), which shows the same search again.
  *
  * Data (ApexRX API, js/api.js):
  *   GET /search/pharmacies           q + price range + location/radius + sort, filtered and
@@ -16,8 +20,11 @@
  *   tiles     tile.openstreetmap.org        (OSM tile usage policy: light use, attribution)
  *   routing   routing.openstreetmap.de      (FOSSGIS OSRM, car and foot; fair use)
  *   places    nominatim.openstreetmap.org   (only when the patient presses Find; max 1 request/s)
- * If routing fails the map draws a straight line and says so; the Google Maps and
- * OpenStreetMap buttons always give turn-by-turn directions.
+ * If routing fails the map draws a straight line and says so. "Get directions" hands
+ * the branch (its coordinates, else its address) to the device's own maps app: a
+ * geo: link on Android (the system lets the patient pick or use their default app),
+ * Apple Maps links on iPhone, iPad and Mac, and OpenStreetMap in the browser
+ * elsewhere or when no app opens. "Call pharmacy" is a tel: link.
  *
  * The patient's location is asked for only when they press "Use my location", is kept
  * in memory for this tab, and is never put in the URL.
@@ -41,7 +48,7 @@
     q: '', min: null, max: null, sort: 'price', sortTouched: false, radius: '',
     items: [], total: 0, run: 0, controller: null, recordNext: false,
     origin: null,            // { lat, lng, source: 'gps' | 'place' | 'map', label }
-    selectedId: null, selectedItem: null, detail: null, detailRun: 0,
+    selectedId: null, selectedItem: null, productId: null, detail: null, detailRun: 0,
     mode: 'car', routeRun: 0, routeController: null,
     pushedDetail: false      // true when this page added the pharmacy's history entry
   };
@@ -56,6 +63,8 @@
     S.sort = ['price', 'price_desc', 'distance', 'freshness'].includes(p.get('sort')) ? p.get('sort') : 'price';
     S.sortTouched = p.has('sort');
     S.radius = ['1', '2', '5', '10', '20'].includes(p.get('radius')) ? p.get('radius') : '';
+    const product = Number(p.get('product'));
+    S.productId = Number.isInteger(product) && product > 0 ? product : null;
     const id = Number(p.get('pharmacy'));
     return Number.isInteger(id) && id > 0 ? id : null;
   }
@@ -66,12 +75,25 @@
     if (S.max != null) p.set('max', S.max);
     if (S.sortTouched) p.set('sort', S.sort);
     if (S.radius) p.set('radius', S.radius);
-    if (pharmacyId) p.set('pharmacy', pharmacyId);
+    if (pharmacyId) {
+      p.set('pharmacy', pharmacyId);
+      const product = S.selectedItem ? S.selectedItem.product_id : S.productId;
+      if (product) p.set('product', product);
+    }
     p.set('lang', SITE.lang());
     return location.pathname + '?' + p.toString();
   }
+  // The single back arrow. Results: the homepage search with this query. Pharmacy:
+  // the results it was opened from (handled on click, see "events").
+  function homeSearchHref() {
+    return 'index.html?' + new URLSearchParams(S.q ? { q: S.q, lang: SITE.lang() } : { lang: SITE.lang() }) + '#hero-search';
+  }
   function syncBackLink() {
-    $('ps-back').href = 'index.html?' + new URLSearchParams(S.q ? { q: S.q, lang: SITE.lang() } : { lang: SITE.lang() }) + '#hero-search';
+    const back = $('ps-back'), detail = !!S.selectedId;
+    back.href = detail ? urlFor(null) : homeSearchHref();
+    const label = t(detail ? 'ps_back_results' : 'ps_back');
+    back.setAttribute('aria-label', label); back.title = label;
+    document.body.classList.toggle('ps-on-detail', detail);
   }
 
   /* ----------------------------------------------------------- filters */
@@ -172,12 +194,15 @@
       const dist = x.distance_km != null ? `<span class="ps-dist">${esc(tf('ps_km', { n: num(x.distance_km, x.distance_km < 10 ? 1 : 0) }))}</span>`
         : S.origin ? `<span>${esc(t('ps_no_coords'))}</span>` : '';
       const best = S.items.length > 1 && Number(x.unit_price) === lowest ? `<span class="ps-best">${esc(t('ps_cheapest'))}</span>` : '';
+      const href = urlFor(null).replace(/lang=[^&]*$/, '') + new URLSearchParams({ pharmacy: x.location_id, product: x.product_id, lang: SITE.lang() });
       return `<li class="ps-card" data-location="${x.location_id}" data-offer="${x.offer_id}">
+<a class="ps-card-link" href="${esc(href)}" data-open="${i}">
   <div class="ps-card-top"><h3>${esc(SITE.medicineLabel(x))}</h3><span class="ps-price">${esc(SITE.formatPrice(x.unit_price, x.currency))}</span></div>
   <p class="ps-place">${esc(place)}</p>
   ${x.address ? `<p class="ps-addr">${esc(x.address)}</p>` : ''}
   <div class="ps-meta"><span class="rstock ${status[0]}">${esc(t(status[1]))}</span>${dist}${best}<span>${esc(t('t_updated') + ' ' + SITE.formatAge(x.last_updated))}</span></div>
-  <button type="button" class="ps-btn" data-open="${i}">${esc(t('ps_view'))}</button>
+  <span class="ps-card-go" aria-hidden="true">${esc(t('ps_view'))} ›</span>
+</a>
 </li>`;
     }).join('');
     $('ps-more').hidden = S.items.length >= S.total;
@@ -252,18 +277,24 @@
 
   /* ---------------------------------------------------- selected pharmacy */
   function showList() {
-    S.selectedId = null; S.detail = null;
+    S.selectedId = null; S.detail = null; S.selectedItem = null; S.productId = null;
     $('ps-detail-view').hidden = true; $('ps-list-view').hidden = false;
-    const card = S.lastOpened && document.querySelector(`.ps-card[data-location="${S.lastOpened}"] button`);
+    syncBackLink();
+    const card = S.lastOpened && document.querySelector(`.ps-card[data-location="${S.lastOpened}"] .ps-card-link`);
     if (card) card.focus();
+    // Back on the results: where the patient was in the list.
+    if (S.listScroll != null) window.scrollTo(0, S.listScroll);
   }
   async function openDetail(locationId, item, push) {
+    if (!S.selectedId) S.listScroll = window.scrollY;
     S.selectedId = locationId; S.selectedItem = item || null; S.lastOpened = locationId;
+    if (item) S.productId = item.product_id;
     if (push) { history.pushState({ pharmacy: locationId }, '', urlFor(locationId)); S.pushedDetail = true; }
     $('ps-list-view').hidden = true; $('ps-detail-view').hidden = false;
+    syncBackLink();
     $('ps-info').innerHTML = `<p class="ps-msg">${esc(t('ps_loading'))}</p>`;
-    $('ps-directions').innerHTML = ''; $('ps-route-msg').textContent = '';
-    $('ps-detail-view').scrollIntoView({ block: 'start' });
+    $('ps-route-msg').textContent = '';
+    window.scrollTo(0, 0);
     const run = ++S.detailRun;
     try {
       const detail = await API.search.pharmacy(locationId);
@@ -279,33 +310,93 @@
   }
   function isSearched(m) {
     if (S.selectedItem) return m.offer_id === S.selectedItem.offer_id;
+    if (S.productId) return m.product_id === S.productId; // the exact medicine that was clicked
     const q = S.q.toLowerCase();
     return !!q && [m.product_name, m.drug_name].some(v => String(v || '').toLowerCase().includes(q));
   }
   function renderInfo() {
     const d = S.detail;
     const where = [d.address, d.city, d.region].filter(Boolean).join(', ');
-    const phone = d.phone ? `<a href="tel:${esc(String(d.phone).replace(/[^\d+]/g, ''))}">${esc(d.phone)}</a>` : '';
     const searched = d.medicines.find(isSearched);
     const status = searched ? SITE.stockClass(searched.availability_status) : null;
-    $('ps-info').innerHTML = `<h2 tabindex="-1" id="ps-detail-title">${esc(d.pharmacy_name)}</h2>
-${d.location_name && d.location_name !== d.pharmacy_name ? `<p class="ps-branch">${esc(d.location_name)}</p>` : ''}
-<dl class="ps-facts">
-  ${where ? `<dt>${esc(t('ps_address'))}</dt><dd>${esc(where)}</dd>` : ''}
-  ${phone ? `<dt>${esc(t('ps_phone'))}</dt><dd>${phone}</dd>` : ''}
-</dl>
-${searched ? `<div class="ps-searched"><small>${esc(t('ps_searched'))}</small>
-  <strong>${esc(SITE.medicineLabel(searched))}</strong>
-  <span class="ps-price">${esc(SITE.formatPrice(searched.unit_price, searched.currency))}</span>
-  <span class="ps-meta"><span class="rstock ${status[0]}">${esc(t(status[1]))}</span><span>${esc(t('t_updated') + ' ' + SITE.formatAge(searched.last_updated))}</span></span>
-  <div class="rs-reserve-box" id="ps-reserve" aria-live="polite"><p class="ps-msg">${esc(t('rs_checking'))}</p></div></div>` : ''}
-${d.medicines.length ? `<h3>${esc(t('ps_other_meds'))}</h3><ul class="ps-medlist">${d.medicines.map(m => {
+    const others = d.medicines.filter(m => m !== searched);
+    $('ps-info').innerHTML = `<header class="ps-d-head">
+  <h2 tabindex="-1" id="ps-detail-title">${esc(d.pharmacy_name)}</h2>
+  ${d.location_name && d.location_name !== d.pharmacy_name ? `<p class="ps-branch">${esc(d.location_name)}</p>` : ''}
+  ${where ? `<p class="ps-d-addr">${esc(where)}</p>` : ''}
+  ${d.phone ? `<p class="ps-d-phone">${esc(d.phone)}</p>` : ''}
+  <div class="ps-actions" id="ps-actions">${contactActions(d)}</div>
+</header>
+${searched ? `<section class="ps-searched" aria-labelledby="ps-searched-name">
+  <small>${esc(t('ps_searched'))}</small>
+  <div class="ps-searched-row"><strong id="ps-searched-name">${esc(SITE.medicineLabel(searched))}</strong>
+    <span class="ps-price">${esc(SITE.formatPrice(searched.unit_price, searched.currency))}</span></div>
+  <p class="ps-meta"><span class="rstock ${status[0]}">${esc(t(status[1]))}</span><span>${esc(t('t_updated') + ' ' + SITE.formatAge(searched.last_updated))}</span></p>
+  <div class="rs-reserve-box" id="ps-reserve" aria-live="polite"><p class="ps-msg">${esc(t('rs_checking'))}</p></div>
+</section>` : ''}
+${others.length ? `<section class="ps-others"><h3>${esc(t('ps_other_meds'))}</h3><ul class="ps-medlist">${others.map(m => {
       const st = SITE.stockClass(m.availability_status);
-      return `<li class="${isSearched(m) ? 'match' : ''}"><span>${esc(SITE.medicineLabel(m))}</span><span><span class="rstock ${st[0]}">${esc(t(st[1]))}</span> <span class="ps-medprice">${esc(SITE.formatPrice(m.unit_price, m.currency))}</span></span></li>`;
-    }).join('')}</ul>` : ''}`;
+      return `<li><span>${esc(SITE.medicineLabel(m))}</span><span><span class="rstock ${st[0]}">${esc(t(st[1]))}</span> <span class="ps-medprice">${esc(SITE.formatPrice(m.unit_price, m.currency))}</span></span></li>`;
+    }).join('')}</ul></section>` : ''}`;
     const title = $('ps-detail-title'); if (title) title.focus({ preventScroll: true });
     if (searched) paintReserve(d.location_id, searched.product_id);
   }
+
+  /* ------------------------------------------------- call and directions */
+  // Where the branch is: verified coordinates if the pharmacy set them, otherwise
+  // its address with the district and country (never a guess).
+  function destinationOf(d) {
+    if (hasCoords(d)) return { coords: `${Number(d.latitude)},${Number(d.longitude)}` };
+    const parts = [d.address];
+    [d.city, 'Rwanda'].forEach(p => { if (p && !String(d.address || '').toLowerCase().includes(String(p).toLowerCase())) parts.push(p); });
+    return d.address || d.city ? { address: parts.filter(Boolean).join(', ') } : null;
+  }
+  function platform() {
+    const ua = navigator.userAgent || '';
+    if (/Android/i.test(ua)) return 'android';
+    if (/iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1)) return 'ios';
+    if (/Macintosh/i.test(ua)) return 'mac';
+    return 'other';
+  }
+  // native: what the device's maps app opens; web: a browser page that always works.
+  function directionLinks(d) {
+    const dest = destinationOf(d); if (!dest) return null;
+    const label = d.pharmacy_name;
+    const where = dest.coords || dest.address;
+    const web = dest.coords
+      ? `https://www.openstreetmap.org/directions?route=%3B${encodeURIComponent(dest.coords)}#map=16/${dest.coords.replace(',', '/')}`
+      : `https://www.openstreetmap.org/search?query=${encodeURIComponent(dest.address)}`;
+    const os = platform();
+    let native = null;
+    if (os === 'android') native = dest.coords ? `geo:${dest.coords}?q=${encodeURIComponent(dest.coords + '(' + label + ')')}` : `geo:0,0?q=${encodeURIComponent(dest.address)}`;
+    else if (os === 'ios' || os === 'mac') native = `https://maps.apple.com/?daddr=${encodeURIComponent(where)}&q=${encodeURIComponent(label)}`;
+    return { native, web, os };
+  }
+  function contactActions(d) {
+    const tel = d.phone ? String(d.phone).replace(/[^\d+]/g, '') : '';
+    const dir = directionLinks(d);
+    const call = tel
+      ? `<a class="ps-action" id="ps-call" href="tel:${esc(tel)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"/></svg>${esc(t('ps_call_pharmacy'))}</a>`
+      : '';
+    const go = dir
+      ? `<a class="ps-action" id="ps-directions-link" href="${esc(dir.native && dir.os !== 'android' ? dir.native : dir.web)}" target="_blank" rel="noopener" data-native="${esc(dir.native || '')}" data-web="${esc(dir.web)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 22 2l-9 19-2-8-8-2Z"/></svg>${esc(t('ps_get_directions'))}</a>`
+      : '';
+    return call + go;
+  }
+  // Android: try the geo: link (the system opens the patient's maps app, or asks
+  // which one); if nothing took over after a moment, open the browser page.
+  document.addEventListener('click', e => {
+    const a = e.target.closest('#ps-directions-link'); if (!a) return;
+    const native = a.dataset.native;
+    if (!native || !native.startsWith('geo:')) return; // other devices follow the link itself
+    e.preventDefault();
+    let left = false;
+    const onHide = () => { left = true; };
+    document.addEventListener('visibilitychange', onHide, { once: true });
+    window.addEventListener('pagehide', onHide, { once: true });
+    location.href = native;
+    setTimeout(() => { if (!left && !document.hidden) window.open(a.dataset.web, '_blank', 'noopener'); }, 1500);
+  });
 
   /* ----------------------------------------------------------- reserve */
   // The API decides; the button is shown only when this medicine can be reserved at
@@ -353,7 +444,7 @@ ${d.medicines.length ? `<h3>${esc(t('ps_other_meds'))}</h3><ul class="ps-medlist
   }
   function drawMap() {
     const d = S.detail; if (!d) return;
-    paintDirections();
+    $('ps-route').hidden = !hasCoords(d); // a route needs the branch on the map
     if (!hasCoords(d)) {
       showMapMessage(t(d.address || d.city ? 'ps_no_map' : 'ps_no_address'));
       $('ps-route-msg').textContent = '';
@@ -398,26 +489,6 @@ ${d.medicines.length ? `<h3>${esc(t('ps_other_meds'))}</h3><ul class="ps-medlist
       $('ps-route-msg').textContent = t('ps_route_fail');
     } finally { if (timer) clearTimeout(timer); }
   }
-  function paintDirections() {
-    const d = S.detail, box = $('ps-directions');
-    const coords = hasCoords(d) ? `${Number(d.latitude)},${Number(d.longitude)}` : null;
-    // Without coordinates: the address, plus the district and country when the address lacks them.
-    const parts = [d.address];
-    [d.city, 'Rwanda'].forEach(p => { if (p && !String(d.address || '').toLowerCase().includes(String(p).toLowerCase())) parts.push(p); });
-    const destination = coords || parts.filter(Boolean).join(', ');
-    if (!coords && !d.address && !d.city) { box.innerHTML = ''; return; }
-    const g = new URLSearchParams({ api: '1', destination, travelmode: S.mode === 'foot' ? 'walking' : 'driving' });
-    if (S.origin) g.set('origin', `${S.origin.lat.toFixed(5)},${S.origin.lng.toFixed(5)}`);
-    let osm = '';
-    if (coords) {
-      osm = S.origin
-        ? `https://www.openstreetmap.org/directions?engine=fossgis_osrm_${S.mode}&route=${S.origin.lat.toFixed(5)},${S.origin.lng.toFixed(5)};${coords}`
-        : `https://www.openstreetmap.org/?mlat=${Number(d.latitude)}&mlon=${Number(d.longitude)}#map=17/${Number(d.latitude)}/${Number(d.longitude)}`;
-    }
-    box.innerHTML = `<a class="primary" id="ps-dir-google" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?${esc(g.toString())}">${esc(t('ps_open_google'))}</a>`
-      + (osm ? `<a id="ps-dir-osm" target="_blank" rel="noopener" href="${esc(osm)}">${esc(t('ps_open_osm'))}</a>` : '')
-      + (d.phone ? `<a href="tel:${esc(String(d.phone).replace(/[^\d+]/g, ''))}">${esc(t('ps_call'))} ${esc(d.phone)}</a>` : '');
-  }
   function setMode(mode) {
     S.mode = mode;
     $('ps-mode-car').setAttribute('aria-pressed', String(mode === 'car'));
@@ -459,20 +530,36 @@ ${d.medicines.length ? `<h3>${esc(t('ps_other_meds'))}</h3><ul class="ps-medlist
     load(false);
   });
   $('ps-more').addEventListener('click', () => load(true));
+  // Phones: the filters fold away behind "Filter and sort" so the results come first.
+  $('ps-filter-toggle').addEventListener('click', () => {
+    const open = $('ps-filters').classList.toggle('open');
+    $('ps-filter-toggle').setAttribute('aria-expanded', String(open));
+  });
+  // A card is a link (it can be opened in a new tab); a plain click opens it here.
   $('ps-results').addEventListener('click', e => {
     const b = e.target.closest('[data-open]'); if (!b) return;
+    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
     const item = S.items[+b.dataset.open];
     if (item) openDetail(item.location_id, item, true);
   });
-  // Back to the list: through history when this page opened the pharmacy (so the
-  // browser's Back button behaves the same), otherwise in place (a shared link).
-  $('ps-back-results').addEventListener('click', () => {
-    if (S.pushedDetail) history.back();
+  // The back arrow. Pharmacy page: back through history when the results were the
+  // previous page (here, or the homepage's results), so their filters and scroll
+  // position come back; opened directly, the results for the same search instead.
+  // Results: a plain link to the homepage search.
+  $('ps-back').addEventListener('click', e => {
+    if (!S.selectedId) return;
+    e.preventDefault();
+    let fromSite = false;
+    try { fromSite = !!document.referrer && new URL(document.referrer).origin === location.origin; } catch (x) { /* none */ }
+    if (S.pushedDetail || (fromSite && history.length > 1)) history.back();
     else { history.replaceState(null, '', urlFor(null)); showList(); }
   });
   window.addEventListener('popstate', () => {
     const id = readUrlPharmacy();
     S.pushedDetail = false;
+    const product = Number(new URLSearchParams(location.search).get('product'));
+    S.productId = Number.isInteger(product) && product > 0 ? product : null;
     if (id) openDetail(id, S.items.find(x => x.location_id === id) || null, false); else showList();
   });
   function readUrlPharmacy() { const id = Number(new URLSearchParams(location.search).get('pharmacy')); return Number.isInteger(id) && id > 0 ? id : null; }

@@ -27,6 +27,9 @@ window.APEX_I18N_EXTRA = (function (prev) {
       rs_reason_pack_size_missing: 'This medicine has not been reviewed for reservations yet.',
       rs_reason_no_reservable_stock: 'This pharmacy cannot take reservations for this medicine right now. You can still ask at the counter.',
       rs_reason_offer_unlisted: 'This pharmacy does not list this medicine.',
+      rs_account_menu: 'Account menu',
+      rs_welcome: 'Your account is ready. Find a medicine and reserve it; your reservations appear here.',
+      rs_not_patient: 'You are signed in with a pharmacy, supplier or ApexRX account. Reservations are for patient accounts: sign out and sign in with a patient account.',
       rs_forgot: 'Forgot your password?',
       rs_reason_own_pharmacy: 'You cannot reserve at a pharmacy you work for.',
 
@@ -181,6 +184,9 @@ window.APEX_I18N_EXTRA = (function (prev) {
       rs_reason_pack_size_missing: 'Ce médicament n’a pas encore été examiné pour les réservations.',
       rs_reason_no_reservable_stock: 'Cette pharmacie ne peut pas prendre de réservation pour ce médicament pour le moment. Vous pouvez toujours le demander au comptoir.',
       rs_reason_offer_unlisted: 'Cette pharmacie ne propose pas ce médicament.',
+      rs_account_menu: 'Menu du compte',
+      rs_welcome: 'Votre compte est prêt. Trouvez un médicament et réservez-le ; vos réservations apparaissent ici.',
+      rs_not_patient: 'Vous êtes connecté avec un compte pharmacie, fournisseur ou ApexRX. Les réservations sont réservées aux comptes patients : déconnectez-vous et connectez-vous avec un compte patient.',
       rs_forgot: 'Mot de passe oublié ?',
       rs_reason_own_pharmacy: 'Vous ne pouvez pas réserver dans une pharmacie où vous travaillez.',
 
@@ -335,6 +341,9 @@ window.APEX_I18N_EXTRA = (function (prev) {
       rs_reason_pack_size_missing: 'Uyu muti ntabwo urasuzumwa ngo ubikishwe.',
       rs_reason_no_reservable_stock: 'Iyi farumasi ntishobora kwakira ubusabe bwo kubikisha uyu muti ubu. Ushobora kuwubaza kuri farumasi.',
       rs_reason_offer_unlisted: 'Iyi farumasi ntigaragaza uyu muti.',
+      rs_account_menu: 'Ibikubiyemo bya konti',
+      rs_welcome: 'Konti yawe yiteguye. Shaka umuti uwubikishe; ibyo wabikishije bigaragara hano.',
+      rs_not_patient: 'Winjiye ukoresheje konti ya farumasi, y’utanga imiti cyangwa ya ApexRX. Kubikisha ni ibya konti z’abarwayi: sohoka winjire ukoresheje konti y’umurwayi.',
       rs_forgot: 'Wibagiwe ijambobanga?',
       rs_reason_own_pharmacy: 'Ntushobora kubikisha muri farumasi ukoramo.',
 

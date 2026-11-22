@@ -110,7 +110,7 @@ def staff_view(page, kind, w):
     side = w[kind]
     settle(page)
     page.wait_for_timeout(800)  # anything late (an insights call) would show up now
-    check(f"{kind} staff: labelled Staff", page.inner_text("#dash-user").endswith("· Staff"))
+    check(f"{kind} staff: labelled Staff", D.role_of(page) == "Staff")
     check(f"{kind} staff: no charts, analytics or Premium cards",
           page.locator(CHARTS).count() == 0 and page.locator(".ov-premium").count() == 0 and page.is_hidden(".pcard")
           and page.locator(".nav[data-v=prem]").count() == 0)
@@ -187,7 +187,7 @@ def main():
         had = page.locator("#ins-health").count() == 1
         call("PATCH", f"/organizations/{ph['org']}/members/{ph['manager_mid']}", {"role": "staff"}, ph["owner"])
         page.click(".nav[data-v=home]")
-        page.wait_for_function("() => document.querySelector('#dash-user')?.textContent.endsWith('· Staff')", timeout=20000)
+        page.wait_for_function("() => [...document.querySelectorAll('.am-head > *')].pop()?.textContent.endsWith('· Staff')", timeout=20000)
         settle(page)
         check("demoted manager: charts gone after the refresh, now labelled Staff",
               had and page.locator(CHARTS).count() == 0 and page.locator(".nav[data-v=prem]").count() == 0)

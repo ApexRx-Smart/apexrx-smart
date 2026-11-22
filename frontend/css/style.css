@@ -234,6 +234,10 @@ nav.main-nav a:hover::after{transform:scaleX(1);}
 .search-results{margin-top:10px; border-radius:12px; overflow:hidden; border:1px solid transparent; max-height:0; opacity:0; transition:max-height .25s var(--ease), opacity .2s, border-color .2s;}
 .search-results.open{max-height:270px; overflow-y:auto; opacity:1; border-color:var(--line);}
 .result-row{display:flex; justify-content:space-between; gap:10px; align-items:center; padding:11px 14px; font-size:13.5px; border-bottom:1px solid var(--line);}
+a.result-row{color:inherit; text-decoration:none; cursor:pointer; transition:background-color .15s;}
+a.result-row:hover{background:rgba(26,148,88,.06);}
+a.result-row:focus-visible{outline:3px solid var(--rw-blue); outline-offset:-3px; background:rgba(26,148,88,.06);}
+a.result-row::after{content:"›"; color:var(--text-faint); font-size:20px; line-height:1; margin-left:2px;}
 .result-row:last-child{border-bottom:none;}
 .result-row .rname{font-weight:600;}
 .result-row .rmeta{color:var(--text-faint); font-size:12px;}
@@ -242,7 +246,7 @@ nav.main-nav a:hover::after{transform:scaleX(1);}
 .rstock.low{background:rgba(250,210,1,.25); color:#7d5a00;}
 .rstock.out{background:var(--tint); color:var(--text-faint);}
 .result-empty{padding:16px 14px; font-size:13px; color:var(--text-faint);}
-.result-more{display:block; padding:12px 14px; font-size:13.5px; font-weight:600; color:var(--green); text-decoration:none; background:rgba(26,148,88,.06);}
+.result-more{display:block; padding:10px 14px; font-size:13.5px; font-weight:600; text-align:center; color:var(--green); text-decoration:none; background:rgba(26,148,88,.06);}
 .result-more:hover, .result-more:focus-visible{background:rgba(26,148,88,.12); text-decoration:underline;}
 
 
@@ -607,22 +611,6 @@ footer.site.footer-wide{background:#121329;padding:76px 0 26px;}
 /* Header when signed in: the account email instead of "Sign in" */
 .signed-in-chip{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-/* ===== Account chooser (Sign in / Get started: patient, pharmacy, supplier) ===== */
-dialog.account-chooser{
-  /* The header is pointer-events:none (only its pill takes clicks): the dialog must opt back in. */
-  pointer-events:auto;
-  width:min(440px, calc(100vw - 32px)); max-height:calc(100vh - 32px); overflow:auto;
-  border:0; border-radius:20px; padding:22px 22px 18px; color:var(--text); background:var(--bg);
-  box-shadow:0 24px 60px rgba(15,26,61,.28);
-}
-dialog.account-chooser::backdrop{background:rgba(15,26,61,.45);}
-.account-chooser h2{font-family:var(--font-display); font-size:1.35rem; margin:0 0 4px; color:var(--ink);}
-.account-chooser .ac-lede{margin:0 0 14px; color:var(--text-dim);}
-.account-chooser .ac-close-row{display:flex; justify-content:flex-end; margin:-8px -8px 0 0;}
-.account-chooser .ac-close{border:0; background:transparent; font-size:1.1rem; line-height:1; padding:8px; border-radius:10px; cursor:pointer; color:var(--text-dim);}
-.account-chooser .ac-close:hover, .account-chooser .ac-close:focus-visible{background:var(--tint); color:var(--ink);}
-.account-chooser .ac-options{list-style:none; margin:0; padding:0; display:grid; gap:10px;}
-.account-chooser .ac-option{display:flex; flex-direction:column; gap:2px; padding:14px 16px; border:1px solid var(--line); border-radius:14px; text-decoration:none; color:var(--text); background:var(--tint);}
-.account-chooser .ac-option strong{font-size:1.02rem; color:var(--ink);}
-.account-chooser .ac-option span{font-size:.92rem; color:var(--text-dim);}
-.account-chooser .ac-option:hover, .account-chooser .ac-option:focus-visible{border-color:var(--green); background:#fff; outline:none; box-shadow:0 0 0 3px rgba(26,148,88,.18);}
+/* Patient workspace app bar (reservations.html): brand, language, account menu. */
+.app-bar .header-actions{gap:10px;}
+.app-bar .am-btn{background:var(--green); border-color:rgba(255,255,255,.35);}

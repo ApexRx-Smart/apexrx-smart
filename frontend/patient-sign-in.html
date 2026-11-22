@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Patient sign-in — ApexRX Smart</title>
+<meta name="description" content="Sign in to ApexRX to reserve medicines and follow your reservations.">
+<link rel="icon" href="assets/logos/logo-mark.svg">
+<link rel="stylesheet" href="css/pharmacies.css">
+</head>
+<body class="patient-page" data-role="patient" data-auth="signin">
+<!-- Patient sign-in (js/patient-auth.js). Registration is patient-register.html. -->
+<header><a class="brand" href="index.html"><img src="assets/logos/logo-mark.svg" alt="" width="38"><span>ApexRX<span class="green"> Smart</span><small>Smarter access. Better health.</small></span></a><a class="home-link" href="index.html">← Back to website</a><label class="language-control"><span class="sr-only">Language</span><select id="workflow-language" aria-label="Language"><option value="en">English</option><option value="fr">Français</option><option value="rw">Kinyarwanda</option></select></label></header>
+
+<main id="onboarding" class="onboarding">
+<aside class="story">
+<span class="eyebrow">FOR PATIENTS · KIGALI</span>
+<h1>Your medicine. <br>Reserved at <br><em>a pharmacy near you.</em></h1>
+<p>Find which pharmacies report having a medicine, reserve it and collect it at the counter.</p>
+<div class="story-photo"><img src="assets/images/audience-patients.png" alt="Illustration of a patient finding a medicine on a phone"><div>Find it nearby.<br><strong>Collect it with confidence.</strong></div></div>
+<div class="story-foot"><span class="dot"></span> Free for patients</div>
+</aside>
+
+<section class="workspace">
+<div class="form-area">
+<h2 id="step-title" tabindex="-1">Sign in</h2>
+<p id="step-description" class="muted">Welcome back. Sign in to reserve medicines and follow your reservations.</p>
+<form id="patient-auth" class="step-form" novalidate>
+  <label>Email address<input name="email" type="email" autocomplete="email" maxlength="255" placeholder="you@example.com" required></label>
+  <label>Password<input name="password" type="password" autocomplete="current-password" placeholder="Your password" required></label>
+  <p class="forgot-row"><a href="reset-password.html?next=patient" id="forgot-link">Forgot password?</a></p>
+  <p id="form-error" role="alert"></p>
+  <button class="primary" id="auth-submit">Sign in <span>→</span></button>
+  <p class="auth-switch"><span>Don’t have an account?</span> <a class="text-button" id="auth-other" href="patient-register.html">Sign up</a></p>
+</form>
+<div id="account-panel" class="step-form" hidden>
+  <p id="account-panel-text"></p>
+  <button type="button" class="primary" id="account-signout">Sign out <span>→</span></button>
+</div>
+</div>
+<div class="workspace-foot">Medicines, closer to you. <span>APEXRX SMART</span></div>
+</section>
+</main>
+<script src="js/pharmacies-i18n.js"></script>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/patient-auth.js"></script>
+<script src="js/password-toggle.js"></script>
+</body></html>

@@ -119,12 +119,11 @@
     $('#p-b').textContent = t('See the preview'); $('#p-b').dataset.v = 'prem';
     $('.pcard').hidden = !seesInsights();
     $('#br-l').textContent = t(IS_PH ? 'Branch' : 'Depot');
-    $('#out').textContent = isPreview ? t('Exit preview') : t('Sign out');
     $('#lang').value = lang;
     paintTheme();
     if (ctx) {
       $('#me-name').textContent = ctx.org.name;
-      $('#dash-user').textContent = isPreview ? t('Sample data') : `${ctx.user.email} · ${t(ROLE_NAMES[ctx.myRole] || ctx.myRole)}`;
+      paintAccount();
       // Users in several organizations pick one; the other dashboard opens for the other type.
       const orgs = ctx.memberships || [];
       $('#org-l').textContent = t('Organization');
@@ -1449,7 +1448,26 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
   });
   $('#theme').addEventListener('click', () => ApexTheme.toggle());
   window.addEventListener('apexrx:theme', paintTheme);
-  $('#out').addEventListener('click', () => { data.signOut(); location.href = isPreview ? ONBOARD + '?lang=' + lang : SIGN_IN + '?lang=' + lang + SIGN_IN_HASH; });
+  // Account menu (js/account-menu.js): initials, the account's own email, the
+  // organization and role, and Sign out, which ends the session and opens the
+  // landing page. The preview has no account: an "Exit preview" button instead.
+  var acct = null; // var: paintAccount may run before this line (no TDZ)
+  function paintAccount() {
+    const host = $('#acct'); if (!host) return;
+    if (isPreview) {
+      if (!host.querySelector('#out')) host.innerHTML = '<button class="linkish" id="out" type="button"></button>';
+      $('#out').textContent = t('Exit preview');
+      $('#out').onclick = () => { location.href = ONBOARD + '?lang=' + lang; };
+      return;
+    }
+    if (!ctx || !window.ApexAccountMenu) return;
+    const opts = {
+      name: ctx.user.name || ctx.user.email, email: ctx.user.email,
+      detail: `${ctx.org.name} · ${t(ROLE_NAMES[ctx.myRole] || ctx.myRole)}`,
+      labels: { menu: t('Account menu'), signOut: t('Sign out') }
+    };
+    if (acct) acct.update(opts); else acct = ApexAccountMenu.mount(host, opts);
+  }
   $('#lang').addEventListener('change', e => {
     lang = e.target.value;
     try { localStorage.setItem('apexrx_lang', lang); } catch (err) { /* ignore */ }
@@ -1503,8 +1521,11 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
   });
   // Signed out anywhere (this page, another tab, inactivity or an ended session):
   // back to sign-in. The registration page explains why.
+  // A deliberate sign-out (the account menu) ends on the landing page; inactivity,
+  // another tab or an ended session go to sign-in with the reason.
   window.addEventListener('apexrx:signed-out', e => {
     const reason = e.detail && e.detail.reason;
+    if (!reason || reason === 'signed_out') { location.replace('index.html'); return; }
     location.href = SIGN_IN + '?lang=' + lang + (reason && reason !== 'signed_out' ? '&signed_out=' + encodeURIComponent(reason) : '') + SIGN_IN_HASH;
   });
   // Another organization: remember it for this tab and open its dashboard.

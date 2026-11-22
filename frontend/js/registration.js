@@ -294,12 +294,12 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
   }
 
   let signingOut = false;
+  // A deliberate sign-out ends on the landing page, like everywhere on ApexRX.
   function signOut() {
     signingOut = true;
     reg = null; resetEmailState();
     API.auth.logout();
-    signingOut = false;
-    reset();
+    location.replace('index.html');
   }
 
   function reset(message, reason) {
