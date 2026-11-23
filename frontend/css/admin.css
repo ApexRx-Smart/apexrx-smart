@@ -155,6 +155,18 @@ label.check input { width: auto; }
 .req { color: var(--red); }
 .drug-picker { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 
+/* Medicines (reservation classification) */
+.badge.unclassified { background: var(--amber-bg); color: var(--amber); }
+.badge.non_prescription { background: var(--mint); color: #006b4b; }
+.badge.prescription_only { background: var(--red-bg); color: var(--red); }
+.badge.ready { background: var(--mint); color: #006b4b; }
+.badge.not-ready { background: var(--grey-bg); color: #374151; }
+.badge.unclassified, .badge.non_prescription, .badge.prescription_only, .badge.ready, .badge.not-ready { text-transform: none; }
+ul.problems { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; display: grid; gap: 2px; }
+.med-form-row td { background: #fbfcfc; }
+.med-form-row .form-grid { margin: 4px 0; }
+.med-form-row small.muted { font-weight: 400; }
+
 /* Organization activity (read only) */
 .history-row td { background: #fbfcfc; }
 ul.history { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; display: grid; gap: 3px; }

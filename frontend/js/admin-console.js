@@ -13,6 +13,9 @@
  *   Catalogue        GET/POST /catalogue/drugs, PATCH /catalogue/drugs/{id},
  *                    GET/POST /catalogue/products, PATCH /catalogue/products/{id}
  *                    (edit, retire and reactivate with is_active)
+ *   Medicines        GET /catalogue/reservation-settings?q=&dispensing_class=&include_inactive=,
+ *                    PATCH /catalogue/products/{id}/reservation-settings (classification,
+ *                    stock unit, unit name, pack size, most per reservation)
  *   Search insights  GET /admin/insights/searches?days=&limit=&only_unmet=
  *   Organization     GET /organizations/{id}/inventory, GET .../stock/{product}/adjustments,
  *   detail (read)    GET /purchase-orders?organization_id= (admins may read these, not change them)
@@ -114,6 +117,7 @@
       ['orgs_total', API.admin.organizations({ limit: 1 }).then(total)],
       ['orgs_pending', API.admin.organizations({ limit: 1, status: 'pending' }).then(total)],
       ['docs_pending', API.admin.documents({ limit: 1, status: 'pending' }).then(total)],
+      ['meds_unclassified', API.catalogue.medicines({ limit: 1, dispensing_class: 'unclassified' }).then(total)],
       ['users_total', API.admin.users({ limit: 1 }).then(total)],
       ['users_admins', API.admin.users({ limit: 1, is_platform_admin: true }).then(total)],
       ['drugs_total', API.catalogue.drugs({ limit: 1 }).then(total)],
@@ -784,12 +788,201 @@
     return row;
   }
 
+  /* ---------------------------------------------------------- medicines */
+  // Each medicine's reservation settings. Patients can reserve a medicine only
+  // once it is non-prescription with a defined stock unit; the backend decides
+  // (and lists the remaining problems), this screen only edits and explains.
+  var medicines = { offset: 0, total: 0, seq: 0, open: null, saving: false };
+  pagers.medicines = { state: medicines, load: loadMedicines };
+  var MED_CLASS = { unclassified: 'Not classified yet', non_prescription: 'Non-prescription', prescription_only: 'Prescription only' };
+  var MED_UNIT = { pack: 'Packs', unit: 'Single units', unknown: 'Not set' };
+
+  function showMedicines() { loadMedicineCounts(); return loadMedicines(); }
+
+  var medCountSeq = 0;
+  function loadMedicineCounts() {
+    var seq = ++medCountSeq;
+    var keys = ['unclassified', 'non_prescription', 'prescription_only', 'all'];
+    keys.forEach(function (k) { document.querySelector('[data-med-count="' + k + '"]').textContent = '…'; });
+    keys.forEach(function (k) {
+      var params = { limit: 1 };
+      if (k !== 'all') params.dispensing_class = k;
+      API.catalogue.medicines(params).then(function (page) { return String(page.total); }, function () { return '?'; })
+        .then(function (text) {
+          if (seq === medCountSeq) document.querySelector('[data-med-count="' + k + '"]').textContent = text;
+        });
+    });
+  }
+
+  function loadMedicines() {
+    var form = $('#med-filters');
+    var filters = {};
+    if (form.dispensing_class.value) filters.dispensing_class = form.dispensing_class.value;
+    if (form.q.value.trim()) filters.q = form.q.value.trim();
+    if (form.include_inactive.checked) filters.include_inactive = true;
+    medicines.open = null;
+    document.querySelectorAll('[data-med-class]').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.medClass === form.dispensing_class.value);
+    });
+    return list({
+      key: 'medicines', state: medicines, rows: '#med-rows', message: '#med-list-message', pageInfo: '#med-page-info', columns: 5,
+      empty: filters.q || filters.dispensing_class ? 'No medicines match these filters.' : 'The catalogue has no medicines yet.',
+      fetch: function (params) { return API.catalogue.medicines(Object.assign(params, filters)); },
+      row: medicineRow
+    });
+  }
+  $('#med-filters').addEventListener('submit', function (e) { e.preventDefault(); medicines.offset = 0; notice('#med-message', ''); loadMedicines(); });
+  ['dispensing_class', 'include_inactive'].forEach(function (name) {
+    $('#med-filters')[name].addEventListener('change', function () { medicines.offset = 0; notice('#med-message', ''); loadMedicines(); });
+  });
+  function filterMedicines(cls) {
+    var form = $('#med-filters');
+    form.dispensing_class.value = cls;
+    form.q.value = '';
+    medicines.offset = 0;
+    notice('#med-message', '');
+  }
+  document.querySelectorAll('[data-med-class]').forEach(function (b) {
+    b.addEventListener('click', function () { filterMedicines(b.dataset.medClass); loadMedicines(); });
+  });
+  document.querySelectorAll('[data-goto-medicines]').forEach(function (a) {
+    a.addEventListener('click', function (e) { e.preventDefault(); filterMedicines(a.dataset.gotoMedicines); K.goTo('medicines'); });
+  });
+
+  function unitText(m) {
+    if (m.stock_unit === 'pack') return 'Packs' + (m.unit_label ? ' (' + m.unit_label + ')' : '') + (m.pack_size ? ' of ' + m.pack_size : '');
+    if (m.stock_unit === 'unit') return 'Single units' + (m.unit_label ? ' (' + m.unit_label + ')' : '');
+    return 'Not set';
+  }
+
+  function medicineRow(m) {
+    var details = [m.strength, m.dosage_form].filter(Boolean).join(' · ');
+    var row = el('tr', { 'data-medicine': m.product_name, class: m.is_active ? '' : 'retired' }, [
+      el('td', {}, [el('strong', { text: m.product_name }),
+        el('small', { text: m.drug_name + (details ? ' · ' + details : '') + (m.brand ? ' · Brand: ' + m.brand : '') }),
+        m.is_active ? null : el('small', { text: 'Retired from the catalogue' })]),
+      el('td', {}, [el('span', { class: 'badge ' + m.dispensing_class, text: MED_CLASS[m.dispensing_class] || m.dispensing_class })]),
+      el('td', { text: unitText(m) }),
+      el('td', {}, m.ready
+        ? [el('span', { class: 'badge ready', text: 'Yes' }),
+          el('small', { text: 'Up to ' + m.effective_max_quantity + ' per reservation, where a pharmacy lists it with stock' })]
+        : [el('span', { class: 'badge not-ready', text: 'No' }),
+          el('ul', { class: 'problems' }, m.dispensing_class === 'prescription_only'
+            ? [el('li', { text: 'Prescription-only medicines cannot be reserved.' })]
+            : m.problems.map(function (p) { return el('li', { text: p.message }); }))]),
+      el('td', { class: 'cell-actions' }, [
+        el('button', { type: 'button', class: (m.dispensing_class === 'unclassified' ? 'primary' : 'secondary') + ' small',
+          text: m.dispensing_class === 'unclassified' ? 'Classify' : 'Edit', 'aria-label': 'Edit reservation settings of ' + m.product_name,
+          on: { click: function () { toggleMedicineForm(m, row); } } })
+      ])
+    ]);
+    return row;
+  }
+
+  function closeMedicineForm() {
+    var existing = document.querySelector('#med-rows .med-form-row');
+    if (existing) existing.remove();
+    medicines.open = null;
+  }
+
+  function toggleMedicineForm(m, row) {
+    var same = medicines.open === m.product_id;
+    closeMedicineForm();
+    if (same) return;
+    medicines.open = m.product_id;
+    var maxHint = m.max_reservation_quantity ? '(empty: the platform default)' : '(empty: the default, ' + m.effective_max_quantity + ')';
+    var form = el('form', { class: 'form-grid', novalidate: true }, [
+      el('label', {}, ['Classification',
+        el('select', { name: 'dispensing_class', required: true }, Object.keys(MED_CLASS).map(function (k) {
+          return el('option', { value: k, text: MED_CLASS[k], selected: k === m.dispensing_class });
+        }))]),
+      el('label', {}, ['Counted in',
+        el('select', { name: 'stock_unit' }, Object.keys(MED_UNIT).map(function (k) {
+          return el('option', { value: k, text: MED_UNIT[k], selected: k === m.stock_unit });
+        }))]),
+      el('label', {}, ['Unit name ', el('small', { class: 'muted', text: '(what one unit is called)' }),
+        el('input', { name: 'unit_label', maxlength: '60', value: m.unit_label || '',
+          placeholder: m.dosage_form ? 'e.g. box or ' + m.dosage_form : 'e.g. box, tablet, bottle' })]),
+      el('label', { 'data-pack': '' }, ['Pack size',
+        el('input', { name: 'pack_size', maxlength: '100', value: m.pack_size || '', placeholder: 'e.g. 20 tablets' })]),
+      el('label', {}, ['Most per reservation ', el('small', { class: 'muted', text: maxHint }),
+        el('input', { name: 'max_reservation_quantity', type: 'number', min: '1', max: '1000', step: '1',
+          value: m.max_reservation_quantity === null ? '' : String(m.max_reservation_quantity) })]),
+      el('p', { class: 'muted wide', text: 'Changing the stock unit is refused while the medicine has open reservations.' }),
+      el('p', { class: 'error wide', role: 'alert' }),
+      el('div', { class: 'actions wide' }, [
+        el('button', { class: 'primary', text: 'Save' }),
+        el('button', { type: 'button', class: 'secondary', text: 'Cancel', on: { click: closeMedicineForm } })
+      ])
+    ]);
+    var packField = form.querySelector('[data-pack]');
+    var syncUnit = function () { packField.hidden = form.stock_unit.value !== 'pack'; };
+    form.stock_unit.addEventListener('change', syncUnit);
+    syncUnit();
+    form.addEventListener('submit', function (e) { e.preventDefault(); saveMedicine(m, form); });
+    row.after(el('tr', { class: 'med-form-row' }, [el('td', { colspan: '5' }, [form])]));
+    form.dispensing_class.focus();
+  }
+
+  function saveMedicine(m, form) {
+    if (medicines.saving) return;
+    var error = form.querySelector('.error');
+    error.textContent = '';
+    var max = form.max_reservation_quantity.value.trim();
+    if (max && (!/^\d+$/.test(max) || +max < 1 || +max > 1000)) {
+      error.textContent = 'The most per reservation must be a whole number from 1 to 1000, or empty for the default.';
+      return;
+    }
+    var wanted = {
+      dispensing_class: form.dispensing_class.value,
+      stock_unit: form.stock_unit.value,
+      unit_label: trimmed(form.unit_label.value),
+      pack_size: form.stock_unit.value === 'pack' ? trimmed(form.pack_size.value) : m.pack_size,
+      max_reservation_quantity: max ? +max : null
+    };
+    if (wanted.stock_unit !== 'unknown' && !wanted.unit_label) {
+      error.textContent = 'Name the unit (for example "box" or "tablet").';
+      form.unit_label.focus();
+      return;
+    }
+    if (wanted.stock_unit === 'pack' && !wanted.pack_size) {
+      error.textContent = 'A medicine counted in packs needs a pack size.';
+      form.pack_size.focus();
+      return;
+    }
+    // Send only what changed (an unchanged unit never starts a new unit version).
+    var changes = {};
+    Object.keys(wanted).forEach(function (k) { if (wanted[k] !== m[k]) changes[k] = wanted[k]; });
+    if (!Object.keys(changes).length) { closeMedicineForm(); return; }
+    if (changes.dispensing_class === 'non_prescription' && !window.confirm(
+      'Classify ' + m.product_name + ' as non-prescription?\n\nPatients will be able to reserve it at any pharmacy that lists it with stock, ' +
+      'without a prescription. Only do this for medicines sold without a prescription in Rwanda.')) return;
+    medicines.saving = true;
+    var restore = working(form.querySelector('button.primary'), 'Saving…');
+    API.catalogue.updateMedicine(m.product_id, changes).then(function (saved) {
+      var text = saved.ready
+        ? m.product_name + ' saved. Patients can now reserve it wherever a pharmacy lists it with stock.'
+        : saved.dispensing_class === 'prescription_only'
+          ? m.product_name + ' saved as prescription only. Patients cannot reserve it.'
+          : m.product_name + ' saved. Not reservable yet: ' + saved.problems.map(function (p) { return p.message; }).join(' ');
+      loadMedicineCounts();
+      return loadMedicines().then(function () { notice('#med-message', text); });
+    }).catch(function (err) {
+      restore();
+      if (!signedOut(err)) {
+        var problems = err && err.data && err.data.problems;
+        error.textContent = errorText(err) + (problems && problems.length ? ' ' + problems.map(function (p) { return p.message; }).join(' ') : '');
+      }
+    }).then(function () { medicines.saving = false; });
+  }
+
   /* ------------------------------------------------------------ routing */
   var loaders = {
     overview: loadOverview,
     documents: loadDocuments,
     users: loadUsers,
     catalogue: showCatalogue,
+    medicines: showMedicines,
     insights: loadInsights
   };
   document.querySelectorAll('[data-refresh]').forEach(function (b) {

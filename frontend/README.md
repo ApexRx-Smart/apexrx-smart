@@ -124,7 +124,7 @@ Owners manage everyone else; managers manage staff only; staff update quantities
 |---|---|
 | Sign in | `POST /auth/login`, then `GET /auth/me`. Refused unless `is_platform_admin` |
 | Overview counts | `GET /admin/organizations/counts` (all seven numbers in one request) |
-| Tabs | Overview, Organizations, Documents, Users, Catalogue, Search insights. The current tab is in the URL hash. `js/admin.js` (sign-in, tabs, organizations) and `js/admin-console.js` (the other sections) |
+| Tabs | Overview, Organizations, Documents, Users, Catalogue, Medicines, Search insights. The current tab is in the URL hash. `js/admin.js` (sign-in, tabs, organizations) and `js/admin-console.js` (the other sections) |
 | **Overview** cards | The `total` of `GET /admin/organizations`, `/admin/documents?status=pending`, `/admin/users` (and `?is_platform_admin=true`), `/catalogue/drugs`, `/catalogue/products` (and `?include_inactive=true`), each with `limit=1`. Plus `GET /admin/insights/searches?days=30&limit=5` (and `&only_unmet=true`) |
 | Organization counts | `GET /admin/organizations?limit=1` with each `type` / `status` filter, using its `total` |
 | Organization table, filters, search, pages | `GET /admin/organizations?type=&status=&q=&limit=&offset=` |
@@ -142,6 +142,8 @@ Owners manage everyone else; managers manage staff only; staff update quantities
 | **Products** list, search, include retired, pages | `GET /catalogue/products?q=&drug_id=&include_inactive=` |
 | **Add product** / **Edit** | `POST /catalogue/products`, `PATCH /catalogue/products/{id}` (only the changed fields; a cleared field is sent as `null`). The drug is chosen from `GET /catalogue/drugs?q=`. A 409 duplicate or barcode is shown on the form |
 | **Retire** / **Reactivate** | `PATCH /catalogue/products/{id}` with `is_active`, after a confirmation |
+| **Medicines** counts, list, filters, pages | `GET /catalogue/reservation-settings?q=&dispensing_class=&include_inactive=` (counts use `limit=1` and `total`; the Overview's "Medicines not classified for reservations" card opens this tab filtered) |
+| **Classify** / **Edit** (medicine) | `PATCH /catalogue/products/{id}/reservation-settings` with only the changed fields (classification, stock unit, unit name, pack size, most per reservation). Non-prescription asks for a confirmation; the row then says whether patients can reserve it and why not |
 | **Search insights** | `GET /admin/insights/searches?days=&limit=&only_unmet=`. **Check catalogue** searches the products list for that text |
 | **Sign out**, expired token | Clears the session and shows the sign-in screen |
 

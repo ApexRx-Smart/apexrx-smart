@@ -29,9 +29,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, Response, status
 from fastapi.security import HTTPAuthorizationCredentials
-from sqlalchemy import case, exists, func, select
+from sqlalchemy import case, exists, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
+from app.api.catalogue import contains
 from app.api.deps import (
     ALL_ROLES,
     MANAGERS,
@@ -70,6 +71,7 @@ from app.schemas.reservations import (
     BranchSummary,
     CollectionDetail,
     CollectRequest,
+    DispensingClass,
     HistoryEntry,
     MedicineSummary,
     PatientContact,
@@ -83,6 +85,7 @@ from app.schemas.reservations import (
     ReservationOptions,
     ReservationSettings,
     ReservationSettingsHistory,
+    ReservationSettingsListItem,
     ReservationSettingsUpdate,
     ReservationStatusFilter,
     SettingsProblem,
@@ -679,6 +682,39 @@ def _settings(product: Product) -> ReservationSettings:
         ready=not problems,
         problems=[SettingsProblem(code=p, message=SETTINGS_PROBLEMS[p]) for p in problems],
     )
+
+
+@settings_router.get("/reservation-settings", response_model=Page[ReservationSettingsListItem])
+def list_reservation_settings(
+    _: AdminUser,
+    db: DbSession,
+    page: Pagination,
+    q: Annotated[str | None, Query(max_length=100, description="Matches product, brand, drug name or barcode")] = None,
+    dispensing_class: DispensingClass | None = None,
+    include_inactive: bool = False,
+):
+    """Platform admins only: every catalogue medicine with its classification,
+    unit and why it cannot be reserved yet (the admin Medicines list)."""
+    limit, offset = page
+    stmt = select(Product, Drug.name).join(Drug, Drug.drug_id == Product.drug_id)
+    if not include_inactive:
+        stmt = stmt.where(Product.is_active.is_(True))
+    if dispensing_class is not None:
+        stmt = stmt.where(Product.dispensing_class == dispensing_class)
+    if q and q.strip():
+        pattern = contains(q)
+        stmt = stmt.where(or_(Product.product_name.ilike(pattern), Product.brand.ilike(pattern),
+                              Drug.name.ilike(pattern), Product.barcode == q.strip()))
+    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+    rows = db.execute(stmt.order_by(Drug.name, Product.product_name, Product.product_id).limit(limit).offset(offset)).all()
+    items = [
+        ReservationSettingsListItem(
+            **_settings(product).model_dump(), product_name=product.product_name, drug_name=drug_name,
+            brand=product.brand, strength=product.strength, dosage_form=product.dosage_form,
+        )
+        for product, drug_name in rows
+    ]
+    return Page(items=items, total=total, limit=limit, offset=offset)
 
 
 @settings_router.get("/products/{product_id}/reservation-settings", response_model=ReservationSettings)

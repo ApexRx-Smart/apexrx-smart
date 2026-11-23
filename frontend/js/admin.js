@@ -119,7 +119,7 @@
   /* ---------------------------------------------------------------- tabs */
   // One section at a time; the URL hash (#users, #catalogue, ...) keeps the
   // current section across reloads and makes the browser's back button work.
-  var TABS = ['overview', 'organizations', 'documents', 'users', 'catalogue', 'insights'];
+  var TABS = ['overview', 'organizations', 'documents', 'users', 'catalogue', 'medicines', 'insights'];
   var pendingOpen = null; // organization to open when the Organizations tab shows
   function tabFromHash() {
     var name = location.hash.replace(/^#/, '');

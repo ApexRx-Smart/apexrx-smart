@@ -36,6 +36,7 @@
       <a href="#documents" data-tab="documents">Documents</a>
       <a href="#users" data-tab="users">Users</a>
       <a href="#catalogue" data-tab="catalogue">Catalogue</a>
+      <a href="#medicines" data-tab="medicines">Medicines</a>
       <a href="#insights" data-tab="insights">Search insights</a>
     </nav>
 
@@ -47,6 +48,7 @@
       <div class="stats">
         <a class="stat pending" href="#organizations" data-goto-orgs="pending"><strong data-overview="orgs_pending">–</strong><span>Organizations awaiting review</span></a>
         <a class="stat pending" href="#documents"><strong data-overview="docs_pending">–</strong><span>Documents awaiting review</span></a>
+        <a class="stat pending" href="#medicines" data-goto-medicines="unclassified"><strong data-overview="meds_unclassified">–</strong><span>Medicines not classified for reservations</span></a>
       </div>
       <h2 class="sub">Platform</h2>
       <div class="stats">
@@ -252,6 +254,37 @@
         </div>
         <p id="drug-list-message" class="muted" role="status"></p>
         <div class="pager"><button type="button" class="secondary small" data-page="drugs:prev">← Previous</button><span class="muted" id="drug-page-info"></span><button type="button" class="secondary small" data-page="drugs:next">Next →</button></div>
+      </section>
+    </div>
+
+    <!-- Medicines: classification and unit, which decide whether patients can reserve -->
+    <div class="panel" data-panel="medicines" hidden>
+      <div class="section-head"><h1>Medicines for reservations</h1><button type="button" class="secondary small" data-refresh="medicines">Refresh</button></div>
+      <p class="muted small-print">Patients can reserve a medicine only when it is classified as <strong>non-prescription</strong> and its stock unit is set. Prescription-only medicines can never be reserved. After that, each pharmacy branch decides by its own stock and minimum. Classify a medicine as non-prescription only when it is sold without a prescription in Rwanda.</p>
+      <div class="stats">
+        <button type="button" class="stat pending" data-med-class="unclassified"><strong data-med-count="unclassified">–</strong><span>Not classified yet</span></button>
+        <button type="button" class="stat approved" data-med-class="non_prescription"><strong data-med-count="non_prescription">–</strong><span>Non-prescription</span></button>
+        <button type="button" class="stat rejected" data-med-class="prescription_only"><strong data-med-count="prescription_only">–</strong><span>Prescription only</span></button>
+        <button type="button" class="stat" data-med-class=""><strong data-med-count="all">–</strong><span>All active medicines</span></button>
+      </div>
+      <section class="card">
+        <form id="med-filters" class="filters">
+          <label>Classification<select name="dispensing_class">
+            <option value="">All</option><option value="unclassified">Not classified yet</option>
+            <option value="non_prescription">Non-prescription</option><option value="prescription_only">Prescription only</option></select></label>
+          <label class="grow">Search<input name="q" type="search" maxlength="100" placeholder="Product, brand, drug or exact barcode"></label>
+          <label class="check"><input type="checkbox" name="include_inactive"> Include retired medicines</label>
+          <button class="primary small">Search</button>
+        </form>
+        <p id="med-message" class="notice" role="status" hidden></p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Medicine</th><th>Classification</th><th>Stock unit</th><th>Patients can reserve</th><th><span class="sr-only">Actions</span></th></tr></thead>
+            <tbody id="med-rows"></tbody>
+          </table>
+        </div>
+        <p id="med-list-message" class="muted" role="status"></p>
+        <div class="pager"><button type="button" class="secondary small" data-page="medicines:prev">← Previous</button><span class="muted" id="med-page-info"></span><button type="button" class="secondary small" data-page="medicines:next">Next →</button></div>
       </section>
     </div>
 
