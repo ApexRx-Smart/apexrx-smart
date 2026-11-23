@@ -317,12 +317,12 @@ def test_verification_can_be_switched_off(client, monkeypatch):
     assert r.status_code == 201, r.text
 
 
-def test_no_phone_verification_is_involved(client):
-    """Phone numbers are contact details: no SMS endpoints, no phone requirement."""
+def test_registration_needs_no_sms_while_phone_verification_is_not_required(client):
+    """With PHONE_VERIFICATION_REQUIRED off (the default), registering an
+    organization needs the verified email only; the organization's phone is a
+    contact number. Mandatory SMS verification is in test_phone_verification.py."""
     h = user(client, "nophone@x.example.com")
-    for path in ("/auth/phone/status", "/auth/phone/send-code", "/auth/phone/verify", "/dev/sms/latest"):
-        assert client.request("GET" if path.endswith(("status", "latest")) else "POST", path, headers=h,
-                              json={}).status_code in (404, 405)
+    assert client.get("/auth/me", headers=h).json()["phone_verification_pending"] is False
     _send(client, h)
     _verify(client, _latest(client, h)["token"])
     r = client.post("/organizations", json={"name": "Any Phone Pharmacy", "type": "pharmacy",

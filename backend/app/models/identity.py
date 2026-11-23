@@ -38,9 +38,17 @@ class User(Base):
     # Set only by a successful email verification (an emailed link, see
     # app/services/email_verification.py). Required to register an organization.
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # Historical: set by the former SMS phone verification, no longer written.
+    # Set only by a successful SMS code check (app/services/otp.py): the number
+    # that was verified and when. The phone counts as verified while
+    # ``phone == verified_phone``.
     verified_phone: Mapped[str | None] = mapped_column(String(20))
     phone_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # This account must verify its mobile number before using ApexRX (accounts
+    # created while PHONE_VERIFICATION_REQUIRED is on, or that changed their
+    # number since). False for every account that existed before.
+    phone_verification_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false"), default=False
+    )
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     # Platform-level administrator (ApexRx staff). Separate from membership roles.
     is_platform_admin: Mapped[bool] = mapped_column(

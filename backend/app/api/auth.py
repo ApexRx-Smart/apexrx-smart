@@ -3,7 +3,7 @@ import math
 from fastapi import APIRouter, BackgroundTasks, Request, Response, status
 from sqlalchemy import func, select
 
-from app.api.deps import CurrentAuth, CurrentUser, DbSession
+from app.api.deps import CurrentAuth, DbSession, SignedInUser
 from app.core import device_token
 from app.core.config import settings
 from app.core.errors import AppError, Conflict, TooManyRequests, Unauthorized
@@ -22,9 +22,10 @@ from app.schemas.auth import (
     UserResponse,
 )
 from app.schemas.common import Message
-from app.services import account_emails, sessions
+from app.services import account_emails, otp, sessions
 from app.services.email import email_delivery_available
 from app.services.phone import PhoneNumberError, normalize_phone
+from app.services.sms import sms_configuration_problem, sms_is_sandbox
 
 router = APIRouter()
 
@@ -39,8 +40,8 @@ def find_user_by_email(db, email: str) -> User | None:
 
 def _personal_phone(raw: str | None) -> str | None:
     """An account's own mobile number, stored in E.164 (+250...). Reservations use
-    it as the contact number, and it will be verified by SMS once a provider is
-    set up, so only mobile numbers are accepted. Empty: no number."""
+    it as the contact number and it is verified by SMS code (/auth/phone), so
+    only mobile numbers are accepted. Empty: no number."""
     if raw is None or not raw.strip():
         return None
     try:
@@ -54,15 +55,21 @@ def register(payload: RegisterRequest, db: DbSession):
     """Create a personal user account. Patients do not need an account; this is
     for pharmacy/supplier staff, who then create or join an organization."""
     email = normalize_email(payload.email)
+    phone = _personal_phone(payload.phone)
+    if phone is None and settings.phone_verification_required:
+        raise AppError("Enter your mobile number. We send a code to verify it.",
+                       status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, extra={"code": "phone_required"})
     if find_user_by_email(db, email):
         raise Conflict("An account with this email already exists.")
 
     user = User(
         name=payload.name,
         email=email,
-        phone=_personal_phone(payload.phone),
+        phone=phone,
         password_hash=hash_password(payload.password),
     )
+    # Locked until the number is verified, when verification is required.
+    otp.mark_new_account(user)
     db.add(user)
     db.commit()
     return user
@@ -131,6 +138,7 @@ def capabilities():
     return {
         "email_delivery": email,
         "email_verification_required": settings.email_verification_required,
+        "phone_verification_required": settings.phone_verification_required,
         "password_reset": email,
         "invitation_emails": email,
     }
@@ -174,6 +182,8 @@ def _me(db, user: User) -> MeResponse:
     ).all()
     return MeResponse(
         **UserResponse.model_validate(user).model_dump(),
+        phone_verification_pending=otp.verification_pending(user),
+        phone_verification_available=sms_configuration_problem() is None and not sms_is_sandbox(),
         memberships=[
             MembershipSummary(
                 membership_id=m.membership_id,
@@ -189,18 +199,30 @@ def _me(db, user: User) -> MeResponse:
 
 
 @router.get("/me", response_model=MeResponse)
-def get_me(user: CurrentUser, db: DbSession):
-    """The current user and the organizations they belong to (with role)."""
+def get_me(user: SignedInUser, db: DbSession):
+    """The current user and the organizations they belong to (with role).
+    Available while the phone still has to be verified (see
+    ``phone_verification_pending``)."""
     return _me(db, user)
 
 
 @router.patch("/me", response_model=MeResponse)
-def update_me(payload: UpdateMeRequest, user: CurrentUser, db: DbSession):
+def update_me(payload: UpdateMeRequest, user: SignedInUser, db: DbSession):
+    """Also available while the phone still has to be verified, to correct the
+    number. A new number is never verified by this call: earlier codes stop
+    working, and when verification is required the new number must be verified."""
     for field, value in payload.model_dump(exclude_unset=True).items():
         if field == "name" and value is None:
             continue
         if field == "phone":
             value = _personal_phone(value)
+            if value is None and settings.phone_verification_required and user.phone_verification_required:
+                raise AppError("Enter your mobile number. We send a code to verify it.",
+                               status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, extra={"code": "phone_required"})
+            if value != user.phone:
+                user.phone = value
+                otp.phone_changed(db, user)
+            continue
         setattr(user, field, value)
     db.commit()
     return _me(db, user)

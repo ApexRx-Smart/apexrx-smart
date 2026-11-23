@@ -19,6 +19,7 @@ from app.api import (
     orders,
     organizations,
     password_reset,
+    phone_verification,
     procurement,
     reservations,
     search,
@@ -28,6 +29,7 @@ from app.core.config import settings
 from app.core.database import engine
 from app.core.errors import AppError, register_error_handlers
 from app.services.email import email_configuration_problem
+from app.services.sms import sms_configuration_problem, sms_is_sandbox
 
 logging.basicConfig(level=logging.INFO)
 
@@ -117,6 +119,25 @@ elif _email_problem:
         _email_problem,
     )
 
+# Phone verification: sandbox codes never reach a phone, so requiring
+# verification in production with a sandbox key would lock every new account.
+# Refuse to start instead (Render keeps the previous deploy running).
+if settings.phone_verification_required and settings.is_production and sms_is_sandbox():
+    raise RuntimeError(
+        "PHONE_VERIFICATION_REQUIRED=true needs live SMS in production (ESMS_MODE=live with an esms_live_ key): "
+        "sandbox codes never reach a phone."
+    )
+_sms_problem = sms_configuration_problem()
+if _sms_problem and settings.phone_verification_required:
+    _log.critical(
+        "PHONE_VERIFICATION_REQUIRED is true but SMS codes cannot be sent (%s): new accounts cannot be "
+        "verified. Fix the SMS settings or unset PHONE_VERIFICATION_REQUIRED.", _sms_problem,
+    )
+elif _sms_problem:
+    _log.info("SMS phone verification is unavailable (%s). It is not required.", _sms_problem)
+elif sms_is_sandbox():
+    _log.warning("SMS codes use the eSMS Africa SANDBOX: they are simulated and never reach a phone.")
+
 if os.environ.get("RENDER") and not settings.trusted_client_ip_header:
     logging.getLogger("apexrx").warning(
         "TRUSTED_CLIENT_IP_HEADER is not set: on Render every request comes from a private proxy address, "
@@ -126,6 +147,8 @@ if os.environ.get("RENDER") and not settings.trusted_client_ip_header:
 
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(email_verification.router, prefix="/auth/email", tags=["Email verification"])
+app.include_router(phone_verification.router, prefix="/auth/phone", tags=["Phone verification"])
+app.include_router(phone_verification.webhook_router, prefix="/webhooks", tags=["Webhooks"])
 app.include_router(password_reset.router, prefix="/auth/password", tags=["Password reset"])
 app.include_router(search.router, prefix="/search", tags=["Search"])
 app.include_router(catalogue.router, prefix="/catalogue", tags=["Catalogue"])

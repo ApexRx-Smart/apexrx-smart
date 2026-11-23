@@ -23,7 +23,7 @@ from app.core.errors import Forbidden, NotFound, Unauthorized
 from app.core.security import decode_access_token
 from app.models import AuthSession, Location, Membership, Organization, User
 from app.models.enums import MembershipRole, OrganizationStatus, OrganizationType
-from app.services import sessions
+from app.services import otp, sessions
 
 bearer_scheme = HTTPBearer(auto_error=False, description="JWT from POST /auth/login")
 
@@ -72,7 +72,23 @@ def get_auth(
 CurrentAuth = Annotated[Auth, Depends(get_auth)]
 
 
+def get_signed_in_user(auth: CurrentAuth) -> User:
+    """The signed-in user, even while their mobile number still has to be
+    verified. Only for the few endpoints such an account may use: its own
+    details, phone verification, password, sign-out."""
+    return auth.user
+
+
+SignedInUser = Annotated[User, Depends(get_signed_in_user)]
+
+
 def get_current_user(auth: CurrentAuth) -> User:
+    """The signed-in user, refused (403 ``phone_verification_required``) while
+    the account must still verify its mobile number. Enforced here, on the
+    server, for every endpoint that uses CurrentUser (and so AdminUser and
+    organization access): nothing the browser sends can skip it."""
+    if otp.verification_pending(auth.user):
+        raise Forbidden("Verify your mobile number to continue.", extra={"code": "phone_verification_required"})
     return auth.user
 
 

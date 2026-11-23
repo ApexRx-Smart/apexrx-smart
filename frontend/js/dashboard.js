@@ -1464,7 +1464,8 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
     const opts = {
       name: ctx.user.name || ctx.user.email, email: ctx.user.email,
       detail: `${ctx.org.name} · ${t(ROLE_NAMES[ctx.myRole] || ctx.myRole)}`,
-      labels: { menu: t('Account menu'), signOut: t('Sign out') }
+      verifyPhone: !!ctx.user.phone_verification_available && !ctx.user.phone_verified,
+      labels: { menu: t('Account menu'), signOut: t('Sign out'), verifyPhone: t('Verify your mobile number') }
     };
     if (acct) acct.update(opts); else acct = ApexAccountMenu.mount(host, opts);
   }

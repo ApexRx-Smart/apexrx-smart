@@ -55,6 +55,7 @@ window.APEX_I18N_EXTRA = (function (prev) {
       rs_err_email_taken: 'An account with this email already exists. Sign in instead.',
       rs_signed_in: 'Signed in as {email}',
       rs_signout: 'Sign out',
+      rs_verify_phone: 'Verify your mobile number',
 
       rs_form_title: 'Reserve a medicine',
       rs_medicine: 'Medicine',
@@ -214,6 +215,7 @@ window.APEX_I18N_EXTRA = (function (prev) {
       rs_err_email_taken: 'Un compte existe déjà avec cet e-mail. Connectez-vous plutôt.',
       rs_signed_in: 'Connecté en tant que {email}',
       rs_signout: 'Se déconnecter',
+      rs_verify_phone: 'Vérifier votre numéro de mobile',
 
       rs_form_title: 'Réserver un médicament',
       rs_medicine: 'Médicament',
@@ -373,6 +375,7 @@ window.APEX_I18N_EXTRA = (function (prev) {
       rs_err_email_taken: 'Hari konti isanzwe ikoresha iyi meli. Injira aho.',
       rs_signed_in: 'Winjiye nka {email}',
       rs_signout: 'Sohoka',
+      rs_verify_phone: 'Emeza nimero ya telefoni yawe',
 
       rs_form_title: 'Bikisha umuti',
       rs_medicine: 'Umuti',

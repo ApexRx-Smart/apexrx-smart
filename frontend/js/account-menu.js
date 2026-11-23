@@ -7,7 +7,8 @@
  *   ApexAccountMenu.mount(host, {
  *     name, email,            // shown inside the menu (the account's own details only)
  *     detail,                 // optional second line, e.g. "Kigali Pharmacy · Manager"
- *     labels: { menu, signOut },
+ *     verifyPhone,            // optional: show "Verify your mobile number" (verify-phone.html)
+ *     labels: { menu, signOut, verifyPhone },
  *     onSignOut               // optional; default: ApexAccountMenu.signOut()
  *   }) -> { update(opts), close() }
  *   ApexAccountMenu.signOut()  // end this session (POST /auth/logout) and open index.html
@@ -33,6 +34,8 @@
 .am-item{display:flex;width:100%;align-items:center;gap:8px;border:0;background:none;color:inherit;text-align:left;
   padding:10px;border-radius:8px;font:inherit;cursor:pointer;min-height:40px}
 .am-item:hover,.am-item:focus-visible{background:#eef4f1;outline:none}
+a.am-item{text-decoration:none}
+.am-item[hidden]{display:none}
 :root[data-theme=dark] .am-menu{background:#142132;color:#e8eef4;border-color:#27394d}
 :root[data-theme=dark] .am-head{border-color:#27394d}
 :root[data-theme=dark] .am-head span{color:#9db0c2}
@@ -71,7 +74,11 @@
     const menu = el('div', { class: 'am-menu', id, role: 'menu', hidden: '' });
     const head = el('div', { class: 'am-head', role: 'presentation' });
     const out = el('button', { type: 'button', class: 'am-item', role: 'menuitem', 'data-am': 'signout' });
-    menu.append(head, out);
+    // A reminder for accounts whose number is not verified yet (never a block).
+    const page = (location.pathname.split('/').pop() || 'index.html') + location.search;
+    const verify = el('a', { class: 'am-item', role: 'menuitem', 'data-am': 'verify-phone',
+      href: 'verify-phone.html?next=' + encodeURIComponent(page) });
+    menu.append(head, verify, out);
     root.append(btn, menu);
     host.replaceChildren(root);
     let current = {};
@@ -87,8 +94,10 @@
         current.detail && el('span', {}, current.detail)].filter(Boolean));
       head.hidden = !head.childElementCount;
       out.textContent = labels.signOut;
+      verify.textContent = labels.verifyPhone || 'Verify your mobile number';
+      verify.hidden = !current.verifyPhone;
     }
-    const items = () => Array.from(menu.querySelectorAll('[role=menuitem]'));
+    const items = () => Array.from(menu.querySelectorAll('[role=menuitem]')).filter(n => !n.hidden);
     function open(focusFirst) {
       menu.hidden = false; btn.setAttribute('aria-expanded', 'true');
       if (focusFirst) (items()[0] || btn).focus();

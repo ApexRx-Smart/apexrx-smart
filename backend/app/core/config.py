@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -120,11 +121,53 @@ class Settings(BaseSettings):
     password_reset_max_per_user_per_hour: int = Field(default=3, ge=1)
     password_reset_max_per_ip_per_hour: int = Field(default=10, ge=1)
 
-    # Phone numbers (business contact, future Mobile Money; not used to verify
-    # anyone): parsed with this default region, and only numbers from these
+    # Phone numbers: parsed with this default region, and only numbers from these
     # regions are accepted (ISO 3166 codes, comma-separated).
     phone_default_region: str = "RW"
     phone_allowed_regions: Annotated[list[str], NoDecode] = ["RW"]
+
+    # Phone verification by SMS one-time code (app/services/otp.py). ApexRX
+    # generates, stores (HMAC only), expires and checks every code; the SMS
+    # provider only delivers it.
+    # When true, accounts created from now on (sign-up, accepted staff
+    # invitations) are locked until their mobile number is verified, and an
+    # existing account that changes its number must verify the new one.
+    # Accounts created while it is false, and admins made by create_admin, are
+    # never locked. Turn it on only with a LIVE SMS provider: sandbox messages
+    # never reach a phone.
+    phone_verification_required: bool = False
+    # "esms" (eSMS Africa), or "mock" (development and tests only: messages are
+    # kept in memory; refused in production). Unset: SMS is unavailable.
+    sms_provider: str | None = None
+    # Keyed HMAC for stored codes and client IPs. Server-side only (Render
+    # environment), at least 32 characters, never the JWT secret.
+    otp_hmac_secret: SecretStr | None = None
+    otp_ttl_seconds: int = Field(default=300, ge=60, le=3600)
+    otp_max_attempts: int = Field(default=5, ge=1, le=10)
+    otp_resend_cooldown_seconds: int = Field(default=60, ge=0, le=3600)
+    otp_max_sends_per_phone_per_hour: int = Field(default=5, ge=1)
+    otp_max_sends_per_user_per_hour: int = Field(default=5, ge=1)
+    otp_max_sends_per_ip_per_hour: int = Field(default=20, ge=1)
+    # Wrong codes per account per hour across all of its codes (brute force over
+    # several codes); verifying is refused for the rest of the hour after that.
+    otp_max_failed_attempts_per_user_per_hour: int = Field(default=15, ge=1)
+    # Every SMS code sent by the platform per hour: a ceiling on cost and on SMS
+    # pumping from many fresh accounts.
+    otp_max_sends_global_per_hour: int = Field(default=300, ge=1)
+
+    # eSMS Africa (https://docs.esmsafrica.io). The mode must match the key:
+    # "sandbox" with an esms_test_ key (free, simulated, nothing reaches a phone)
+    # or "live" with an esms_live_ key.
+    esms_mode: Literal["sandbox", "live"] = "sandbox"
+    esms_api_key: SecretStr | None = None
+    esms_base_url: str = "https://sms.esmsafrica.io/api"
+    # Optional: an approved sender ID (letters, digits, hyphen; up to 11).
+    # Unset: eSMS uses the route's default sender where one exists.
+    esms_sender_id: str | None = None
+    esms_timeout_seconds: float = Field(default=10, gt=0, le=60)
+    # Signing secret for eSMS delivery-report webhooks (POST /webhooks/esms/delivery).
+    # Unset: the webhook answers 404.
+    esms_webhook_secret: SecretStr | None = None
 
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",
@@ -157,7 +200,46 @@ class Settings(BaseSettings):
             raise ValueError("PHONE_ALLOWED_REGIONS must list at least one region, e.g. RW.")
         return regions
 
-    @field_validator("email_provider", mode="before")
+    @field_validator("esms_sender_id", mode="before")
+    @classmethod
+    def _blank_is_none(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().rstrip("/") or None
+        return value
+
+    @field_validator("esms_sender_id")
+    @classmethod
+    def _sender_id(cls, value: str | None) -> str | None:
+        if value is not None and not re.fullmatch(r"[A-Za-z0-9-]{1,11}", value):
+            raise ValueError("ESMS_SENDER_ID must be 1-11 letters, digits or hyphens.")
+        return value
+
+    @field_validator("esms_base_url", mode="before")
+    @classmethod
+    def _esms_https(cls, value: object) -> object:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return "https://sms.esmsafrica.io/api"  # blank means the documented default
+        if not isinstance(value, str):
+            return value
+        value = value.strip().rstrip("/")
+        if not value.startswith("https://"):
+            raise ValueError("ESMS_BASE_URL must start with https://.")
+        return value
+
+    @field_validator("otp_hmac_secret")
+    @classmethod
+    def _strong_otp_secret(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None or not value.get_secret_value().strip():
+            return None
+        raw = value.get_secret_value()
+        lowered = raw.strip().lower()
+        if lowered in KNOWN_PLACEHOLDER_SECRETS or any(marker in lowered for marker in PLACEHOLDER_MARKERS):
+            raise ValueError("OTP_HMAC_SECRET is a placeholder value. Generate a real one.")
+        if len(raw) < MIN_JWT_SECRET_LENGTH:
+            raise ValueError(f"OTP_HMAC_SECRET must be at least {MIN_JWT_SECRET_LENGTH} characters long.")
+        return value
+
+    @field_validator("email_provider", "sms_provider", mode="before")
     @classmethod
     def _normalize_provider(cls, value: object) -> object:
         if isinstance(value, str):

@@ -142,6 +142,7 @@ def fill_account(page, email, confirm=True):
     page.fill("#account [name=password]", PASSWORD)
     if confirm:
         page.fill("#account [name=confirm]", PASSWORD)
+        page.fill("#account [name=phone]", "0788 210 300")  # the owner's own mobile number
     page.click("#account-submit")
 
 

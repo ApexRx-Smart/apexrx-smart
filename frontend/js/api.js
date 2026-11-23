@@ -267,6 +267,9 @@
           if (res.status === 401 && opts.auth !== false && headers.Authorization) {
             endSession(reasonOf(data), false);
           }
+          if (res.status === 403 && data && data.code === 'phone_verification_required' && headers.Authorization) {
+            phoneVerificationRequired();
+          }
           throw new ApiError(res.status, messageFrom(res.status, data), data);
         }
         return data;
@@ -276,6 +279,20 @@
       if (opts.signal && opts.signal.aborted) throw err; // caller cancelled
       throw new ApiError(0, messageFrom(0, null), { cause: String(err) });
     }));
+  }
+
+  // The account must verify its mobile number before using ApexRX: the server
+  // refuses every other call (403 phone_verification_required), so open the
+  // verification page and come back here afterwards. The server, not this
+  // redirect, is what enforces it. Pages can opt out (verify-phone.html itself).
+  var phoneRedirecting = false;
+  function phoneVerificationRequired() {
+    emit('apexrx:phone-verification-required', {});
+    if (phoneRedirecting || global.APEXRX_NO_PHONE_REDIRECT) return;
+    var page = (location.pathname.split('/').pop() || 'index.html');
+    if (/^verify-phone(\.html)?$/.test(page)) return;
+    phoneRedirecting = true;
+    location.assign('verify-phone.html?next=' + encodeURIComponent(page + location.search));
   }
 
   // Authenticated file download. Resolves with a Blob (use URL.createObjectURL).
@@ -514,6 +531,13 @@
       },
       me: function () { return get('/auth/me'); },
       updateMe: function (data) { return patch('/auth/me', data); },
+      // Phone verification by SMS code (the account's own number). Available
+      // while the account is locked for verification.
+      phone: {
+        status: function () { return get('/auth/phone'); },
+        send: function () { return post('/auth/phone/send', {}); },
+        verify: function (challengeId, code) { return post('/auth/phone/verify', { challenge_id: challengeId, code: code }); }
+      },
       changePassword: function (current, next) {
         return post('/auth/me/password', { current_password: current, new_password: next });
       }

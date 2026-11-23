@@ -100,6 +100,7 @@
   const FORMS_HTML = `
 <form id="account" class="step-form" novalidate>
   <label>Email address<input name="email" type="email" autocomplete="email" placeholder="${T.emailPh}" required></label>
+  <label id="phone-field">Your mobile number<input name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="30" placeholder="078 812 3456" required></label>
   <div class="fields"><label>Password<input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required></label><label id="confirm-field">Confirm password<input name="confirm" type="password" autocomplete="new-password" minlength="8" placeholder="Re-enter your password" required></label></div>
   <p class="note" id="account-note">Your account is created on ApexRX Smart.</p>
   <p class="forgot-row" id="forgot-row" hidden><a href="reset-password.html?next=${ROLE}" id="forgot-link">Forgot password?</a></p>
@@ -399,6 +400,8 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     const text = AUTH_TEXT[mode], f = $('#account').elements, signin = mode === 'signin';
     titles[0] = text.title; descriptions[0] = text.description;
     $('#confirm-field').hidden = signin;
+    $('#phone-field').hidden = signin;
+    f.phone.required = !signin;
     $('#confirm-field').parentElement.classList.toggle('single', signin);
     f.confirm.required = !signin; f.confirm.value = '';
     f.password.setAttribute('autocomplete', signin ? 'current-password' : 'new-password');
@@ -430,7 +433,10 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     const email = f.email.value.trim(), password = f.password.value;
     if (!email || !password) { formError('Enter your email and password.'); return; }
     if (!/^\S+@\S+\.\S+$/.test(email)) { formError('Enter a valid email address.'); f.email.focus(); return; }
+    const phone = f.phone.value.trim();
     if (authMode === 'create') {
+      if (!phone) { formError('Enter your mobile number.'); f.phone.focus(); return; }
+      if (!/^\+?[0-9 ()\-./]{9,30}$/.test(phone)) { formError('Enter a valid mobile number, for example 078 812 3456.'); f.phone.focus(); return; }
       if (password.length < 8) { formError('Use at least 8 characters for your password.'); f.password.focus(); return; }
       if (password !== f.confirm.value) { formError('Your passwords do not match.'); f.confirm.focus(); return; }
     }
@@ -446,8 +452,12 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
         } else {
           try {
             // No name field here: the email name is used until the user changes it.
-            await API.auth.register({ name: email.split('@')[0].slice(0, 150) || email, email, password });
+            // Your own mobile number: verified by SMS code before the account is used.
+            await API.auth.register({ name: email.split('@')[0].slice(0, 150) || email, email, phone, password });
           } catch (err) {
+            if (err.status === 422 && err.data && (err.data.code === 'invalid_phone' || err.data.code === 'phone_required')) {
+              f.phone.focus(); throw err;
+            }
             if (err.status !== 409) throw err;
             existing = true; // already registered: sign in with these details
           }
