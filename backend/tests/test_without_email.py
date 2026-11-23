@@ -36,7 +36,7 @@ def test_defaults_need_no_email_provider():
 def test_capabilities_say_what_is_unavailable(client):
     assert client.get("/auth/capabilities").json() == {
         "email_delivery": False, "email_verification_required": False,
-        "password_reset": False, "invitation_emails": False,
+        "password_reset": False, "invitation_emails": False, "phone_verification_required": False,
     }
 
 

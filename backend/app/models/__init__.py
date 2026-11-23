@@ -35,7 +35,7 @@ from app.models.reservations import (
     ReservationStatus,
     ReservationStatusHistory,
 )
-from app.models.verification import EmailVerification
+from app.models.verification import EmailVerification, PhoneVerification
 from app.models.views import patient_availability, supplier_listing
 
 __all__ = [
@@ -60,6 +60,7 @@ __all__ = [
     "ReservationStatusHistory",
     "Drug",
     "EmailVerification",
+    "PhoneVerification",
     "Location",
     "Membership",
     "Organization",

@@ -10,11 +10,13 @@ import re
 
 from fastapi import APIRouter
 
-from app.api.deps import CurrentUser
+from app.api.deps import CurrentUser, SignedInUser
 from app.core.config import settings
 from app.core.errors import NotFound
 from app.services.email import EmailNotConfigured, get_email_provider
 from app.services.email.mock import MockEmailProvider
+from app.services.sms import SmsNotConfigured, get_sms_provider
+from app.services.sms.mock import MockSmsProvider
 
 router = APIRouter()
 
@@ -65,3 +67,29 @@ def _describe(item):
         "token": found.group(1) if found else None,
         "sent_at": item.sent_at,
     }
+
+
+_SMS_CODE = re.compile(r"\b(\d{6})\b")
+
+
+@router.get("/sms/latest")
+def latest_test_sms(user: SignedInUser):
+    """The latest mock SMS sent to the signed-in user's number, with its code.
+    Development/test only, mock provider only (never a real or sandbox SMS)."""
+    return _latest_sms(user)
+
+
+def _latest_sms(user):
+    if settings.is_production:
+        raise NotFound("Not found.")
+    try:
+        provider = get_sms_provider()
+    except SmsNotConfigured:
+        raise NotFound("No test SMS available.") from None
+    if not isinstance(provider, MockSmsProvider) or not user.phone:
+        raise NotFound("No test SMS available (not using the mock provider).")
+    item = provider.latest(user.phone)
+    if item is None:
+        raise NotFound("No test SMS has been sent to this number yet.")
+    found = _SMS_CODE.search(item.message)
+    return {"to": item.to, "code": found.group(1) if found else None, "sent_at": item.sent_at}

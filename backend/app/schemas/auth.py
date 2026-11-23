@@ -50,17 +50,23 @@ class UserResponse(ORMModel):
     email: EmailStr
     phone: str | None
     email_verified_at: datetime | None = None
-    # Historical (former SMS verification); no longer set.
     verified_phone: str | None = None
     phone_verified_at: datetime | None = None
     is_platform_admin: bool
     is_active: bool
     created_at: datetime
+    # Set by the server only (a verified SMS code); see /auth/phone.
+    phone_verification_required: bool = False
 
     @computed_field
     @property
     def email_verified(self) -> bool:
         return self.email_verified_at is not None
+
+    @computed_field
+    @property
+    def phone_verified(self) -> bool:
+        return self.verified_phone is not None and self.verified_phone == self.phone
 
 
 class MembershipSummary(BaseModel):
@@ -74,6 +80,11 @@ class MembershipSummary(BaseModel):
 
 class MeResponse(UserResponse):
     memberships: list[MembershipSummary]
+    # True while this account must verify its mobile number before using
+    # ApexRX: every other endpoint answers 403 phone_verification_required.
+    phone_verification_pending: bool = False
+    # SMS codes can be sent now (an unverified account may verify optionally).
+    phone_verification_available: bool = False
 
 
 class UpdateMeRequest(BaseModel):
@@ -117,3 +128,37 @@ class EmailVerifiedResponse(BaseModel):
     verified: bool = True
     already_verified: bool
     email_masked: str
+
+
+# Phone verification (SMS one-time code) ------------------------------------
+class PhoneStatusResponse(BaseModel):
+    phone: str | None  # the account's own number
+    phone_masked: str | None
+    verified: bool  # the current number is the verified one
+    verified_at: datetime | None
+    pending: bool  # this account must verify before using ApexRX
+    required: bool  # PHONE_VERIFICATION_REQUIRED is on
+    sms_available: bool  # codes can be sent now
+    sandbox: bool  # codes are simulated by the provider: none reaches a phone
+    challenge_id: str | None  # the usable code sent to the current number, if any
+    expires_at: datetime | None
+    resend_available_at: datetime | None
+
+
+class PhoneCodeSentResponse(BaseModel):
+    challenge_id: str
+    phone_masked: str
+    expires_at: datetime
+    resend_available_at: datetime
+    sandbox: bool
+
+
+class PhoneVerifyRequest(BaseModel):
+    challenge_id: str = Field(min_length=16, max_length=43, pattern=r"^[A-Za-z0-9_-]+$")
+    code: str = Field(min_length=6, max_length=12)
+
+
+class PhoneVerifiedResponse(BaseModel):
+    verified: bool = True
+    phone: str
+    phone_masked: str

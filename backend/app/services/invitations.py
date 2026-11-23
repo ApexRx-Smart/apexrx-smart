@@ -39,6 +39,7 @@ from app.core.config import settings
 from app.core.errors import AppError, Conflict, Forbidden, TooManyRequests
 from app.models import Membership, Organization, OrganizationInvitation, User
 from app.models.enums import MembershipRole
+from app.services import otp
 from app.services.email import (
     EmailDeliveryError,
     EmailNotConfigured,
@@ -292,6 +293,9 @@ def accept_with_new_account(db: Session, token: str, name: str, password_hash: s
         raise Conflict("An ApexRX account already uses this email. Sign in to accept the invitation.",
                        extra={"reason": "account_exists"})
     user = User(name=name, email=inv.email, password_hash=password_hash)
+    # Like any new account: locked until a mobile number is added and verified
+    # (when PHONE_VERIFICATION_REQUIRED is on). Checked at first sign-in.
+    otp.mark_new_account(user)
     db.add(user)
     db.flush()
     membership = _activate(db, inv, user, account_created=True)

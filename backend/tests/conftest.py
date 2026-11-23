@@ -35,6 +35,16 @@ os.environ["FRONTEND_BASE_URL"] = "http://frontend.test"
 # re-enabled) with the mock provider and verification required. The production
 # configuration (no email provider, verification off) is in test_without_email.py.
 os.environ["EMAIL_VERIFICATION_REQUIRED"] = "true"
+# SMS codes: the in-memory mock provider (never eSMS Africa, sandbox or live) and
+# a random HMAC secret per run. Phone verification is NOT required by default, so
+# the other suites run as existing accounts do; tests/test_phone_verification.py
+# switches it on. tests/test_esms_sandbox_live.py builds its own provider and
+# only runs when ESMS_LIVE_TESTS=1.
+os.environ["SMS_PROVIDER"] = "mock"
+os.environ["OTP_HMAC_SECRET"] = secrets.token_urlsafe(48)
+os.environ.pop("PHONE_VERIFICATION_REQUIRED", None)
+for _name in ("ESMS_API_KEY", "ESMS_WEBHOOK_SECRET", "ESMS_SENDER_ID"):
+    os.environ.pop(_name, None)
 os.environ.pop("RATE_LIMIT_STORAGE_URI", None)
 os.environ["UPLOAD_DIR"] = tempfile.mkdtemp(prefix="apexrx-uploads-")
 # Never touch a real Supabase bucket by accident: tests use the local backend or
@@ -78,14 +88,17 @@ def _clean():
     from app.services.email import set_email_provider
     from app.services.email.mock import mock_provider
     from app.services.password_reset import limiter as reset_limiter
+    from app.services.sms import set_sms_provider
+    from app.services.sms.mock import mock_provider as sms_mock
 
     for reset in (login_limiter.reset, mock_provider.reset, reset_limiter.reset,
                   message_limiter.reset, procurement_limiter.reset, reservation_limiter.reset):
         reset()
     yield
-    for reset in (login_limiter.reset, mock_provider.reset, reset_limiter.reset):
+    for reset in (login_limiter.reset, mock_provider.reset, reset_limiter.reset, sms_mock.reset):
         reset()
     set_email_provider(None)
+    set_sms_provider(None)
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {TABLES} RESTART IDENTITY CASCADE"))
 
@@ -147,3 +160,26 @@ def fake_bucket():
     storage.set_backend(storage.SupabaseBackend(fake, "organization-documents"))
     yield fake
     storage.set_backend(None)
+
+
+@pytest.fixture
+def app_logs(caplog):
+    """caplog that also sees the application's "apexrx" loggers (which do not
+    propagate to the root logger)."""
+    import logging
+
+    caplog.set_level(logging.DEBUG)
+    # alembic's fileConfig (run by _schema) disables loggers that already exist.
+    disabled = [lg for name, lg in logging.root.manager.loggerDict.items()
+                if name.startswith("apexrx") and isinstance(lg, logging.Logger) and lg.disabled]
+    for lg in disabled:
+        lg.disabled = False
+    logger = logging.getLogger("apexrx")
+    previous = logger.level
+    logger.addHandler(caplog.handler)
+    logger.setLevel(logging.DEBUG)
+    yield caplog
+    logger.removeHandler(caplog.handler)
+    logger.setLevel(previous)
+    for lg in disabled:
+        lg.disabled = True

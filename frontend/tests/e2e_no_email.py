@@ -111,6 +111,7 @@ def main():
         page.fill("#account [name=email]", owner_email)
         page.fill("#account [name=password]", PW)
         page.fill("#account [name=confirm]", PW)
+        page.fill("#account [name=phone]", "0788 210 301")
         page.click("#account-submit")
         visible(page, "#details")
         check("registration: no verification step; the details step explains why",

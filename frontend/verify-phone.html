@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Verify your number — ApexRX Smart</title>
+<meta name="robots" content="noindex">
+<meta name="description" content="Verify your mobile number with the code we send by SMS.">
+<link rel="icon" href="assets/logos/logo-mark.svg">
+<link rel="stylesheet" href="css/pharmacies.css">
+</head>
+<body class="patient-page verify-phone-page">
+<!-- Mobile number verification by SMS code (js/verify-phone.js). The server
+     decides whether the account must verify and checks every code. -->
+<header><a class="brand" href="index.html"><img src="assets/logos/logo-mark.svg" alt="" width="38"><span>ApexRX<span class="green"> Smart</span><small>Smarter access. Better health.</small></span></a><label class="language-control"><span class="sr-only">Language</span><select id="workflow-language" aria-label="Language"><option value="en">English</option><option value="fr">Français</option><option value="rw">Kinyarwanda</option></select></label></header>
+
+<main id="onboarding" class="onboarding">
+<aside class="story">
+<span class="eyebrow">ACCOUNT SECURITY</span>
+<h1>One last step. <br><em>Verify your number.</em></h1>
+<p>Pharmacies use this number to reach you about your reservations, so we check that it is yours.</p>
+<div class="story-foot"><span class="dot"></span> We never share your number</div>
+</aside>
+
+<section class="workspace">
+<div class="form-area">
+<h2 id="vp-title" tabindex="-1">Verify your mobile number</h2>
+<p id="vp-loading" class="muted">Loading…</p>
+
+<div id="vp-main" hidden>
+  <p class="vp-sandbox" id="vp-sandbox" role="note" hidden>Test mode: SMS codes are simulated and do not reach a phone.</p>
+
+  <div class="vp-number" id="vp-number-view">
+    <p class="muted">Your mobile number</p>
+    <p class="vp-number-line"><strong id="vp-number">—</strong> <button type="button" class="text-button" id="vp-change">Change number</button></p>
+  </div>
+
+  <form id="vp-number-form" class="step-form" novalidate hidden>
+    <label>Mobile number<input name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="30" placeholder="078 812 3456" required></label>
+    <p class="muted small">We send a code to this number. Changing it means the new number must be verified.</p>
+    <div class="vp-actions"><button class="primary" id="vp-number-save">Save number <span>→</span></button> <button type="button" class="text-button" id="vp-number-cancel">Cancel</button></div>
+  </form>
+
+  <div id="vp-send-view" class="step-form">
+    <p id="vp-send-text">We will send a 6-digit code to this number by SMS.</p>
+    <button type="button" class="primary" id="vp-send">Send code <span>→</span></button>
+  </div>
+
+  <form id="vp-code-form" class="step-form" novalidate hidden>
+    <p id="vp-sent-text" aria-live="polite"></p>
+    <label>6-digit code<input id="vp-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="123456" required aria-describedby="vp-expiry"></label>
+    <p class="muted small" id="vp-expiry"></p>
+    <button class="primary" id="vp-verify">Verify <span>→</span></button>
+    <p class="vp-resend"><span>Didn’t get it?</span> <button type="button" class="text-button" id="vp-resend">Send a new code</button> <span id="vp-resend-wait" class="muted"></span></p>
+  </form>
+
+  <p id="vp-error" role="alert"></p>
+  <p id="vp-status" role="status" aria-live="polite"></p>
+  <div id="vp-done" class="step-form" hidden>
+    <p><strong>Your number is verified.</strong> <span id="vp-done-text"></span></p>
+    <a class="primary button-link" id="vp-continue" href="index.html">Continue <span>→</span></a>
+  </div>
+  <p class="auth-switch"><button type="button" class="text-button" id="vp-signout">Sign out</button></p>
+</div>
+</div>
+<div class="workspace-foot">Medicines, closer to you. <span>APEXRX SMART</span></div>
+</section>
+</main>
+<script src="js/pharmacies-i18n.js"></script>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/verify-phone.js"></script>
+</body></html>

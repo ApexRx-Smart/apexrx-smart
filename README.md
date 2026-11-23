@@ -173,6 +173,17 @@ cp .env.example .env    # then edit DATABASE_URL and JWT_SECRET_KEY
 | `SUPABASE_SECRET_KEY` | production | Supabase **secret** key (`sb_secret_...`, or the legacy `service_role` key). Backend only: never put it in the frontend |
 | `SUPABASE_BUCKET_NAME` | no | Default `organization-documents`. The bucket must be **private** |
 | `TRUSTED_CLIENT_IP_HEADER` | no (leave unset) | Header holding the real client IP. **Set it only after `tools/render-ip-check` shows that the proxy overwrites it.** Otherwise clients choose their own value. `X-Forwarded-For` is refused. See [Login rate limiting](#login-rate-limiting) |
+| `PHONE_VERIFICATION_REQUIRED` | no | Default `false`. When `true`, new accounts must verify their mobile number by SMS code before using ApexRX. **Only with live SMS**: production refuses to start with it on and a sandbox key. See [Phone verification](#phone-verification-by-sms-code) |
+| `SMS_PROVIDER` | for SMS | `esms` (eSMS Africa). `mock` for development/tests only (refused in production). Unset: SMS is unavailable |
+| `OTP_HMAC_SECRET` | for SMS | At least 32 random characters, different from `JWT_SECRET_KEY`. Keys the stored HMAC of every code. Backend only |
+| `ESMS_MODE` | for SMS | `sandbox` (default; needs an `esms_test_` key, free, nothing reaches a phone) or `live` (needs an `esms_live_` key) |
+| `ESMS_API_KEY` | for SMS | eSMS Africa API key (dashboard: Developers → API keys). Backend only |
+| `ESMS_SENDER_ID` | no | Approved sender ID (letters, digits, hyphen; up to 11). Unset: the route's default sender |
+| `ESMS_BASE_URL` / `ESMS_TIMEOUT_SECONDS` | no | Defaults `https://sms.esmsafrica.io/api` / 10 |
+| `ESMS_WEBHOOK_SECRET` | no | eSMS webhook signing secret, for delivery reports at `POST /webhooks/esms/delivery`. Unset: that endpoint answers 404 |
+| `OTP_TTL_SECONDS` / `OTP_MAX_ATTEMPTS` / `OTP_RESEND_COOLDOWN_SECONDS` | no | Defaults 300 (5 minutes) / 5 / 60 |
+| `OTP_MAX_SENDS_PER_PHONE_PER_HOUR` / `_PER_USER_PER_HOUR` / `_PER_IP_PER_HOUR` | no | Defaults 5 / 5 / 20 (per IP only with a verified `TRUSTED_CLIENT_IP_HEADER`) |
+| `OTP_MAX_FAILED_ATTEMPTS_PER_USER_PER_HOUR` / `OTP_MAX_SENDS_GLOBAL_PER_HOUR` | no | Defaults 15 / 300 |
 | `DEVICE_TOKEN_MAX_AGE_DAYS` | no | Default 90. Lifetime of the "known browser" tokens |
 | `LOGIN_MAX_FAILURES_PER_ACCOUNT` / `LOGIN_MAX_FAILURES_PER_IP` / `LOGIN_FAILURE_WINDOW_SECONDS` | no | Defaults 5 / 20 / 900 (15 minutes) |
 | `RATE_LIMIT_STORAGE_URI` | no | Default `memory://` (per process). Use e.g. `redis://host:6379` with several instances |
@@ -319,6 +330,42 @@ python ../frontend/tests/e2e_no_email.py
 python ../frontend/tests/e2e_registration.py
 python ../frontend/tests/e2e_accounts.py
 ```
+
+## Phone verification by SMS code
+
+ApexRX generates, stores, limits and checks every code; **eSMS Africa only delivers the SMS**. eSMS Africa's own OTP product is not used. Code: `app/services/otp.py` (lifecycle), `app/services/sms/` (delivery: `esms.py`, and `mock.py` for development), `app/api/phone_verification.py` (endpoints), `frontend/verify-phone.html`.
+
+**Flow.** Sign-up (patients, pharmacy and supplier owners) asks for a mobile number, stored as E.164 (`+250…`). When verification is required, the new account is created **locked** (`app_user.phone_verification_required`): the backend refuses every endpoint (403 `phone_verification_required`) except its own details, phone verification, password change and sign-out. The page opens `verify-phone.html`, which sends a code (`POST /auth/phone/send`) and checks it (`POST /auth/phone/verify {challenge_id, code}`). Only then does the account work. The number is always the account's own; it is changed with `PATCH /auth/me`, which never verifies anything.
+
+**Codes.**
+- Six digits from `secrets`, valid 5 minutes, at most 5 wrong tries, single use. A new code supersedes the earlier one (database-enforced: one usable code per account).
+- Stored only as an HMAC-SHA256 keyed with `OTP_HMAC_SECRET` over the challenge id, account, number and code. The code and the HMAC never appear in responses or logs. Codes are compared in constant time.
+- A code verifies only the number it was sent to, and only while that is still the account's number.
+
+**Limits** (PostgreSQL-backed, so they survive restarts and hold across instances; rolling one-hour windows, so nobody can permanently block someone else's number):
+- 60 s between codes for the same account and number;
+- 5 codes per number per hour (across accounts; the answer is the same whatever account holds the number), 5 per account, 20 per client IP (only with a verified `TRUSTED_CLIENT_IP_HEADER`), 300 per hour on the whole platform (cost and SMS pumping);
+- 15 wrong codes per account per hour across all its codes (brute force over several codes).
+
+**Failures.** The code is saved before it is sent; a database error before sending sends nothing (503). If the provider fails, the code is marked undeliverable and the user can retry at once; a number the provider refuses gets a 422 so the user can correct it. A database error while verifying verifies nothing. Nothing is ever marked verified without a correct code.
+
+**Who must verify.**
+| Account | Policy |
+|---|---|
+| Created by sign-up while `PHONE_VERIFICATION_REQUIRED=true` | Locked until verified |
+| Created by accepting a staff invitation while required | Locked at first sign-in until they add and verify a number |
+| Existing before (or created while not required) | **Never locked.** Prompted ("Verify your mobile number" in the account menu, when SMS works). Must verify if they **change** their number while required |
+| Platform admins made with `create_admin` | **Exempt** (an SMS outage can never lock the admin console). The one deliberate exception |
+
+`PHONE_VERIFICATION_REQUIRED=false` (the default) is also the emergency switch: it unlocks everyone at once; nothing is marked verified.
+
+**eSMS Africa.** `POST https://sms.esmsafrica.io/api/messages/send` with `Authorization: Bearer <key>`, an `Idempotency-Key` (the challenge id, so a retry never sends twice) and `{to, text, sender_id?}`. 429 and 5xx are retried once; other errors are not. Delivery reports (`POST /webhooks/esms/delivery`) are accepted only with a valid `X-Webhook-Signature` and only record a status.
+
+**Sandbox, then live.**
+1. In the eSMS Africa dashboard create a **test** key (`esms_test_…`). On Render set `SMS_PROVIDER=esms`, `ESMS_MODE=sandbox`, `ESMS_API_KEY=<test key>`, `OTP_HMAC_SECRET=<random>`, and leave `PHONE_VERIFICATION_REQUIRED` unset. Sandbox sends are free and simulated: **no SMS reaches a phone**, so nobody can be required to verify with it.
+2. For live SMS: top up the wallet, request a sender ID for Rwanda if eSMS requires one, create a **live** key, then set `ESMS_MODE=live`, `ESMS_API_KEY=<live key>` (and `ESMS_SENDER_ID`). Test with your own number, then set `PHONE_VERIFICATION_REQUIRED=true`. No code changes.
+
+Local checks: `pytest tests/test_phone_verification.py tests/test_sms_esms.py` (mock provider and mocked HTTP); `ESMS_LIVE_TESTS=1 ESMS_SANDBOX_API_KEY=esms_test_… pytest tests/test_esms_sandbox_live.py` (the real sandbox); `frontend/tests/e2e_phone_verification.py` (browser, mock provider).
 
 ## Sessions
 

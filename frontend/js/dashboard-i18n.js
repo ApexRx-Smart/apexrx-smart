@@ -205,6 +205,7 @@
 ['Sent for review.','Envoyé pour examen.','Byoherejwe kugenzurwa.'],
 ['Sign out','Se déconnecter','Sohoka'],
 ['Account menu','Menu du compte','Ibikubiyemo bya konti'],
+['Verify your mobile number','Vérifier votre numéro de mobile','Emeza nimero ya telefoni yawe'],
 ['Something went wrong. Please try again.','Une erreur est survenue. Veuillez réessayer.','Habaye ikibazo. Ongera ugerageze.'],
 ['Sort','Trier','Tondeka'],
 ['Staff','Employé','Umukozi'],

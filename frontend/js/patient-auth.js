@@ -6,8 +6,9 @@
  *   Register: POST /auth/register (name, email, mobile number, password), then
  *             POST /auth/login (the session is set up at once), then the patient's
  *             reservations. The mobile number is the contact number for every
- *             reservation (the backend stores it as +250...; it will be verified by
- *             SMS once a provider is set up).
+ *             reservation (the backend stores it as +250...). When the server
+ *             requires it (me.phone_verification_pending), the patient first
+ *             verifies it with an SMS code on verify-phone.html, then continues.
  *
  * Where it goes next: ?next= when it is a patient page on this site (only
  * reservations.html with its own parameters: a reservation being made or one
@@ -49,10 +50,13 @@
   const form = $('patient-auth'), err = $('form-error'), panel = $('account-panel');
   function fail(text) { err.textContent = text || ''; }
   function isPatient(me) { return !me.is_platform_admin && !(me.memberships || []).length; }
-  function go(welcome) {
+  function go(welcome, me) {
     let target = NEXT;
     if (welcome && target === 'reservations.html') target += '?welcome=1';
-    location.replace(withLang(target));
+    target = withLang(target);
+    // The server refuses everything else until the number is verified.
+    if (me && me.phone_verification_pending) target = 'verify-phone.html?next=' + encodeURIComponent(target);
+    location.replace(target);
   }
   function notPatient(me) {
     form.hidden = true;
@@ -79,7 +83,7 @@
       if (MODE === 'create') {
         try { await API.auth.register({ name, email, phone, password }); } catch (x) {
           if (x && x.status === 409) { fail('An account with this email already exists. Sign in instead.'); return; }
-          if (x && x.status === 422 && x.data && x.data.code === 'invalid_phone') { fail(x.message); f.phone.focus(); return; }
+          if (x && x.status === 422 && x.data && (x.data.code === 'invalid_phone' || x.data.code === 'phone_required')) { fail(x.message); f.phone.focus(); return; }
           throw x;
         }
       }
@@ -96,7 +100,7 @@
         fail('This account belongs to a pharmacy, a supplier or ApexRX. Sign in with a patient account.');
         return;
       }
-      go(MODE === 'create');
+      go(MODE === 'create', me);
     } catch (x) {
       fail(x && x.status === 0 ? x.message : (x && x.message) || 'Something went wrong. Please try again.');
     } finally { button.disabled = false; }
@@ -110,7 +114,7 @@
     if (!API || !API.session.isSignedIn()) return;
     try {
       const me = await API.auth.me();
-      if (isPatient(me)) go(false); else notPatient(me);
+      if (isPatient(me)) go(false, me); else notPatient(me);
     } catch (x) { /* an ended session: api.js clears it; the form stays */ }
   }
   start();

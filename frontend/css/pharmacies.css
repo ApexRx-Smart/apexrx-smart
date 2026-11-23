@@ -109,3 +109,19 @@ header{background:#ffffffcc;backdrop-filter:blur(20px)}.onboarding{padding:24px;
   .form-area h2{font-size:23px}
   .step-form input,.step-form select{font-size:16px}
 }
+
+/* Mobile number verification (verify-phone.html) */
+.verify-phone-page .vp-number-line{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin:4px 0 18px;font-size:18px}
+.verify-phone-page .vp-number-line strong{font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.verify-phone-page .vp-sandbox{background:#fff6e0;border:1px solid #f0c36a;color:#7a5200;border-radius:10px;padding:10px 12px;margin:0 0 16px;font-size:14px}
+.verify-phone-page #vp-code{font-size:24px;letter-spacing:.4em;font-variant-numeric:tabular-nums;max-width:14ch}
+.verify-phone-page .vp-actions{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.verify-phone-page .vp-resend{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;font-size:14px}
+.verify-phone-page .small{font-size:13px}
+.verify-phone-page #vp-error{color:#b42318;min-height:1.2em;margin:8px 0}
+.verify-phone-page #vp-status{min-height:1.2em;margin:4px 0}
+.verify-phone-page a.button-link{display:inline-flex;align-items:center;gap:8px;text-decoration:none}
+.verify-phone-page .story h1 em{font-style:normal}
+.verify-phone-page .vp-number-line .text-button,.verify-phone-page .vp-resend .text-button,.verify-phone-page .vp-actions .text-button{display:inline;margin:0;padding:2px 4px;font-weight:700}
+.verify-phone-page .vp-number .muted{margin:0}
+.verify-phone-page .vp-resend .text-button:disabled{color:var(--muted);cursor:default}

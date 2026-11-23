@@ -137,7 +137,8 @@
     S.notPatient = !!account.is_platform_admin || !!(account.memberships || []).length;
     if (!window.ApexAccountMenu || !$('accountHost')) return;
     const opts = { name: account.name || account.email, email: account.email,
-      labels: { menu: t('rs_account_menu'), signOut: t('rs_signout') } };
+      verifyPhone: !!account.phone_verification_available && !account.phone_verified,
+      labels: { menu: t('rs_account_menu'), signOut: t('rs_signout'), verifyPhone: t('rs_verify_phone') } };
     if (menu) menu.update(opts); else menu = ApexAccountMenu.mount($('accountHost'), opts);
     if (S.notPatient && S.view !== 'rs-not-patient') showNotPatient();
   }
