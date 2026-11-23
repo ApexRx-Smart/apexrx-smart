@@ -199,7 +199,8 @@ def main():
         shown = {k: page.text_content(f"[data-overview={k}]") for k in expected}
         check("2. overview cards match the API totals", all(shown[k] == str(v) for k, v in expected.items()), (shown, expected))
         wait_text(page, "#overview-unmet", f"unmetmedicine {RUN}")
-        check("2. overview lists the unmet search", f"{world['searches']} searches" in page.inner_text("#overview-unmet"))
+        n = world["searches"]
+        check("2. overview lists the unmet search", f"{n} search{'' if n == 1 else 'es'}" in page.inner_text("#overview-unmet"))
         page.click("[data-overview=docs_pending] >> xpath=..")
         page.wait_for_selector("[data-panel=documents]:not([hidden])")
         check("2. the documents card opens the document queue", True)
@@ -469,7 +470,7 @@ def main():
         page.wait_for_selector("#dashboard-view:not([hidden])")
         page.set_viewport_size({"width": 375, "height": 800})
         wide = []
-        for tab in ("overview", "organizations", "documents", "users", "catalogue", "insights"):
+        for tab in ("overview", "organizations", "documents", "users", "catalogue", "medicines", "insights"):
             open_tab(page, tab)
             page.wait_for_timeout(400)
             if page.evaluate("document.documentElement.scrollWidth > window.innerWidth"):

@@ -535,7 +535,12 @@
       createDrug: function (data) { return post('/catalogue/drugs', data); },
       updateDrug: function (id, data) { return patch('/catalogue/drugs/' + enc(id), data); },
       createProduct: function (data) { return post('/catalogue/products', data); },
-      updateProduct: function (id, data) { return patch('/catalogue/products/' + enc(id), data); }
+      updateProduct: function (id, data) { return patch('/catalogue/products/' + enc(id), data); },
+      // Platform admins: each medicine's reservation settings (classification, unit, limit).
+      // params: {q, dispensing_class, include_inactive, limit, offset}
+      medicines: function (params) { return get('/catalogue/reservation-settings', params); },
+      // data: {dispensing_class?, stock_unit?, unit_label?, pack_size?, max_reservation_quantity?}
+      updateMedicine: function (id, data) { return patch('/catalogue/products/' + enc(id) + '/reservation-settings', data); }
     },
 
     organizations: {

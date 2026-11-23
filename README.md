@@ -448,6 +448,11 @@ Verification documents are files in a **private Supabase Storage bucket**. Their
   - Add or edit a product, choosing its drug from a searchable list. A field you clear is removed.
   - **Retire** / **Reactivate** use `is_active`, after a confirmation. Retired products are greyed out and labelled.
   - Duplicate names, products and barcodes are refused by the backend (409), and its message is shown on the form. Save buttons are disabled while saving, so a double click can't create a duplicate.
+- **Medicines:** whether patients can reserve each catalogue medicine (`GET /catalogue/reservation-settings`).
+  - Every medicine starts **not classified**, so it cannot be reserved. The Overview counts these under "Needs attention".
+  - **Classify** / **Edit** sets the classification (non-prescription or prescription only), the stock unit (packs with a unit name and pack size, or single units), and optionally the most per reservation (`PATCH /catalogue/products/{id}/reservation-settings`).
+  - Marking a medicine non-prescription asks for a confirmation first. Prescription-only medicines can never be reserved.
+  - Each row says whether patients can reserve it and, if not, why. Filter by classification or search; retired medicines are optional.
 - **Search insights:** anonymous patient searches (`GET /admin/insights/searches`).
   - Choose the period (7, 30, 90 or 365 days) and how many to show, or show only searches that found nothing.
   - **Check catalogue** looks the search up in the products list, to spot catalogue gaps.
@@ -464,7 +469,8 @@ The page's buttons are only for usability. All values from the API are inserted 
 
 To check the dashboard end to end against a **local** backend and a disposable database:
 - `frontend/tests/e2e_admin.py`: organizations, document review, the session;
-- `frontend/tests/e2e_admin_console.py`: overview, document queue, users, catalogue, search insights, loading, empty and error states, and access control.
+- `frontend/tests/e2e_admin_console.py`: overview, document queue, users, catalogue, search insights, loading, empty and error states, and access control;
+- `frontend/tests/e2e_admin_medicines.py`: the Medicines tab (counts, classifying, the confirmation, validation, filters).
 
 ## API Overview
 
@@ -603,6 +609,7 @@ Reservations are addressed by their reference (`RX-` and 10 characters), never b
 | `POST …/{reference}/collect` | Any role; `override` owners and managers | Body `{reference, override?}`: `reference` is the code the patient shows, typed by staff, and must match (422 `reference_mismatch`, nothing collected). Always the full quantity. 409 `stock_record_insufficient`, `stock_changed`, `expired`. |
 | `GET /organizations/{id}/locations/{loc}/reservation-medicines` | Active members | Each medicine with a stock record at the branch: recorded, held, unallocated, kept back and reservable quantities, the limit per reservation, and whether patients can reserve it there now (or why not). |
 | `PATCH /organizations/{id}/locations/{loc}` `{reservation_min_stock}` | Owners and managers (pharmacies only) | The branch minimum kept for walk-in customers. Staff 403, other organizations 404, suppliers 422. |
+| `GET /catalogue/reservation-settings?q=&dispensing_class=&include_inactive=` | Platform admins | Every catalogue medicine with its reservation settings and `problems` (the admin Medicines tab). |
 | `GET /catalogue/products/{pid}/reservation-settings` | Any signed-in user | Classification, unit, limit (`effective_max_quantity`), `ready`, and `problems` explaining why it cannot be reserved anywhere yet. |
 | `PATCH /catalogue/products/{pid}/reservation-settings`, `GET …/history` | Platform admins | The catalogue is shared by every pharmacy, so only ApexRx admins classify medicines. |
 

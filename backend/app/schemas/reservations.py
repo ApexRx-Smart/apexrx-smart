@@ -267,6 +267,16 @@ class ReservationSettings(UnitInfo):
     problems: list[SettingsProblem] = Field(description="Why this medicine cannot be reserved anywhere yet.")
 
 
+class ReservationSettingsListItem(ReservationSettings):
+    """A catalogue medicine with its reservation settings (the admin Medicines list)."""
+
+    product_name: str
+    drug_name: str
+    brand: str | None
+    strength: str | None
+    dosage_form: str | None
+
+
 class ReservationSettingsUpdate(Strict):
     dispensing_class: DispensingClass | None = None
     stock_unit: StockUnit | None = None

@@ -114,6 +114,7 @@ def test_every_reservation_endpoint_requires_authentication(w):
         ("get", f"/catalogue/products/{prod}/reservation-settings"),
         ("patch", f"/catalogue/products/{prod}/reservation-settings"),
         ("get", f"/catalogue/products/{prod}/reservation-settings/history"),
+        ("get", "/catalogue/reservation-settings"),
     ]
     for method, path in endpoints:
         r = getattr(w.client, method)(path, headers={"Authorization": "Bearer not-a-token"})
@@ -145,6 +146,7 @@ def test_only_the_expected_reservation_routes_exist(client):
         "/organizations/{organization_id}/reservations/{reference}/cancel": {"post"},
         "/organizations/{organization_id}/reservations/{reference}/collect": {"post"},
         "/organizations/{organization_id}/locations/{location_id}/reservation-medicines": {"get"},
+        "/catalogue/reservation-settings": {"get"},
         "/catalogue/products/{product_id}/reservation-settings": {"get", "patch"},
         "/catalogue/products/{product_id}/reservation-settings/history": {"get"},
     }
@@ -837,6 +839,39 @@ def test_reservation_settings_are_admin_only_and_explain_problems(w):
     assert history[0]["changed_by_name"] == "Admin"
     # Classified and listed with stock: reservable with nothing else to do.
     assert submit(w, product=product).status_code == 201
+
+
+def test_admin_medicines_list_shows_classification_and_filters(w):
+    """The admin Medicines tab: every catalogue medicine with its settings,
+    filtered by classification or search; platform admins only."""
+    unclassified = w.medicine("Amoxicillin", "Amoxil 500mg", classify=False)
+    url = "/catalogue/reservation-settings"
+    for who in (w.owner, w.manager, w.staff, w.patient):
+        assert w.client.get(url, headers=w.headers[who]).status_code == 403
+    page = w.client.get(url, headers=w.admin_headers).json()
+    items = {i["product_id"]: i for i in page["items"]}
+    assert page["total"] == len(items) >= 2
+    item = items[unclassified]
+    assert (item["product_name"], item["drug_name"], item["dispensing_class"], item["ready"]) == (
+        "Amoxil 500mg", "Amoxicillin", "unclassified", False)
+    assert [p["code"] for p in item["problems"]] == ["not_non_prescription", "unit_unknown"]
+    assert items[w.product]["ready"] is True and items[w.product]["dispensing_class"] == "non_prescription"
+    only = w.client.get(url, params={"dispensing_class": "unclassified"}, headers=w.admin_headers).json()
+    assert [i["product_id"] for i in only["items"]] == [unclassified]
+    assert w.client.get(url, params={"q": "amox"}, headers=w.admin_headers).json()["total"] == 1
+    assert w.client.get(url, params={"dispensing_class": "otc"}, headers=w.admin_headers).status_code == 422
+    # Classifying it from the list moves it to non-prescription and makes it reservable.
+    r = w.client.patch(f"/catalogue/products/{unclassified}/reservation-settings",
+                       json={"dispensing_class": "non_prescription", "stock_unit": "pack", "unit_label": "box"},
+                       headers=w.admin_headers)
+    assert r.status_code == 200 and r.json()["ready"] is True, r.text
+    assert w.client.get(url, params={"dispensing_class": "unclassified"}, headers=w.admin_headers).json()["total"] == 0
+    assert submit(w, product=unclassified).status_code == 201
+    # Retired medicines appear only when asked for.
+    w.client.patch(f"/catalogue/products/{unclassified}", json={"is_active": False}, headers=w.admin_headers)
+    assert unclassified not in {i["product_id"] for i in w.client.get(url, headers=w.admin_headers).json()["items"]}
+    shown = w.client.get(url, params={"include_inactive": True}, headers=w.admin_headers).json()["items"]
+    assert unclassified in {i["product_id"] for i in shown}
 
 
 def test_branch_medicines_show_the_stock_breakdown(w):
