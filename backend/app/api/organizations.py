@@ -61,6 +61,11 @@ def create_organization(payload: OrganizationCreate, user: CurrentUser, db: DbSe
 
     The caller's account email must be verified first (when
     EMAIL_VERIFICATION_REQUIRED is on; see app/api/email_verification.py)."""
+    if user.account_type != payload.type:
+        raise Forbidden(
+            f"This account can't register a {payload.type}. Sign up on the {payload.type} registration page.",
+            extra={"code": "wrong_account_type"},
+        )
     if settings.email_verification_required and user.email_verified_at is None:
         raise Forbidden(
             "Verify your email address before registering an organization.",
@@ -208,6 +213,10 @@ def add_member(organization_id: int, payload: MemberCreate, user: CurrentUser, d
     member = find_user_by_email(db, payload.email)
     if member is None or not member.is_active:
         raise NotFound("No active ApexRx account uses that email. Ask them to register first.")
+    if member.account_type != access.organization.type:
+        raise Conflict(f"The account using that email can't join a {access.organization.type}. "
+                       "Invite them with an email address that has no ApexRX account yet.",
+                       extra={"code": "wrong_account_type"})
 
     membership = db.scalar(
         select(Membership).where(

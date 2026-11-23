@@ -71,17 +71,19 @@ def call(method, path, body=None, token=None):
             return e.code, text
 
 
-def login(email, password=PASSWORD):
-    return call("POST", "/auth/login", {"email": email, "password": password})[1]["access_token"]
+def login(email, password=PASSWORD, kind="pharmacy"):
+    if email == ADMIN_EMAIL:
+        kind = "admin"
+    return call("POST", "/auth/login", {"email": email, "password": password, "account_type": kind})[1]["access_token"]
 
 
 def admin_token():
     return login(ADMIN_EMAIL, ADMIN_PASSWORD)
 
 
-def account(email):
-    call("POST", "/auth/register", {"name": email.split("@")[0], "email": email, "password": PASSWORD})
-    return login(email)
+def account(email, kind="pharmacy"):
+    call("POST", "/auth/register", {"name": email.split("@")[0], "email": email, "password": PASSWORD, "account_type": kind})
+    return login(email, kind=kind)
 
 
 def latest_email(token):
@@ -509,23 +511,22 @@ def main():
               page.url.split("?")[0].endswith("/supplier-dashboard.html") and supplier in page.inner_text("#me-name"))
         ctx.close()
 
-        # A supplier who signs in on the pharmacy sign-in page is told so, with no
-        # link into the supplier sign-in (no cross-group auth links): only home or sign out.
+        # A supplier who signs in on the pharmacy sign-in page is refused there: an
+        # error on the same page, no session, no registration, no link to another group.
         ctx = new_context(browser)
         page = ctx.new_page()
-        watch(page, errors)
+        watch(page, errors, allowed=("status of 403",))  # the refused sign-in itself
         page.goto(SITE + "/pharmacy-sign-in.html")
         fill_account(page, supplier_email, confirm=False)
-        visible(page, "#account-panel")
-        check("sign in: a supplier on the pharmacy sign-in page is not asked to register a pharmacy",
-              "registered as a medicine supplier" in page.inner_text("#account-panel-text") and page.is_hidden("#verify-email"))
-        check("sign in: ...and is offered the home page, not the supplier sign-in",
-              page.get_attribute("#account-panel-link", "href").split("?")[0] == "index.html"
-              and "suppliers.html" not in page.inner_html("#onboarding"))
-        page.click("#sign-out")
-        page.wait_for_url("**/index.html*")
-        check("sign in: ...signing out opens the landing page",
+        wait_text(page, "#form-error", "can't sign in here")
+        page.wait_for_timeout(600)
+        check("sign in: a supplier on the pharmacy sign-in page is refused on that page",
+              page.url.split("?")[0].endswith("/pharmacy-sign-in.html") and page.is_hidden("#account-panel")
+              and page.is_hidden("#verify-email") and page.is_hidden("#details"))
+        check("sign in: ...and is never signed in",
               page.evaluate("sessionStorage.getItem('apexrx_session')") is None)
+        check("sign in: ...and gets no link into the supplier sign-in",
+              "suppliers.html" not in page.inner_html("#onboarding"))
         ctx.close()
 
         # ======================================= translations and mobile layout
@@ -533,7 +534,7 @@ def main():
         page = ctx.new_page()
         watch(page, errors)
         email4 = f"reg-mobile-{RUN}@example.com"
-        verify_by_api(account(email4))
+        verify_by_api(account(email4, "supplier"))
         page.goto(SITE + "/suppliers.html#signin")
         fill_account(page, email4, confirm=False)
         visible(page, "#details")

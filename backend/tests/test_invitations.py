@@ -67,7 +67,7 @@ def test_invite_someone_without_an_account(team):
     assert me["email"] == "new.person@example.com" and me["name"] == "Nia Person" and me["email_verified"] is True
     assert _memberships(client, signed_in) == {("Invite Pharmacy", "staff")}
     # The employee signs in on their own, with their own password.
-    assert client.post("/auth/login", json={"email": "new.person@example.com", "password": NEW_PASSWORD}).status_code == 200
+    assert client.post("/auth/login", json={"account_type": "pharmacy", "email": "new.person@example.com", "password": NEW_PASSWORD}).status_code == 200
     listed = client.get(f"/organizations/{org}/invitations", headers=owner).json()[0]
     assert listed["status"] == "accepted" and listed["account_created"] is True and listed["accepted_at"]
     # Single use.
@@ -79,7 +79,7 @@ def test_invite_an_existing_account(team, client):
     _, owner, org = team
     other_owner = user(client, "boss@elsewhere.example.com")
     other_org = organization(client, other_owner, "pharmacy", "Other Pharmacy")
-    staff = user(client, "veteran@example.com", "Vera Veteran")
+    staff = user(client, "veteran@example.com", "Vera Veteran", account_type="pharmacy")
     client.post(f"/organizations/{other_org}/members", json={"email": "veteran@example.com", "role": "manager"},
                 headers=other_owner)
     assert _invite(client, owner, org, "veteran@example.com", "staff").status_code == 201
@@ -158,7 +158,7 @@ def test_resend_cooldown(team, client):
 def test_permissions(team, client):
     _, owner, org = team
     for email, role in (("mgr@example.com", "manager"), ("st@example.com", "staff")):
-        user(client, email)
+        user(client, email, account_type="pharmacy")
         client.post(f"/organizations/{org}/members", json={"email": email, "role": role}, headers=owner)
     manager, staff = login(client, "mgr@example.com"), login(client, "st@example.com")
     assert _invite(client, manager, org, "s2@example.com", "staff").status_code == 201
@@ -196,7 +196,7 @@ def test_email_failure_keeps_the_invitation_and_never_activates(team, client):
 
 def test_deactivated_member_is_reactivated_with_the_invited_role(team, client):
     _, owner, org = team
-    user(client, "back@example.com")
+    user(client, "back@example.com", account_type="pharmacy")
     m = client.post(f"/organizations/{org}/members", json={"email": "back@example.com", "role": "manager"},
                     headers=owner).json()
     client.patch(f"/organizations/{org}/members/{m['membership_id']}", json={"is_active": False}, headers=owner)
@@ -215,4 +215,4 @@ def test_new_account_password_rules(team, client):
     r = client.post("/invitations/accept-new", json={"token": token, "name": "W", "password": "short"})
     assert r.status_code == 422 and _users("weak@example.com") == 0
     register(client, "unrelated@example.com")
-    assert client.post("/auth/login", json={"email": "unrelated@example.com", "password": PASSWORD}).status_code == 200
+    assert client.post("/auth/login", json={"account_type": "patient", "email": "unrelated@example.com", "password": PASSWORD}).status_code == 200

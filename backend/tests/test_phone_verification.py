@@ -33,7 +33,7 @@ def required(monkeypatch):
 
 
 def signup(client, email, phone="0788 123 456", name="Pat Patient"):
-    body = {"name": name, "email": email, "password": PASSWORD}
+    body = {"name": name, "email": email, "password": PASSWORD, "account_type": "patient"}
     if phone is not None:
         body["phone"] = phone
     r = client.post("/auth/register", json=body)
@@ -101,17 +101,17 @@ def test_new_account_is_locked_until_its_number_is_verified(client, required):
 
 
 def test_sign_up_needs_a_valid_mobile_number_when_required(client, required):
-    base = {"name": "N", "email": "n@example.com", "password": PASSWORD}
+    base = {"name": "N", "email": "n@example.com", "password": PASSWORD, "account_type": "patient"}
     r = client.post("/auth/register", json=base)
     assert r.status_code == 422 and r.json()["code"] == "phone_required"
     for bad in ("0252 123 456", "12345678", "abcdefghij"):
-        assert client.post("/auth/register", json={**base, "phone": bad}).status_code == 422, bad
+        assert client.post("/auth/register", json={"account_type": "patient", **base, "phone": bad}).status_code == 422, bad
     assert rows("SELECT count(*) AS n FROM app_user")[0]["n"] == 0
 
 
 def test_client_cannot_mark_itself_verified(client, required):
     """Fields the browser might send to skip verification are ignored."""
-    forged = {"name": "F", "email": "f@example.com", "password": PASSWORD, "phone": "0788123456",
+    forged = {"name": "F", "email": "f@example.com", "password": PASSWORD, "phone": "0788123456", "account_type": "patient",
               "verified_phone": "+250788123456", "phone_verified_at": "2026-01-01T00:00:00Z",
               "phone_verification_required": False, "phone_verified": True}
     assert client.post("/auth/register", json=forged).status_code == 201
@@ -161,7 +161,7 @@ def test_existing_accounts_are_not_locked(client, monkeypatch):
     data = me(client, h)
     assert data["phone_verification_pending"] is False and data["phone_verified"] is False
     assert client.get("/reservations", headers=h).status_code == 200
-    assert client.post("/auth/login", json={"email": "old@example.com", "password": PASSWORD}).status_code == 200
+    assert client.post("/auth/login", json={"account_type": "patient", "email": "old@example.com", "password": PASSWORD}).status_code == 200
     # Nothing was marked verified for them.
     assert rows("SELECT verified_phone FROM app_user WHERE email = 'old@example.com'")[0]["verified_phone"] is None
     # When they set (or change) their number, the new number must be verified.
@@ -179,7 +179,7 @@ def test_admins_created_by_the_script_are_exempt(client, required):
     rc = create_admin.main(["--email", "boot@example.com", "--name", "Boot Admin"],
                            input_fn=lambda *_: next(answers), getpass_fn=lambda *_: next(passwords))
     assert rc == 0
-    r = client.post("/auth/login", json={"email": "boot@example.com", "password": "Str0ng-admin-password"})
+    r = client.post("/auth/login", json={"account_type": "admin", "email": "boot@example.com", "password": "Str0ng-admin-password"})
     h = {"Authorization": f"Bearer {r.json()['access_token']}"}
     assert me(client, h)["phone_verification_pending"] is False
     assert client.get("/admin/users", headers=h).status_code == 200

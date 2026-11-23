@@ -297,7 +297,7 @@ def test_no_real_provider_is_integrated(monkeypatch):
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize("type_", ["pharmacy", "supplier"])
 def test_organization_registration_requires_a_verified_email(client, type_):
-    h = user(client, f"{type_}@x.example.com")
+    h = user(client, f"{type_}@x.example.com", account_type=type_)
     r = client.post("/organizations", json={"name": "Unverified Co", "type": type_}, headers=h)
     assert r.status_code == 403 and r.json()["reason"] == "email_unverified"
     assert client.get("/organizations", headers=h).json() == []
@@ -311,7 +311,7 @@ def test_organization_registration_requires_a_verified_email(client, type_):
 
 def test_verification_can_be_switched_off(client, monkeypatch):
     monkeypatch.setattr(settings, "email_verification_required", False)
-    h = user(client, "off@x.example.com")
+    h = user(client, "off@x.example.com", account_type="pharmacy")
     assert _status(client, h)["required"] is False
     r = client.post("/organizations", json={"name": "No Check Co", "type": "pharmacy"}, headers=h)
     assert r.status_code == 201, r.text
@@ -321,7 +321,7 @@ def test_registration_needs_no_sms_while_phone_verification_is_not_required(clie
     """With PHONE_VERIFICATION_REQUIRED off (the default), registering an
     organization needs the verified email only; the organization's phone is a
     contact number. Mandatory SMS verification is in test_phone_verification.py."""
-    h = user(client, "nophone@x.example.com")
+    h = user(client, "nophone@x.example.com", account_type="pharmacy")
     assert client.get("/auth/me", headers=h).json()["phone_verification_pending"] is False
     _send(client, h)
     _verify(client, _latest(client, h)["token"])

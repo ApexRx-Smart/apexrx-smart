@@ -286,13 +286,19 @@ def _activate(db: Session, inv: OrganizationInvitation, user: User, *, account_c
     return membership
 
 
+def _org_type(db: Session, inv: OrganizationInvitation) -> str:
+    return db.scalar(select(Organization.type).where(Organization.organization_id == inv.organization_id))
+
+
 def accept_with_new_account(db: Session, token: str, name: str, password_hash: str) -> tuple[User, OrganizationInvitation, Membership]:
     inv = by_token(db, token, lock=True)
     if find_account(db, inv.email) is not None:
         db.rollback()
         raise Conflict("An ApexRX account already uses this email. Sign in to accept the invitation.",
                        extra={"reason": "account_exists"})
-    user = User(name=name, email=inv.email, password_hash=password_hash)
+    # The new account is of the inviting organization's kind.
+    user = User(name=name, email=inv.email, password_hash=password_hash,
+                account_type=_org_type(db, inv))
     # Like any new account: locked until a mobile number is added and verified
     # (when PHONE_VERIFICATION_REQUIRED is on). Checked at first sign-in.
     otp.mark_new_account(user)
@@ -309,6 +315,12 @@ def accept_with_account(db: Session, token: str, user: User) -> tuple[Organizati
         db.rollback()
         raise Forbidden(f"This invitation was sent to {mask_email(inv.email)}. Sign in with that account to accept it.",
                         extra={"reason": "email_mismatch"})
+    org_type = _org_type(db, inv)
+    if user.account_type != org_type:
+        db.rollback()
+        raise Forbidden(f"This account can't join a {org_type}. "
+                        f"Ask for the invitation to be sent to another email address.",
+                        extra={"reason": "wrong_account_type"})
     membership = _activate(db, inv, user, account_created=False)
     db.commit()
     return inv, membership

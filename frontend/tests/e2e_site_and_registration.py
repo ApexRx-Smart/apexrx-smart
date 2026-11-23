@@ -64,7 +64,7 @@ def call(method, path, body=None, token=None):
 
 
 def admin_token():
-    return call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})[1]["access_token"]
+    return call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "account_type": "admin"})[1]["access_token"]
 
 
 def find_org(name):

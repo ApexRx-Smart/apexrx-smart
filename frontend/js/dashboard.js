@@ -86,7 +86,6 @@
   const expiredBatches = () => batchRows().filter(b => b.left < 0 && b.quantity > 0);
   const packCount = pack => { const m = /(\d+)/.exec(pack || ''); return m ? +m[1] : 0; };
   const sid = () => 'SUP-' + String(ctx.org.organization_id).padStart(5, '0');
-  const listedCount = () => S.stock.filter(x => x.offer && x.offer.is_listed).length;
   const seesLabel = x => {
     if (!x.offer || !x.offer.is_listed) return ['', t('Not listed')];
     if (sellable(x) <= 0) return x.quantity > 0 ? ['out', t('Hidden: expired')] : ['out', t('Out of stock')];
@@ -178,21 +177,15 @@
   function hero() {
     const h = new Date().getHours();
     const hello = t(h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening');
-    const n = waiting().length, low = lowItems().length, listed = listedCount();
     const img = IS_PH ? 'audience-pharmacies.webp' : 'audience-suppliers.webp';
     const alt = t(IS_PH ? 'A pharmacist scans a box of medicine at the counter' : 'A supplier scans a carton in a medical warehouse');
-    const scanStyle = IS_PH ? '--sx:57%;--sy:49%;--sw:12%;--sh:13%' : '--sx:53%;--sy:64%;--sw:15%;--sh:9%';
     const cta = IS_PH ? ['cmp', 'Find a medicine source →'] : ['msg', 'Open requests →'];
     const copy = `<div class="hero-copy"><span class="ov-eyebrow">${esc(t(IS_PH ? 'YOUR NETWORK, WITHIN REACH' : 'YOUR DEMAND, WITHIN REACH'))}</span>
 <h2>${esc(hello)}, ${esc(ctx.org.name)}.</h2>
 <p>${esc(t(IS_PH ? 'The next step in better care starts with a connection.' : 'Verified pharmacies ask you for prices here, instead of by phone.'))}</p>
 <div class="hero-cta"><button class="solid" data-a="nav" data-v="${cta[0]}">${esc(t(cta[1]))}</button><button class="ghost" data-a="nav" data-v="${IS_PH ? 'stk' : 'ord'}">${esc(t(IS_PH ? 'My stock' : 'Orders'))}</button></div></div>`;
     const art = `<figure class="hero-art">
-<div class="capsule"><div class="capsule-in"><img src="assets/images/${img}" alt="${esc(alt)}"><span class="scan" style="${scanStyle}" aria-hidden="true"></span></div></div>
-<i class="mini m1" aria-hidden="true"></i><i class="mini m2" aria-hidden="true"></i><span class="plus" aria-hidden="true">+</span>
-<button class="chipf c1" data-a="nav" data-v="msg"><span><b>${n}</b><small>${esc(t(IS_PH ? 'offers waiting' : 'requests waiting'))}</small></span></button>
-<button class="chipf c2" data-a="nav" data-v="${IS_PH ? 'stk' : 'ord'}"><span><b>${IS_PH ? low : toConfirm().length}</b><small>${esc(t(IS_PH ? 'running low' : 'to prepare'))}</small></span></button>
-<button class="chipf c3" data-a="nav" data-v="stk"><span><b>${IS_PH ? listed : hasBatches() ? expiringSoon().length : '—'}</b><small>${esc(t(IS_PH ? 'listed' : 'expiring soon'))}</small></span></button>
+<div class="capsule"><div class="capsule-in"><img src="assets/images/${img}" alt="${esc(alt)}"></div></div>
 </figure>`;
     return IS_PH ? `<section class="hero">${copy}${art}</section>` : `<section class="hero sup">${art}${copy}</section>`;
   }

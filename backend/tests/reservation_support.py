@@ -33,7 +33,14 @@ def user_id(client, headers) -> int:
 
 
 def add_member(user_id_: int, organization_id: int, role: str) -> None:
+    """Test shortcut: a membership written directly, for an account of the
+    organization's kind (as if it had joined through an invitation)."""
     with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE app_user SET account_type = (SELECT type FROM organization WHERE organization_id = :o) "
+                 "WHERE user_id = :u"),
+            {"u": user_id_, "o": organization_id},
+        )
         conn.execute(
             text("INSERT INTO membership (user_id, organization_id, role) VALUES (:u, :o, :r)"),
             {"u": user_id_, "o": organization_id, "r": role},

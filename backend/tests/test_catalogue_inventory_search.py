@@ -10,7 +10,7 @@ from tests.helpers import (
     location,
     login,
     organization,
-    register,
+    register_for,
     stock,
     user,
 )
@@ -45,7 +45,7 @@ def test_stock_requires_approval_and_roles(client):
     assert r.status_code == 403
 
     # Staff update stock but cannot set prices.
-    register(client, "staff@x.example.com")
+    register_for(client, "staff@x.example.com", world.pharmacy)
     client.post(f"/organizations/{world.pharmacy}/members", json={"email": "staff@x.example.com", "role": "staff"}, headers=world.pharmacy_owner)
     staff = login(client, "staff@x.example.com")
     base = f"/organizations/{world.pharmacy}/locations/{world.branch}/stock/{world.paracetamol}"

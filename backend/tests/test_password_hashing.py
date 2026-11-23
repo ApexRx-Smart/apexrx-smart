@@ -48,14 +48,14 @@ def test_cheaper_hash_still_signs_in_and_is_upgraded(client):
                   {"h": CHEAP.hash(PASSWORD), "e": email})
     assert _stored_hash(email).startswith("$argon2id$v=19$m=19456,t=2,p=1$")
 
-    r = client.post("/auth/login", json={"email": email, "password": PASSWORD})
+    r = client.post("/auth/login", json={"account_type": "patient", "email": email, "password": PASSWORD})
     assert r.status_code == 200, r.text
     upgraded = _stored_hash(email)
     assert upgraded.startswith(CURRENT_PREFIX)
     assert verify_password(PASSWORD, upgraded)
 
     # Signing in again works and leaves the (now current) hash alone.
-    assert client.post("/auth/login", json={"email": email, "password": PASSWORD}).status_code == 200
+    assert client.post("/auth/login", json={"account_type": "patient", "email": email, "password": PASSWORD}).status_code == 200
     assert _stored_hash(email) == upgraded
 
 
@@ -65,5 +65,5 @@ def test_wrong_password_does_not_touch_a_cheaper_hash(client):
     cheap = CHEAP.hash(PASSWORD)
     with engine.begin() as c:
         c.execute(text("UPDATE app_user SET password_hash = :h WHERE email = :e"), {"h": cheap, "e": email})
-    assert client.post("/auth/login", json={"email": email, "password": "not the password"}).status_code == 401
+    assert client.post("/auth/login", json={"account_type": "patient", "email": email, "password": "not the password"}).status_code == 401
     assert _stored_hash(email) == cheap

@@ -53,10 +53,11 @@ PHARMACY_STOCK = {
 SUPPLIER_STOCK = {0: (5000, "900"), 1: (800, "1600"), 2: (1200, "700"), 3: (600, "2100"), 4: (300, "2900")}
 
 
-def _user(db, email: str, name: str, admin: bool = False) -> User:
+def _user(db, email: str, name: str, admin: bool = False, account_type: str = "patient") -> User:
     user = db.scalar(select(User).where(func.lower(User.email) == email))
     if user is None:
-        user = User(name=name, email=email, password_hash=hash_password(PASSWORD), is_platform_admin=admin)
+        user = User(name=name, email=email, password_hash=hash_password(PASSWORD), is_platform_admin=admin,
+                    account_type=account_type)
         db.add(user)
         db.flush()
     return user
@@ -128,8 +129,8 @@ def main(argv: list[str] | None = None, input_fn=input) -> int:
 def _seed() -> None:
     with SessionLocal() as db:
         admin = _user(db, "admin@apexrx.example.com", "ApexRx Admin", admin=True)
-        pharmacist = _user(db, "pharmacist@apexrx.example.com", "Demo Pharmacist")
-        supplier_user = _user(db, "supplier@apexrx.example.com", "Demo Supplier")
+        pharmacist = _user(db, "pharmacist@apexrx.example.com", "Demo Pharmacist", account_type="pharmacy")
+        supplier_user = _user(db, "supplier@apexrx.example.com", "Demo Supplier", account_type="supplier")
         db.commit()
 
         products = []

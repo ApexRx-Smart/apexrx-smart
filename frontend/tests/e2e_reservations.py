@@ -71,11 +71,12 @@ def call(method, path, body=None, token=None, ok=True):
 
 
 def login(email):
-    return call("POST", "/auth/login", {"email": email, "password": PW})["access_token"]
+    kind = "admin" if email == ADMIN_EMAIL else ("pharmacy" if email.startswith("res-owner-") else "patient")
+    return call("POST", "/auth/login", {"email": email, "password": PW, "account_type": kind})["access_token"]
 
 
 def seed():
-    admin = call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})["access_token"]
+    admin = call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "account_type": "admin"})["access_token"]
     drug = call("POST", "/catalogue/drugs", {"name": MED, "therapeutic_class": "Analgesic"}, admin)["drug_id"]
     products = {}
     for key, name, strength in (("main", f"{MED} 500mg", "500mg"), ("stale", f"{MED} Syrup", "120mg/5ml"),
@@ -87,7 +88,7 @@ def seed():
                     "stock_unit": "pack", "unit_label": "box", "max_reservation_quantity": 3}
         call("PATCH", f"/catalogue/products/{pid}/reservation-settings", settings, admin)
         products[key] = pid
-    call("POST", "/auth/register", {"name": OWNER_NAME, "email": f"res-owner-{RUN}@example.com", "password": PW})
+    call("POST", "/auth/register", {"name": OWNER_NAME, "email": f"res-owner-{RUN}@example.com", "password": PW, "account_type": "pharmacy"})
     owner = login(f"res-owner-{RUN}@example.com")
     org = call("POST", "/organizations", {"name": f"Gisozi Pharmacy {RUN}", "type": "pharmacy"}, owner)["organization_id"]
     loc = call("POST", f"/organizations/{org}/locations", {
@@ -98,7 +99,7 @@ def seed():
         call("PUT", f"/organizations/{org}/locations/{loc}/stock/{pid}", {"quantity": 40}, owner)
         call("PUT", f"/organizations/{org}/locations/{loc}/stock/{pid}/offer", {"unit_price": "1500"}, owner)
     for person in (PATIENT_B,):
-        call("POST", "/auth/register", {**person, "password": PW})
+        call("POST", "/auth/register", {**person, "password": PW, "account_type": "patient"})
     return {"admin": admin, "owner": owner, "org": org, "loc": loc, "products": products}
 
 

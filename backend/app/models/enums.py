@@ -8,6 +8,15 @@ class OrganizationType(StrEnum):
     SUPPLIER = "supplier"
 
 
+class AccountType(StrEnum):
+    """Which kind of customer an account is. Fixed at registration; it decides
+    which sign-in page accepts the account (see app/api/auth.py)."""
+
+    PATIENT = "patient"
+    PHARMACY = "pharmacy"
+    SUPPLIER = "supplier"
+
+
 class OrganizationStatus(StrEnum):
     PENDING = "pending"
     APPROVED = "approved"

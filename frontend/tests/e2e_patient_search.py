@@ -57,7 +57,7 @@ def call(method, path, body=None, token=None):
 
 
 def seed():
-    admin = call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})["access_token"]
+    admin = call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "account_type": "admin"})["access_token"]
     drug = call("POST", "/catalogue/drugs", {"name": MED, "therapeutic_class": "Analgesic"}, admin)["drug_id"]
     product = call("POST", "/catalogue/products", {"drug_id": drug, "product_name": f"{MED} 500mg", "pack_size": "B/30"}, admin)["product_id"]
     pharmacies = {}
@@ -68,8 +68,8 @@ def seed():
         ("nomap", "No Map Pharmacy", "KN 4 Ave, Kigali", None, None, "700"),
     ):
         email = f"ps-{key}-{RUN}@example.com"
-        call("POST", "/auth/register", {"name": name, "email": email, "password": PW})
-        token = call("POST", "/auth/login", {"email": email, "password": PW})["access_token"]
+        call("POST", "/auth/register", {"name": name, "email": email, "password": PW, "account_type": "pharmacy"})
+        token = call("POST", "/auth/login", {"email": email, "password": PW, "account_type": "pharmacy"})["access_token"]
         org = call("POST", "/organizations", {"name": f"{name} {RUN}", "type": "pharmacy"}, token)["organization_id"]
         loc_body = {"name": f"{name} Branch", "address": place, "city": "Kigali", "phone": "+250788123456"}
         if lat is not None:

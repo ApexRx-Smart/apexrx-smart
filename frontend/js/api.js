@@ -469,6 +469,8 @@
 
     session: {
       isSignedIn: function () { return !!currentToken(); },
+      // 'patient' / 'pharmacy' / 'supplier' / 'admin' for this tab's session, or null.
+      accountType: function () { var s = current(); return (s && s.accountType) || null; },
       // The signed-in email (kept from sign-in), or null.
       email: function () { var s = current(); return (s && s.email) || null; },
       clear: clearSession
@@ -497,14 +499,17 @@
         verify: function (token) { return post('/auth/email/verify', { token: token }, { auth: false }); }
       },
       register: function (data) { return post('/auth/register', data, { auth: false }); },
-      login: function (email, password) {
-        var body = { email: email, password: password };
+      // accountType: the sign-in page's kind of account ('patient', 'pharmacy',
+      // 'supplier'; 'admin' for the operations console). The server refuses an
+      // account of another kind (403 wrong_account_type) without signing it in.
+      login: function (email, password, accountType) {
+        var body = { email: email, password: password, account_type: accountType };
         var known = deviceTokenFor(email);
         if (known) body.device_token = known;
         return post('/auth/login', body, { auth: false })
           .then(function (t) {
             memorySession = null; // a new sign-in never inherits the previous session's fields
-            saveSession(t, { email: String(email).trim().toLowerCase() });
+            saveSession(t, { email: String(email).trim().toLowerCase(), accountType: accountType });
             saveDeviceToken(email, t.device_token);
             lastActivity = Date.now(); lastReport = Date.now();
             return t;
@@ -517,9 +522,9 @@
       // What works on this server (public): email delivery is temporarily disabled.
       capabilities: function () { return get('/auth/capabilities', null, { auth: false }); },
       // Adopt a TokenResponse obtained another way (accepting an invitation).
-      useToken: function (t, email) {
+      useToken: function (t, email, accountType) {
         memorySession = null;
-        saveSession(t, { email: email ? String(email).trim().toLowerCase() : null });
+        saveSession(t, { email: email ? String(email).trim().toLowerCase() : null, accountType: accountType || null });
         lastActivity = Date.now(); lastReport = Date.now();
       },
       password: {
@@ -529,7 +534,10 @@
           return post('/auth/password/reset', { token: token, new_password: newPassword }, { auth: false });
         }
       },
-      me: function () { return get('/auth/me'); },
+      // Also remembers the account's type for this tab (workspace links).
+      me: function () {
+        return get('/auth/me').then(function (me) { rememberAccountType(me && me.account_type); return me; });
+      },
       updateMe: function (data) { return patch('/auth/me', data); },
       // Phone verification by SMS code (the account's own number). Available
       // while the account is locked for verification.
@@ -738,6 +746,47 @@
       searchInsights: function (params) { return get('/admin/insights/searches', params); }
     }
   };
+
+  /* ------------------------------------------------------------ workspaces */
+  // Each kind of customer has one home inside ApexRX. A signed-in customer's
+  // logo leads there, and the public landing page sends them there; signed-out
+  // visitors keep the public site. (The operations console is not linked.)
+  var WORKSPACES = { patient: 'reservations.html', pharmacy: 'pharmacy-dashboard.html', supplier: 'supplier-dashboard.html' };
+  function rememberAccountType(type) {
+    var s = memorySession || readSession();
+    // An operations-console session stays 'admin' (its account's own type is
+    // usually 'patient'); it has no customer workspace.
+    if (!s || !type || s.accountType === type || s.accountType === 'admin') return;
+    s.accountType = type;
+    memorySession = s;
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(s)); } catch (e) { /* ignore */ }
+  }
+  api.workspaceFor = function (type) { return WORKSPACES[type] || null; };
+  api.workspace = function () { return currentToken() ? api.workspaceFor(api.session.accountType()) : null; };
+
+  function linkBrandToWorkspace() {
+    var home = api.workspace();
+    if (!home) return;
+    var here = location.pathname.split('/').pop() || 'index.html';
+    document.querySelectorAll('a.brand').forEach(function (a) {
+      var href = a.getAttribute('href') || '';
+      if (href === 'index.html' || href === '#top' || href === './' || href === '/') a.setAttribute('href', here === home ? '#' : home);
+    });
+  }
+  // The public landing page is for signed-out visitors: a signed-in customer
+  // goes to their workspace (sessions from before account types are looked up
+  // once). An expired or ended session has no token, so there is no loop.
+  function leaveLandingPage() {
+    if (document.body.getAttribute('data-page') !== 'home' || !currentToken()) return;
+    var go = function (type) { var home = api.workspaceFor(type); if (home) location.replace(home); };
+    if (api.session.accountType()) { go(api.session.accountType()); return; }
+    api.auth.me().then(function (me) { go(me.account_type); }, function () { /* signed out: stay */ });
+  }
+  function onReady(fn) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn();
+  }
+  onReady(function () { leaveLandingPage(); linkBrandToWorkspace(); });
+  global.addEventListener('pageshow', function (e) { if (e.persisted) leaveLandingPage(); });
 
   global.ApexAPI = api;
 })(window);

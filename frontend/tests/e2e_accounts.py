@@ -77,7 +77,8 @@ def ok(method, path, body=None, token=None):
 
 
 def login(email, password=PW):
-    return ok("POST", "/auth/login", {"email": email, "password": password})["access_token"]
+    kind = "admin" if email == ADMIN_EMAIL else "pharmacy"  # everyone else here belongs to a pharmacy
+    return ok("POST", "/auth/login", {"email": email, "password": password, "account_type": kind})["access_token"]
 
 
 def mail_to(email):
@@ -85,7 +86,7 @@ def mail_to(email):
 
 
 def owner_with_pharmacy(email, name, org_name):
-    ok("POST", "/auth/register", {"name": name, "email": email, "password": PW})
+    ok("POST", "/auth/register", {"name": name, "email": email, "password": PW, "account_type": "pharmacy"})
     token = login(email)
     ok("POST", "/auth/email/send", {"next": "pharmacy"}, token)
     ok("POST", "/auth/email/verify", {"token": mail_to(email)["token"]})
@@ -196,9 +197,8 @@ def main():
               and acct(page)[1:] == [owner_email, f"Accounts Pharmacy {RUN} · Owner"] and page.locator("#out").count() == 0)
         old_token = token_of(page)
         page.goto(SITE + "/index.html")
-        page.wait_for_timeout(800)
-        check("public site: the landing page never shows who is signed in, and has no Sign in / Get started",
-              owner_email not in page.inner_text("header") and page.locator("#signInBtn, #getStartedBtn, .am-btn").count() == 0)
+        page.wait_for_url("**/pharmacy-dashboard*", timeout=30000)
+        check("public site: a signed-in owner opening the landing page is taken back to the workspace", True)
         page.goto(SITE + "/pharmacy-sign-in.html")
         on_dashboard(page)
         check("session: the pharmacy sign-in page takes a signed-in member straight to the workspace", True)
@@ -406,8 +406,8 @@ def main():
         page.click("#reset-submit")
         wait_text(page, "#reset-title", "Your password has been changed.")
         check("reset: the old password no longer works, the new one does",
-              call("POST", "/auth/login", {"email": new_email, "password": PW})[0] == 401
-              and call("POST", "/auth/login", {"email": new_email, "password": "Brand-New-Pass-77"})[0] == 200)
+              call("POST", "/auth/login", {"email": new_email, "password": PW, "account_type": "pharmacy"})[0] == 401
+              and call("POST", "/auth/login", {"email": new_email, "password": "Brand-New-Pass-77", "account_type": "pharmacy"})[0] == 200)
         page.goto("about:blank")
         page.goto(reset_link)
         page.wait_for_function("document.querySelector('#reset-title').textContent.includes('already been used')")

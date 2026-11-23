@@ -42,7 +42,7 @@ def client_from(ip: str) -> TestClient:
 
 
 def attempt(c, email, password="wrong-password-1", headers=None):
-    return c.post("/auth/login", json={"email": email, "password": password}, headers=headers or {})
+    return c.post("/auth/login", json={"account_type": "patient", "email": email, "password": password}, headers=headers or {})
 
 
 def test_successful_login_is_unaffected(client):

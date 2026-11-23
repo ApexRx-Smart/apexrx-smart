@@ -58,7 +58,11 @@
     pharmacy: {
       createTitle: 'Create your pharmacy account', createDesc: 'Join a connected community of pharmacies and suppliers in Kigali.',
       signinNote: 'Signing in opens your pharmacy workspace.', toCreate: 'Create a pharmacy account', emailPh: 'pharmacy@example.com',
-      otherAccount: 'This account is registered as a medicine supplier, not a pharmacy. Sign out to use a pharmacy account.',
+      otherAccount: {
+        patient: 'You are signed in with a patient account. It can’t be used for a pharmacy. Go to your workspace, or sign out to use a pharmacy account.',
+        supplier: 'You are signed in with a medicine supplier account. It can’t be used for a pharmacy. Go to your workspace, or sign out to use a pharmacy account.',
+        other: 'This account can’t be used for a pharmacy. Sign out to use a pharmacy account.'
+      },
       detailsTitle: 'Make your pharmacy easy to find.', detailsDesc: 'Add your pharmacy’s contact details and the address of its main branch.',
       name: 'Pharmacy name', namePh: 'Kigali Central Pharmacy', place: 'Branch name', placeDefault: 'Main branch',
       address: 'Main branch address', docsTitle: 'Licensing documents', docsDesc: 'Upload the documents ApexRX uses to verify your pharmacy.',
@@ -75,7 +79,11 @@
     supplier: {
       createTitle: 'Create your supplier account', createDesc: 'Join a connected network of pharmacies and suppliers in Kigali.',
       signinNote: 'Signing in shows your supplier registration.', toCreate: 'Create a supplier account', emailPh: 'depot@example.com',
-      otherAccount: 'This account is registered as a pharmacy, not a medicine supplier. Sign out to use a supplier account.',
+      otherAccount: {
+        patient: 'You are signed in with a patient account. It can’t be used for a medicine supplier. Go to your workspace, or sign out to use a supplier account.',
+        pharmacy: 'You are signed in with a pharmacy account. It can’t be used for a medicine supplier. Go to your workspace, or sign out to use a supplier account.',
+        other: 'This account can’t be used for a medicine supplier. Sign out to use a supplier account.'
+      },
       detailsTitle: 'Tell us about your business.', detailsDesc: 'Add your business contact details and the address of your main warehouse.',
       name: 'Business name', namePh: 'Kigali Medical Supplies Ltd', place: 'Warehouse name', placeDefault: 'Main warehouse',
       address: 'Main warehouse address', docsTitle: 'Verification documents', docsDesc: 'Upload the documents ApexRX uses to verify your business.',
@@ -329,8 +337,13 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
   async function route(opts = {}) {
     await load();
     if (!reg.membership) {
-      const other = (reg.me.memberships || []).find(m => m.organization_type !== ROLE);
-      if (other) return accountPanel(T.otherAccount, 'Back to the ApexRX home page →', 'index.html');
+      if (reg.me.account_type !== ROLE && !reg.me.is_platform_admin) {
+        // Signed in already with another kind of account (a patient, or the other
+        // business type): never a registration here. Its own workspace, or sign out.
+        const home = API.workspaceFor(reg.me.account_type);
+        return accountPanel(T.otherAccount[reg.me.account_type] || T.otherAccount.other,
+          home ? 'Go to my workspace →' : 'Back to the ApexRX home page →', home || 'index.html');
+      }
       if (reg.me.is_platform_admin) {
         return accountPanel('You are signed in as an ApexRX administrator. Administrators do not register here. Sign out to use another account.', 'Open the admin console →', 'ops-console-7f3k9q.html');
       }
@@ -445,15 +458,17 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
       try {
         let existing = false;
         if (authMode === 'signin') {
-          try { await API.auth.login(email, password); } catch (err) {
+          try { await API.auth.login(email, password, ROLE); } catch (err) {
             if (err.status === 401) throw new Error('Incorrect email or password.');
+            // Another kind of account: refused by the server, never signed in.
+            if (err.status === 403 && err.data && err.data.code === 'wrong_account_type') throw new Error(err.message);
             throw err;
           }
         } else {
           try {
             // No name field here: the email name is used until the user changes it.
             // Your own mobile number: verified by SMS code before the account is used.
-            await API.auth.register({ name: email.split('@')[0].slice(0, 150) || email, email, phone, password });
+            await API.auth.register({ name: email.split('@')[0].slice(0, 150) || email, email, phone, password, account_type: ROLE });
           } catch (err) {
             if (err.status === 422 && err.data && (err.data.code === 'invalid_phone' || err.data.code === 'phone_required')) {
               f.phone.focus(); throw err;
@@ -461,8 +476,11 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
             if (err.status !== 409) throw err;
             existing = true; // already registered: sign in with these details
           }
-          try { await API.auth.login(email, password); } catch (err) {
+          try { await API.auth.login(email, password, ROLE); } catch (err) {
             if (err.status === 401 && existing) throw new Error('An account with this email already exists. Enter its password to sign in.');
+            if (err.status === 403 && err.data && err.data.code === 'wrong_account_type') {
+              throw new Error('An account with this email already exists and can’t be used here. Use another email address for your business.');
+            }
             throw err;
           }
         }

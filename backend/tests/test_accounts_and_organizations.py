@@ -11,6 +11,7 @@ from tests.helpers import (
     login,
     organization,
     register,
+    register_for,
     user,
 )
 
@@ -25,10 +26,10 @@ def test_register_login_me(client):
     assert "password_hash" not in created
 
     # Email is case/whitespace-insensitive and unique.
-    r = client.post("/auth/register", json={"name": "J", "email": "JANE@example.com", "password": PASSWORD})
+    r = client.post("/auth/register", json={"account_type": "patient", "name": "J", "email": "JANE@example.com", "password": PASSWORD})
     assert r.status_code == 409
 
-    assert client.post("/auth/login", json={"email": "jane@example.com", "password": "wrong-password"}).status_code == 401
+    assert client.post("/auth/login", json={"account_type": "patient", "email": "jane@example.com", "password": "wrong-password"}).status_code == 401
     headers = login(client, "JANE@example.com")
     me = client.get("/auth/me", headers=headers).json()
     assert me["name"] == "Jane" and me["memberships"] == []
@@ -43,7 +44,7 @@ def test_change_password_and_deactivated_user(client):
     assert r.status_code == 400
     r = client.post("/auth/me/password", json={"current_password": PASSWORD, "new_password": "another-password"}, headers=headers)
     assert r.status_code == 200
-    assert client.post("/auth/login", json={"email": "a@x.example.com", "password": "another-password"}).status_code == 200
+    assert client.post("/auth/login", json={"account_type": "patient", "email": "a@x.example.com", "password": "another-password"}).status_code == 200
 
     with engine.begin() as conn:
         conn.execute(text("UPDATE app_user SET is_active = false WHERE email = 'a@x.example.com'"))
@@ -86,9 +87,9 @@ def test_organization_registration_and_review(client):
 def test_member_roles(client):
     owner = user(client, "owner@x.example.com")
     org_id = organization(client, owner, "pharmacy", "P")
-    register(client, "manager@x.example.com")
-    register(client, "staff@x.example.com")
-    register(client, "other@x.example.com")
+    register_for(client, "manager@x.example.com", org_id)
+    register_for(client, "staff@x.example.com", org_id)
+    register_for(client, "other@x.example.com", org_id)
 
     r = client.post(f"/organizations/{org_id}/members", json={"email": "manager@x.example.com", "role": "manager"}, headers=owner)
     assert r.status_code == 201
@@ -197,7 +198,7 @@ def test_admin_users(client):
     assert client.patch(f"/admin/users/{me['user_id']}", json={"is_active": False}, headers=admin_h).status_code == 400
     r = client.patch(f"/admin/users/{target['user_id']}", json={"is_active": False}, headers=admin_h)
     assert r.json()["is_active"] is False
-    assert client.post("/auth/login", json={"email": "t@x.example.com", "password": PASSWORD}).status_code == 401
+    assert client.post("/auth/login", json={"account_type": "patient", "email": "t@x.example.com", "password": PASSWORD}).status_code == 401
     assert client.get("/admin/users", params={"q": "t@x"}, headers=admin_h).json()["total"] == 1
 
 
@@ -205,17 +206,17 @@ def test_registration_phone_is_a_normalized_mobile_number(client):
     """Patients give their number at sign-up: it is stored in E.164 (+250...),
     used as the reservation contact number, and must be a mobile number (it will
     be verified by SMS once a provider is set up)."""
-    r = client.post("/auth/register", json={"name": "Aline", "email": "aline@example.com",
+    r = client.post("/auth/register", json={"account_type": "patient", "name": "Aline", "email": "aline@example.com",
                                             "phone": "0788 123 456", "password": "Patient-Pass-2026"})
     assert r.status_code == 201, r.text
     assert r.json()["phone"] == "+250788123456"
     for bad in ("12345", "0252 123 456", "+250 788 abc 456"):
-        r = client.post("/auth/register", json={"name": "Bad", "email": f"bad{len(bad)}@example.com",
+        r = client.post("/auth/register", json={"account_type": "patient", "name": "Bad", "email": f"bad{len(bad)}@example.com",
                                                 "phone": bad, "password": "Patient-Pass-2026"})
         assert r.status_code == 422, (bad, r.text)
-    assert client.post("/auth/register", json={"name": "No phone", "email": "nophone@example.com",
+    assert client.post("/auth/register", json={"account_type": "patient", "name": "No phone", "email": "nophone@example.com",
                                                "password": "Patient-Pass-2026"}).status_code == 201
-    token = client.post("/auth/login", json={"email": "nophone@example.com", "password": "Patient-Pass-2026"}).json()["access_token"]
+    token = client.post("/auth/login", json={"account_type": "patient", "email": "nophone@example.com", "password": "Patient-Pass-2026"}).json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
     r = client.patch("/auth/me", json={"phone": "250 722 123 456"}, headers=headers)
     assert r.status_code == 200 and r.json()["phone"] == "+250722123456", r.text

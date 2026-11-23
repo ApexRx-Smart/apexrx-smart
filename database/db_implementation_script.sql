@@ -1,6 +1,6 @@
 -- =============================================================================
 -- ApexRx: complete database schema
--- Alembic revision: a6c3e9d1f4b2 (the head of backend/alembic/versions)
+-- Alembic revision: b8d2f6a3c1e7 (the head of backend/alembic/versions)
 -- PostgreSQL 13+
 -- =============================================================================
 --
@@ -13,7 +13,7 @@
 --
 -- How to use it
 --   * Run it on an EMPTY database:  psql -v ON_ERROR_STOP=1 -d <db> -f db_implementation_script.sql
---   * It ends by recording revision a6c3e9d1f4b2 in alembic_version, so Alembic treats
+--   * It ends by recording revision b8d2f6a3c1e7 in alembic_version, so Alembic treats
 --     the database as up to date and later migrations apply normally.
 --   * Real deployments are still built and upgraded with `alembic upgrade head`;
 --     the migrations are the source of truth. When a migration is added,
@@ -32,6 +32,7 @@
 --   Minimum stock threshold for reservations                  (d4a7e2c9b1f8)
 --   SMS one-time codes via eSMS Africa (challenge_ref, delivery status,
 --   app_user.phone_verification_required)                    (a6c3e9d1f4b2)
+--   Account type (patient / pharmacy / supplier) per account (b8d2f6a3c1e7)
 --
 -- Audit actor
 --   Every transaction that writes stock, product_offer, purchase orders or their
@@ -969,6 +970,8 @@ CREATE TABLE public.app_user (
     phone_verified_at timestamp with time zone,
     email_verified_at timestamp with time zone,
     phone_verification_required boolean DEFAULT false NOT NULL,
+    account_type character varying(20) DEFAULT 'patient'::character varying NOT NULL,
+    CONSTRAINT app_user_account_type_check CHECK (((account_type)::text = ANY ((ARRAY['patient'::character varying, 'pharmacy'::character varying, 'supplier'::character varying])::text[]))),
     CONSTRAINT app_user_verified_phone_check CHECK (((verified_phone IS NULL) = (phone_verified_at IS NULL))),
     CONSTRAINT app_user_verified_phone_e164_check CHECK (((verified_phone IS NULL) OR ((verified_phone)::text ~ '^\+[1-9][0-9]{6,14}$'::text)))
 );
@@ -3007,12 +3010,12 @@ ALTER TABLE ONLY public.stock
 --
 
 -- -----------------------------------------------------------------------------
--- Alembic bookkeeping: this database is at revision a6c3e9d1f4b2.
+-- Alembic bookkeeping: this database is at revision b8d2f6a3c1e7.
 -- -----------------------------------------------------------------------------
 CREATE TABLE public.alembic_version (
     version_num character varying(32) NOT NULL,
     CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
 );
-INSERT INTO public.alembic_version (version_num) VALUES ('a6c3e9d1f4b2');
+INSERT INTO public.alembic_version (version_num) VALUES ('b8d2f6a3c1e7');
 
 COMMIT;

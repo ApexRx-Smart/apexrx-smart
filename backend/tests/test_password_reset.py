@@ -44,8 +44,8 @@ def test_reset_flow(client):
 
     r = client.post("/auth/password/reset", json={"token": mail["token"], "new_password": NEW})
     assert r.status_code == 200
-    assert client.post("/auth/login", json={"email": "reset@x.example.com", "password": PASSWORD}).status_code == 401
-    fresh = client.post("/auth/login", json={"email": "reset@x.example.com", "password": NEW})
+    assert client.post("/auth/login", json={"account_type": "pharmacy", "email": "reset@x.example.com", "password": PASSWORD}).status_code == 401
+    fresh = client.post("/auth/login", json={"account_type": "pharmacy", "email": "reset@x.example.com", "password": NEW})
     assert fresh.status_code == 200
     # Every earlier session is signed out; memberships and roles are unchanged.
     assert client.get("/auth/me", headers=owner).status_code == 401
@@ -72,7 +72,7 @@ def test_expired_and_replaced_links(client):
                        "expires_at = now() - interval '1 hour'"))
     r = client.post("/auth/password/reset", json={"token": second, "new_password": NEW})
     assert r.status_code == 400 and r.json()["reason"] == "expired"
-    assert client.post("/auth/login", json={"email": "exp@x.example.com", "password": PASSWORD}).status_code == 200
+    assert client.post("/auth/login", json={"account_type": "patient", "email": "exp@x.example.com", "password": PASSWORD}).status_code == 200
 
 
 @pytest.mark.parametrize("token", ["short", "A" * 43])

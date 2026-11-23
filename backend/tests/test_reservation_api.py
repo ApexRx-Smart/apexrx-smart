@@ -272,9 +272,9 @@ def test_ineligible_medicines_are_refused_with_a_reason(w):
     # A branch without a stock record (and so no listed offer).
     r = submit(w, branch=w.branch2)
     assert r.status_code == 409 and r.json()["reason"] == "offer_unlisted"
-    # Pharmacy staff cannot reserve at their own pharmacy.
+    # Pharmacy staff cannot reserve at all: reservations are for patient accounts only.
     r = submit(w, patient=w.staff)
-    assert r.status_code == 409 and r.json()["code"] == "own_pharmacy"
+    assert r.status_code == 403 and r.json()["code"] == "wrong_account_type"
     assert db_count("SELECT count(*) FROM reservation") == 0
 
 
@@ -915,11 +915,12 @@ def test_branch_minimum_stock_endpoint_rules(w, client):
     assert scalar("SELECT reservation_min_stock FROM location WHERE location_id = :l", l=w.branch) == 3
     assert scalar("SELECT reservation_min_stock FROM location WHERE location_id = :l", l=w.branch2) == 0
     # Suppliers keep no stock back from patients.
-    supplier = organization(client, w.owner_headers, "supplier", "Kigali Supplies")
+    supplier_owner = user(client, "owner@supplies.example.com", "Supplier Owner", account_type="supplier")
+    supplier = organization(client, supplier_owner, "supplier", "Kigali Supplies")
     approve(client, w.admin_headers, supplier)
-    depot = location(client, w.owner_headers, supplier, "Depot", -1.95, 30.06)
+    depot = location(client, supplier_owner, supplier, "Depot", -1.95, 30.06)
     r = w.client.patch(f"/organizations/{supplier}/locations/{depot}", json={"reservation_min_stock": 2},
-                       headers=w.owner_headers)
+                       headers=supplier_owner)
     assert r.status_code == 422
 
 

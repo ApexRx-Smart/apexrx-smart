@@ -85,12 +85,17 @@ def ok(method, path, body=None, token=None, **kw):
     return data
 
 
+KIND = {}
+
+
 def login(email, password=PASSWORD):
-    return call("POST", "/auth/login", {"email": email, "password": password})
+    kind = "admin" if email == ADMIN_EMAIL else KIND.get(email, "patient")
+    return call("POST", "/auth/login", {"email": email, "password": password, "account_type": kind})
 
 
-def account(email, name):
-    ok("POST", "/auth/register", {"name": name, "email": email, "password": PASSWORD})
+def account(email, name, kind="patient"):
+    KIND[email] = kind
+    ok("POST", "/auth/register", {"name": name, "email": email, "password": PASSWORD, "account_type": kind})
     return login(email)[1]["access_token"]
 
 
@@ -99,7 +104,7 @@ def admin_token():
 
 
 def seed():
-    owner = account(f"console-owner-{RUN}@example.com", f"Console Owner {RUN}")
+    owner = account(f"console-owner-{RUN}@example.com", f"Console Owner {RUN}", "pharmacy")
     # The real email verification flow with the mock provider (development only).
     ok("POST", "/auth/email/send", {"next": "pharmacy"}, owner)
     req = urllib.request.Request(API + "/dev/email/latest", headers={"Authorization": f"Bearer {owner}"})

@@ -120,7 +120,7 @@ def main():
 
         # ---- 2. A protected page opened directly redirects to verification and back.
         email2 = f"phone-direct-{RUN}@example.com"
-        api("POST", "/auth/register", body={"name": "Direct", "email": email2, "phone": "0788 431 001", "password": PASSWORD})
+        api("POST", "/auth/register", body={"name": "Direct", "email": email2, "phone": "0788 431 001", "password": PASSWORD, "account_type": "patient"})
         page.goto(SITE + "/patient-sign-in.html")
         page.fill("#patient-auth [name=email]", email2)
         page.fill("#patient-auth [name=password]", PASSWORD)

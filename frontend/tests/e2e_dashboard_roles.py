@@ -30,7 +30,7 @@ CHARTS = "#ins-health, #ins-pipe, #toprq, .ins"
 
 
 def seed():
-    admin = call("POST", "/auth/login", {"email": D.ADMIN_EMAIL, "password": D.ADMIN_PASSWORD})["access_token"]
+    admin = call("POST", "/auth/login", {"email": D.ADMIN_EMAIL, "password": D.ADMIN_PASSWORD, "account_type": "admin"})["access_token"]
     w = {"admin": admin}
     for key, name in (("p1", "Rolecillin"), ("p2", "Rolemycin"), ("p3", "Rolezole")):
         drug = call("POST", "/catalogue/drugs", {"name": f"{name} {RUN}", "therapeutic_class": "Antibiotic"}, admin)["drug_id"]
@@ -42,7 +42,7 @@ def seed():
         side = {"org": org, "loc": loc, "owner": token, "owner_email": email}
         for role in ("manager", "staff"):
             e = f"roles-{kind}-{role}-{RUN}@example.com"
-            side[role] = D.account(e, f"{kind.title()} {role.title()}")
+            side[role] = D.account(e, f"{kind.title()} {role.title()}", kind)
             side[role + "_email"] = e
             side[role + "_mid"] = call("POST", f"/organizations/{org}/members", {"email": e, "role": role}, token)["membership_id"]
         w[kind] = side

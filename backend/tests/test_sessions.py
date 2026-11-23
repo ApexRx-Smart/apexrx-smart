@@ -30,7 +30,7 @@ def _idle_for(sid, minutes):
 
 def test_login_returns_session_limits(client):
     register(client, "s@x.example.com")
-    r = client.post("/auth/login", json={"email": "s@x.example.com", "password": PASSWORD})
+    r = client.post("/auth/login", json={"account_type": "patient", "email": "s@x.example.com", "password": PASSWORD})
     body = r.json()
     assert body["idle_timeout_seconds"] == 30 * 60 and body["session_expires_at"]
     assert 0 < body["expires_in"] <= 30 * 60
@@ -60,7 +60,7 @@ def test_logout_ends_only_this_session(client):
 def test_logout_does_not_affect_colleagues(client):
     owner = user(client, "owner@x.example.com")
     org = organization(client, owner, "pharmacy", "Team Pharmacy")
-    staff = user(client, "staff@x.example.com")
+    staff = user(client, "staff@x.example.com", account_type="pharmacy")
     client.post(f"/organizations/{org}/members", json={"email": "staff@x.example.com", "role": "staff"}, headers=owner)
     assert client.post("/auth/logout", headers=staff).status_code == 204
     assert client.get(f"/organizations/{org}/members", headers=owner).status_code == 200
