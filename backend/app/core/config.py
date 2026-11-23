@@ -200,7 +200,7 @@ class Settings(BaseSettings):
             raise ValueError("PHONE_ALLOWED_REGIONS must list at least one region, e.g. RW.")
         return regions
 
-    @field_validator("esms_sender_id", "esms_base_url", mode="before")
+    @field_validator("esms_sender_id", mode="before")
     @classmethod
     def _blank_is_none(cls, value: object) -> object:
         if isinstance(value, str):
@@ -214,10 +214,14 @@ class Settings(BaseSettings):
             raise ValueError("ESMS_SENDER_ID must be 1-11 letters, digits or hyphens.")
         return value
 
-    @field_validator("esms_base_url")
+    @field_validator("esms_base_url", mode="before")
     @classmethod
-    def _esms_https(cls, value: str | None) -> str:
-        value = value or "https://sms.esmsafrica.io/api"
+    def _esms_https(cls, value: object) -> object:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return "https://sms.esmsafrica.io/api"  # blank means the documented default
+        if not isinstance(value, str):
+            return value
+        value = value.strip().rstrip("/")
         if not value.startswith("https://"):
             raise ValueError("ESMS_BASE_URL must start with https://.")
         return value

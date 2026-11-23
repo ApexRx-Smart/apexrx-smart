@@ -365,7 +365,25 @@ ApexRX generates, stores, limits and checks every code; **eSMS Africa only deliv
 1. In the eSMS Africa dashboard create a **test** key (`esms_test_…`). On Render set `SMS_PROVIDER=esms`, `ESMS_MODE=sandbox`, `ESMS_API_KEY=<test key>`, `OTP_HMAC_SECRET=<random>`, and leave `PHONE_VERIFICATION_REQUIRED` unset. Sandbox sends are free and simulated: **no SMS reaches a phone**, so nobody can be required to verify with it.
 2. For live SMS: top up the wallet, request a sender ID for Rwanda if eSMS requires one, create a **live** key, then set `ESMS_MODE=live`, `ESMS_API_KEY=<live key>` (and `ESMS_SENDER_ID`). Test with your own number, then set `PHONE_VERIFICATION_REQUIRED=true`. No code changes.
 
-Local checks: `pytest tests/test_phone_verification.py tests/test_sms_esms.py` (mock provider and mocked HTTP); `ESMS_LIVE_TESTS=1 ESMS_SANDBOX_API_KEY=esms_test_… pytest tests/test_esms_sandbox_live.py` (the real sandbox); `frontend/tests/e2e_phone_verification.py` (browser, mock provider).
+**Testing with the sandbox.** One key variable everywhere: `ESMS_API_KEY`.
+- While `PHONE_VERIFICATION_REQUIRED` is off (the default), sign-up, pharmacy and supplier registration and the whole app work without any SMS. Nobody is locked, and unverified accounts are not prompted while the provider is in sandbox mode (sandbox SMS reach no phone). `verify-phone.html` still opens, says "Test mode", and sends simulated codes.
+- To complete a code end to end locally, use `SMS_PROVIDER=mock` (development only): the code is read from `GET /dev/sms/latest`, as `frontend/tests/e2e_phone_verification.py` does.
+
+**Checking your eSMS test key against the real sandbox** (no database needed; works in Git Bash on Windows):
+1. Add to `backend/.env` (git-ignored; never paste the key in chat or commit it):
+   ```
+   ESMS_MODE=sandbox
+   ESMS_API_KEY=esms_test_...
+   ```
+2. Run:
+   ```bash
+   cd backend
+   ../.venv/Scripts/python -m app.scripts.check_sms      # Git Bash on Windows
+   # macOS/Linux: ../.venv/bin/python -m app.scripts.check_sms
+   ```
+It sends two simulated messages to eSMS sandbox numbers (no code in them) and checks that a made-up key is refused. It refuses to run with `ESMS_MODE=live` or an `esms_live_` key, so it can never send a paid SMS, and it never prints the key. The test suite ignores these `.env` values: `tests/conftest.py` always uses the mock provider.
+
+Automated tests: `pytest tests/test_phone_verification.py tests/test_sms_esms.py tests/test_check_sms.py` (mock provider and mocked HTTP; no network); `frontend/tests/e2e_phone_verification.py` (browser, mock provider).
 
 ## Sessions
 

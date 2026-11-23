@@ -1,6 +1,6 @@
 """The eSMS Africa adapter against MOCKED HTTP responses (httpx.MockTransport):
 request format, success, failures, timeouts and retries. No network is used;
-tests/test_esms_sandbox_live.py is the opt-in check against the real sandbox.
+python -m app.scripts.check_sms is the manual check against the real sandbox.
 Response bodies follow the examples in the eSMS Africa API reference."""
 
 import json

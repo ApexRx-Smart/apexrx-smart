@@ -25,7 +25,7 @@ from app.schemas.common import Message
 from app.services import account_emails, otp, sessions
 from app.services.email import email_delivery_available
 from app.services.phone import PhoneNumberError, normalize_phone
-from app.services.sms import sms_configuration_problem
+from app.services.sms import sms_configuration_problem, sms_is_sandbox
 
 router = APIRouter()
 
@@ -183,7 +183,7 @@ def _me(db, user: User) -> MeResponse:
     return MeResponse(
         **UserResponse.model_validate(user).model_dump(),
         phone_verification_pending=otp.verification_pending(user),
-        phone_verification_available=sms_configuration_problem() is None,
+        phone_verification_available=sms_configuration_problem() is None and not sms_is_sandbox(),
         memberships=[
             MembershipSummary(
                 membership_id=m.membership_id,

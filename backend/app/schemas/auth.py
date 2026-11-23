@@ -83,7 +83,8 @@ class MeResponse(UserResponse):
     # True while this account must verify its mobile number before using
     # ApexRX: every other endpoint answers 403 phone_verification_required.
     phone_verification_pending: bool = False
-    # SMS codes can be sent now (an unverified account may verify optionally).
+    # SMS codes can be sent to real phones now, so an unverified account is
+    # offered verification (false in sandbox mode: sandbox SMS reach no phone).
     phone_verification_available: bool = False
 
 

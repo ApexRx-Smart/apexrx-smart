@@ -487,3 +487,22 @@ def test_status_endpoint_reports_without_secrets(client, required):
     assert s == {**s, "phone": "+250788123456", "verified": False, "pending": True, "required": True,
                  "sms_available": True, "sandbox": False, "challenge_id": None}
     assert timedelta(seconds=settings.otp_ttl_seconds) == timedelta(minutes=5)
+
+
+def test_sandbox_mode_never_blocks_or_prompts_registration(client, monkeypatch):
+    """While testing with the eSMS sandbox (codes never reach a phone) and
+    verification not required, sign-up and the whole app work without any SMS,
+    and nobody is offered a verification they cannot complete."""
+    from pydantic import SecretStr
+
+    monkeypatch.setattr(settings, "sms_provider", "esms")
+    monkeypatch.setattr(settings, "esms_mode", "sandbox")
+    monkeypatch.setattr(settings, "esms_api_key", SecretStr("esms_test_unit_test_key_0123456789"))
+    h = signup(client, "sandbox@example.com")
+    data = me(client, h)
+    assert data["phone_verification_pending"] is False and data["phone_verification_available"] is False
+    assert client.get("/reservations", headers=h).status_code == 200
+    org = organization(client, h, "pharmacy", "Sandbox Pharmacy")
+    assert client.get(f"/organizations/{org}", headers=h).status_code == 200
+    status = client.get("/auth/phone", headers=h).json()
+    assert status["sandbox"] is True and status["sms_available"] is True and status["pending"] is False
