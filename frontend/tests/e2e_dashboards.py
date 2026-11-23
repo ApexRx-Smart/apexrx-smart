@@ -57,9 +57,9 @@ def call(method, path, body=None, token=None, expect_error=False):
         raise SystemExit(f"{method} {path} -> {e.code}: {payload}") from None
 
 
-def account(email, name):
-    call("POST", "/auth/register", {"name": name, "email": email, "password": PW})
-    return call("POST", "/auth/login", {"email": email, "password": PW})["access_token"]
+def account(email, name, kind="pharmacy"):
+    call("POST", "/auth/register", {"name": name, "email": email, "password": PW, "account_type": kind})
+    return call("POST", "/auth/login", {"email": email, "password": PW, "account_type": kind})["access_token"]
 
 
 def verify_email(token):
@@ -74,7 +74,7 @@ def verify_email(token):
 
 
 def org_with_owner(email, name, org_name, kind, locations, approve=True, admin=None):
-    token = account(email, name)
+    token = account(email, name, kind)
     verify_email(token)
     org = call("POST", "/organizations", {"name": org_name, "type": kind}, token)["organization_id"]
     locs = [call("POST", f"/organizations/{org}/locations", loc, token)["location_id"] for loc in locations]
@@ -84,7 +84,7 @@ def org_with_owner(email, name, org_name, kind, locations, approve=True, admin=N
 
 
 def seed():
-    admin = call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})["access_token"]
+    admin = call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "account_type": "admin"})["access_token"]
     w = {"admin": admin}
     w["owner_email"] = f"db-owner-{RUN}@example.com"
     w["owner"], w["org"], (w["kim"], w["rem"]) = org_with_owner(
@@ -153,29 +153,46 @@ def sign_out_via_menu(page):
 
 def sign_in(page, email, kind="pharmacy", org=None, new=False):
     # Pharmacies sign in on their dedicated page (new=True: a new account, created
-    # on the registration page); the supplier page's create form signs an existing
-    # account in.
+    # on the registration page); suppliers on the supplier page's sign-in form.
     if kind == "pharmacy" and new:
         page.goto(f"{SITE}/pharmacies.html")
-        fields = (("email", email), ("password", PW), ("confirm", PW))
+        # the owner's own mobile number is required on the create form (since phone verification)
+        fields = (("email", email), ("phone", "0788 555 012"), ("password", PW), ("confirm", PW))
     elif kind == "pharmacy":
         page.goto(f"{SITE}/pharmacy-sign-in.html")
         fields = (("email", email), ("password", PW))
     else:
-        page.goto(f"{SITE}/suppliers.html")
-        fields = (("email", email), ("password", PW), ("confirm", PW))
+        page.goto(f"{SITE}/suppliers.html#signin")  # an existing supplier account signs in
+        fields = (("email", email), ("password", PW))
     for field, value in fields:
         page.fill(f"#account [name={field}]", value)
     page.click("#account button.primary")
+    try:
+        _wait_signed_in(page)
+    except Exception:
+        print("SIGN-IN STUCK (form)", kind, email, page.url, "| error:", page.inner_text("#form-error"))
+        raise
+    _after_sign_in(page, kind, email, org)
+
+
+def _wait_signed_in(page):
     page.wait_for_function("location.pathname.endsWith('-dashboard.html') || !document.querySelector('#org-choice').hidden"
                            " || !document.querySelector('#join-wait')?.hidden || !document.querySelector('#details').hidden"
                            " || !document.querySelector('#review').hidden || !document.querySelector('#verify-email').hidden", timeout=20000)
+
+
+def _after_sign_in(page, kind, email, org):
     if "-dashboard.html" not in page.url and page.is_visible("#org-choice"):
         page.click(f"#org-choice-list button[data-org='{org}']" if org else "#org-choice-list button")
     if "-dashboard.html" not in page.url and page.is_visible("#review"):  # e.g. documents still to upload
         page.click("#open-workspace")
     if "-dashboard.html" not in page.url and not page.is_visible("#details") and not page.is_visible("#verify-email"):
-        page.wait_for_url("**/*-dashboard.html*", timeout=20000)
+        try:
+            page.wait_for_url("**/*-dashboard.html*", timeout=20000)
+        except Exception:
+            print("SIGN-IN STUCK", kind, email, page.url, "| error:", page.inner_text("#form-error"),
+                  "| panel:", page.is_visible("#account-panel"))
+            raise
     if "-dashboard.html" in page.url:
         ready(page)
 
@@ -429,7 +446,10 @@ def main():
         check("supplier overview: pipeline, open value and requests from real orders",
               "SUPPLIER OVERVIEW" in home and "New requests" in home and "1 request waiting for your offer" in home)
         check("supplier overview: expiry tracking shown as not connected, not as zero",
-              "Expiry tracking is not connected yet" in home and sup.inner_text(".chipf.c3 b") == "—")
+              "Expiry tracking is not connected yet" in home)
+        check("supplier overview: no floating counters, scanning frame or bobbing shapes on the photo",
+              sup.locator(".hero .chipf, .hero .scan, .hero .mini, .hero .plus").count() == 0
+              and sup.locator(".hero .capsule img").count() == 1)
         sup.wait_for_function("() => !document.querySelector('#toprq').textContent.includes('Loading')")
         check("supplier overview: most requested medicines from real orders", f"Dbtestamol {RUN}" in sup.inner_text("#toprq"))
         open_view(sup, "ord")
@@ -515,7 +535,7 @@ def main():
               "their email" not in joiner.inner_text("#join-status"))
         call("POST", f"/organizations/{w['org']}/invitations", {"email": email, "role": "staff"}, w["owner"])
         link_token = call("GET", "/dev/email/latest-to?" + urllib.parse.urlencode({"to": email}))["token"]
-        call("POST", "/invitations/accept", {"token": link_token}, call("POST", "/auth/login", {"email": email, "password": PW})["access_token"])
+        call("POST", "/invitations/accept", {"token": link_token}, call("POST", "/auth/login", {"email": email, "password": PW, "account_type": "pharmacy"})["access_token"])
         joiner.click("#join-check")
         joiner.wait_for_url("**/pharmacy-dashboard.html*")
         ready(joiner)

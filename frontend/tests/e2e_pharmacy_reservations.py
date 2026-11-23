@@ -53,7 +53,7 @@ def reserve(token, admin, loc, product, quantity):
 
 
 def seed():
-    admin = call("POST", "/auth/login", {"email": D.ADMIN_EMAIL, "password": D.ADMIN_PASSWORD})["access_token"]
+    admin = call("POST", "/auth/login", {"email": D.ADMIN_EMAIL, "password": D.ADMIN_PASSWORD, "account_type": "admin"})["access_token"]
     w = {"admin": admin}
     drug = call("POST", "/catalogue/drugs", {"name": f"Reservamol {RUN}", "therapeutic_class": "Analgesic"}, admin)["drug_id"]
     for key, strength, enable in (("main", "500mg", True), ("two", "250mg", True), ("three", "1g", True),
@@ -89,7 +89,7 @@ def seed():
     patients = {}
     for n in range(1, 6):
         email = f"pr-patient{n}-{RUN}@example.com"
-        patients[n] = D.account(email, f"Patient {n} {RUN}")
+        patients[n] = D.account(email, f"Patient {n} {RUN}", "patient")
     w["patients"] = patients
     p = patients
     # Closed reservations for paging (22 cancelled by their patients).
@@ -220,11 +220,18 @@ def main():
         check("access: signed out, the dashboard sends you to the pharmacy sign-in page", "pharmacy-sign-in.html" in anon.url)
         anon.context.close()
 
-        patient = page_for(browser, f"pr-patient1-{RUN}@example.com")
+        # A patient account is refused by the pharmacy sign-in itself (no session), and
+        # opening the dashboard directly leads back to the sign-in page.
+        patient = page_for(browser, None)
+        patient.goto(f"{D.SITE}/pharmacy-sign-in.html")
+        patient.fill("#account [name=email]", f"pr-patient1-{RUN}@example.com")
+        patient.fill("#account [name=password]", D.PW)
+        patient.click("#account button.primary")
+        D.wait_text(patient, "#form-error", "can't sign in here")
         patient.goto(f"{D.SITE}/pharmacy-dashboard.html")
-        patient.wait_for_url(re.compile(r".*pharmacies\.html.*"), timeout=15000)
+        patient.wait_for_url(re.compile(r".*pharmacy-sign-in\.html.*"), timeout=15000)
         status, _ = call("GET", org_path, token=w["patients"][1], expect_error=True)
-        check("access: a patient never reaches the workspace (redirected; the API says 404)",
+        check("access: a patient never reaches the workspace (refused at sign-in; the API says 404)",
               "pharmacy-dashboard" not in patient.url and status == 404 and not patient.bodies)
         patient.context.close()
 
@@ -509,7 +516,7 @@ def main():
         staff.click("[data-a=rvmode][data-m=setup]"); staff.wait_for_selector("#rv-meds table")
         check("settings: staff see the minimum and the breakdown but cannot change the minimum",
               staff.locator("#rv-min").count() == 0 and "Owners and managers change this." in staff.inner_text("#rv-setup"))
-        staff_token = call("POST", "/auth/login", {"email": w["staff_email"], "password": D.PW})["access_token"]
+        staff_token = call("POST", "/auth/login", {"email": w["staff_email"], "password": D.PW, "account_type": "pharmacy"})["access_token"]
         status, _ = call("PATCH", f"/organizations/{w['org']}/locations/{w['b1']}", {"reservation_min_stock": 3},
                          staff_token, expect_error=True)
         check("settings: the API refuses a staff member changing the minimum", status == 403)

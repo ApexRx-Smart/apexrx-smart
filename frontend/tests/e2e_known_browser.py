@@ -43,7 +43,7 @@ def api(path, body):
 
 
 LOGIN = """async ([email, password]) => {
-  try { await ApexAPI.auth.login(email, password); return {ok: true, signedIn: ApexAPI.session.isSignedIn()}; }
+  try { await ApexAPI.auth.login(email, password, 'patient'); return {ok: true, signedIn: ApexAPI.session.isSignedIn()}; }
   catch (e) { return {ok: false, status: e.status, message: e.message}; }
 }"""
 
@@ -61,7 +61,7 @@ CORRUPTED = {
 
 
 def main():
-    assert api("/auth/register", {"name": "Known Browser", "email": EMAIL, "password": PASSWORD}) == 201
+    assert api("/auth/register", {"name": "Known Browser", "email": EMAIL, "password": PASSWORD, "account_type": "patient"}) == 201
 
     with sync_playwright() as p:
         browser = p.chromium.launch(channel=os.environ.get("E2E_BROWSER_CHANNEL") or None, headless=True)
@@ -103,7 +103,7 @@ def main():
               len(stored) == 5 and EMAIL in stored and "old0@x.com" not in stored)
 
         # 4. The known browser keeps working while the account is locked.
-        codes = [api("/auth/login", {"email": EMAIL, "password": "attacker-guess"}) for _ in range(6)]
+        codes = [api("/auth/login", {"email": EMAIL, "password": "attacker-guess", "account_type": "patient"}) for _ in range(6)]
         check(f"attacker without a device token gets locked out {codes}", codes[:5] == [401] * 5 and codes[5] == 429)
         result = page.evaluate(LOGIN, [EMAIL, PASSWORD])
         check("known browser signs in during the lockout", result == {"ok": True, "signedIn": True})

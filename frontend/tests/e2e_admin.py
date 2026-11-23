@@ -78,9 +78,9 @@ def call(method, path, body=None, token=None, multipart=None):
         raise SystemExit(f"{method} {path} -> {e.code}: {e.read().decode()}")
 
 
-def account(email, name):
-    call("POST", "/auth/register", {"name": name, "email": email, "password": PASSWORD})
-    return call("POST", "/auth/login", {"email": email, "password": PASSWORD})["access_token"]
+def account(email, name, kind="pharmacy"):
+    call("POST", "/auth/register", {"name": name, "email": email, "password": PASSWORD, "account_type": kind})
+    return call("POST", "/auth/login", {"email": email, "password": PASSWORD, "account_type": kind})["access_token"]
 
 
 def verify_email(token):
@@ -95,7 +95,7 @@ def verify_email(token):
 
 
 def seed():
-    admin = call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})["access_token"]
+    admin = call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "account_type": "admin"})["access_token"]
 
     owner = account(f"owner-{RUN}@example.com", "Pending Owner")
     verify_email(owner)
@@ -107,7 +107,7 @@ def seed():
         call("POST", f"/organizations/{pending['organization_id']}/documents", token=owner,
              multipart=({"document_type": doc_type}, (fname, PDF, "application/pdf")))
 
-    supplier_owner = account(f"supplier-{RUN}@example.com", "Supplier Owner")
+    supplier_owner = account(f"supplier-{RUN}@example.com", "Supplier Owner", "supplier")
     verify_email(supplier_owner)
     supplier = call("POST", "/organizations", {"name": XSS_NAME, "type": "supplier"}, supplier_owner)
 
@@ -124,7 +124,7 @@ def seed():
     call("PUT", base, {"quantity": 50}, seller)
     call("PUT", base + "/offer", {"unit_price": "1200.00"}, seller)
 
-    plain = account(f"plain-{RUN}@example.com", "Plain User")
+    plain = account(f"plain-{RUN}@example.com", "Plain User", "patient")
     del plain
     return pending, supplier
 
@@ -138,7 +138,7 @@ def counts(page):
 
 def main():
     before = call("GET", "/admin/organizations?limit=1",
-                  token=call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})["access_token"])["total"]
+                  token=call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "account_type": "admin"})["access_token"])["total"]
     pending, supplier = seed()
 
     with sync_playwright() as p:
@@ -230,7 +230,7 @@ def main():
         check("organization approved", "is now approved" in page.inner_text("#detail-message"))
         check("suspend now available", page.is_visible("#review-box [data-decision=suspended]"))
         org = call("GET", f"/admin/organizations/{pending['organization_id']}",
-                   token=call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})["access_token"])
+                   token=call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "account_type": "admin"})["access_token"])
         check("approval persisted", org["status"] == "approved")
 
         # 5. Supplier rejection needs notes.

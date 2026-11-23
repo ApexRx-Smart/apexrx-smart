@@ -7,20 +7,37 @@ from app.core.database import engine
 PASSWORD = "correct-horse-battery"
 
 
-def register(client, email: str, name: str = "Test User") -> dict:
-    r = client.post("/auth/register", json={"name": name, "email": email, "password": PASSWORD})
+def register(client, email: str, name: str = "Test User", account_type: str = "patient") -> dict:
+    r = client.post("/auth/register", json={"name": name, "email": email, "password": PASSWORD,
+                                            "account_type": account_type})
     assert r.status_code == 201, r.text
     return r.json()
 
 
-def login(client, email: str) -> dict:
-    r = client.post("/auth/login", json={"email": email, "password": PASSWORD})
+def register_for(client, email: str, organization_id: int, name: str = "Test User") -> dict:
+    """Register an account of the organization's kind (staff join their own kind only)."""
+    with engine.begin() as conn:
+        kind = conn.execute(text("SELECT type FROM organization WHERE organization_id = :o"),
+                            {"o": organization_id}).scalar_one()
+    return register(client, email, name, account_type=kind)
+
+
+def account_type_of(email: str) -> str:
+    with engine.begin() as conn:
+        return conn.execute(text("SELECT account_type FROM app_user WHERE lower(email) = lower(:e)"),
+                            {"e": email}).scalar_one()
+
+
+def login(client, email: str, account_type: str | None = None) -> dict:
+    """Sign in on the page for the account's own type (or the one given)."""
+    r = client.post("/auth/login", json={"email": email, "password": PASSWORD,
+                                         "account_type": account_type or account_type_of(email)})
     assert r.status_code == 200, r.text
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 
-def user(client, email: str, name: str = "Test User") -> dict:
-    register(client, email, name)
+def user(client, email: str, name: str = "Test User", account_type: str = "patient") -> dict:
+    register(client, email, name, account_type)
     return login(client, email)
 
 
@@ -28,7 +45,7 @@ def admin(client, email: str = "admin@apexrx.example.com") -> dict:
     register(client, email, "Admin")
     with engine.begin() as conn:
         conn.execute(text("UPDATE app_user SET is_platform_admin = true WHERE email = :e"), {"e": email})
-    return login(client, email)
+    return login(client, email, "admin")
 
 
 def mark_email_verified(client, headers) -> None:
@@ -52,7 +69,15 @@ def verify_email_via_api(client, headers, next_page: str | None = "pharmacy") ->
 
 
 def organization(client, headers, type_: str, name: str) -> int:
+    """Test shortcut: an account made with user() is a patient account; give it
+    the organization's type first, as if it had registered on that business's
+    page (the real rule is tested in tests/test_account_types.py)."""
     mark_email_verified(client, headers)
+    me = client.get("/auth/me", headers=headers).json()
+    if me["account_type"] != type_ and not me["memberships"]:
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE app_user SET account_type = :t WHERE user_id = :u"),
+                         {"t": type_, "u": me["user_id"]})
     r = client.post("/organizations", json={"name": name, "type": type_}, headers=headers)
     assert r.status_code == 201, r.text
     return r.json()["organization_id"]

@@ -111,7 +111,7 @@
     busy(e.currentTarget, async () => {
       try {
         const result = await API.invitations.acceptNew(token, name, password);
-        API.auth.useToken(result, invite.email);
+        API.auth.useToken(result, invite.email, invite.organization_type);
         f.password.value = ''; f.confirm.value = '';
         joined(result);
       } catch (err) {
@@ -129,7 +129,7 @@
     if (!f.password.value) { error('Enter your password.'); return; }
     error('');
     busy(e.currentTarget, async () => {
-      try { await API.auth.login(invite.email, f.password.value); } catch (err) {
+      try { await API.auth.login(invite.email, f.password.value, invite.organization_type); } catch (err) {
         error(err.status === 401 ? 'Incorrect password.' : errorText(err)); return;
       }
       f.password.value = '';

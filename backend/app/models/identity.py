@@ -50,6 +50,12 @@ class User(Base):
         Boolean, nullable=False, server_default=text("false"), default=False
     )
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    # patient / pharmacy / supplier (app.models.enums.AccountType), set at
+    # registration or by the invitation that created the account. Sign-in,
+    # organization creation and invitations only accept the matching kind.
+    account_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'patient'"), default="patient"
+    )
     # Platform-level administrator (ApexRx staff). Separate from membership roles.
     is_platform_admin: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false"), default=False
@@ -66,6 +72,7 @@ class User(Base):
 
     __table_args__ = (
         Index("uq_app_user_email", func.lower(func.btrim(email)), unique=True),
+        CheckConstraint("account_type IN ('patient', 'pharmacy', 'supplier')", name="app_user_account_type_check"),
     )
 
 

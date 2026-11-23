@@ -65,7 +65,7 @@ ADMIN_LINKS = """() => [...document.querySelectorAll('a[href]')].map(a => a.getA
 
 
 def main():
-    assert status_of("POST", "/auth/register", {"name": "Plain", "email": PLAIN_EMAIL, "password": PLAIN_PASSWORD}) == 201
+    assert status_of("POST", "/auth/register", {"name": "Plain", "email": PLAIN_EMAIL, "password": PLAIN_PASSWORD, "account_type": "patient"}) == 201
     check("the old address admin.html no longer exists", site_status("admin.html") == 404)
     check(f"the console is served at {CONSOLE}", site_status(CONSOLE) == 200)
 
@@ -113,7 +113,7 @@ def main():
         check("a non-admin account is refused by the console", page.is_hidden("#dashboard-view"))
         check("/admin API without a token is 401", status_of("GET", "/admin/organizations") == 401)
         plain = json.loads(urllib.request.urlopen(urllib.request.Request(
-            API + "/auth/login", data=json.dumps({"email": PLAIN_EMAIL, "password": PLAIN_PASSWORD}).encode(),
+            API + "/auth/login", data=json.dumps({"email": PLAIN_EMAIL, "password": PLAIN_PASSWORD, "account_type": "patient"}).encode(),
             headers={"Content-Type": "application/json"}, method="POST")).read())["access_token"]
         check("/admin API with a non-admin token is 403", status_of("GET", "/admin/organizations", token=plain) == 403)
 

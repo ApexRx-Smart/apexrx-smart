@@ -385,6 +385,16 @@ It sends two simulated messages to eSMS sandbox numbers (no code in them) and ch
 
 Automated tests: `pytest tests/test_phone_verification.py tests/test_sms_esms.py tests/test_check_sms.py` (mock provider and mocked HTTP; no network); `frontend/tests/e2e_phone_verification.py` (browser, mock provider).
 
+## Account types
+
+Every account is a **patient**, **pharmacy** or **supplier** account (`app_user.account_type`, migration `b8d2f6a3c1e7`). The type is fixed when the account is created: by the registration page it was made on (`POST /auth/register` requires `account_type`), or by the invitation that created it (the inviting organization's type).
+
+- **Sign-in is per type.** `POST /auth/login` requires the sign-in page's `account_type` (`patient`, `pharmacy`, `supplier`, or `admin` for the operations console, platform administrators only). The password is checked first, with the usual generic 401. Then, if the account is of another type, the answer is **403 `wrong_account_type`**, which names only the page ("This sign-in is for pharmacies…"). This happens before any session or token exists, so a refused account is never signed in, not even briefly.
+- **Joining a business:** only an account of the organization's type can create it (`POST /organizations`), be added to it (`POST /organizations/{id}/members`, 409 otherwise) or accept its invitation with an existing account (403). A patient account never becomes pharmacy or supplier staff; that person is invited with another email address.
+- **Every request is checked too.** A membership counts only for an account of the organization's type (`get_org_access`), and patient reservations (`/reservations`) are for patient accounts only (`PatientUser`, 403 otherwise). So a session obtained on one page opens nothing from another group.
+- **In the browser:** each page sends its own type. A signed-in customer who opens another group's sign-in page is offered their own workspace or signing out, never a registration. The ApexRX logo leads signed-in customers to their workspace (`reservations.html`, `pharmacy-dashboard.html` or `supplier-dashboard.html`), and the public landing page sends them there. Signed-out visitors, or visitors whose session expired, keep the public site (`js/api.js`).
+- **Existing accounts (migration):** each account takes the type of its first membership's organization; an account with no membership becomes a patient. The migration prints how many accounts belong to both a pharmacy and a supplier (they keep the first), and how many patient accounts have no membership and no reservation. The second group includes anyone who started a business registration without creating the organization: they cannot continue it on the business pages until an administrator corrects the type in the database.
+
 ## Sessions
 
 Every sign-in creates a server-side session (`auth_session`), and every access token names it (`sid`). The backend accepts a token only while its session is usable, so a frontend timer is never the only protection:
@@ -543,7 +553,7 @@ Authenticated endpoints need `Authorization: Bearer <token>`. List endpoints ret
 
 | Area | Endpoints |
 |---|---|
-| Auth | `POST /auth/register`, `POST /auth/login`, `GET/PATCH /auth/me`, `POST /auth/me/password`. A `phone` given at registration or in `PATCH /auth/me` must be a mobile number (Rwanda by default, `PHONE_ALLOWED_REGIONS`); it is stored in E.164 (`+250…`), else 422 `invalid_phone`. It is the default reservation contact number and the number SMS verification will use once a provider is set up |
+| Auth | `POST /auth/register`, `POST /auth/login` (both require `account_type`, see [Account types](#account-types)), `GET/PATCH /auth/me`, `POST /auth/me/password`. A `phone` given at registration or in `PATCH /auth/me` must be a mobile number (Rwanda by default, `PHONE_ALLOWED_REGIONS`); it is stored in E.164 (`+250…`), else 422 `invalid_phone`. It is the default reservation contact number and the number SMS verification will use once a provider is set up |
 | Patient search (public) | `GET /search/medicines?q=`, `GET /search/pharmacies?q=\|product_id=\|drug_id=&lat=&lng=&radius_km=&availability=&min_price=&max_price=&sort=distance\|price\|price_desc\|freshness&record=`, `GET /search/pharmacies/{location_id}` |
 | Catalogue | `GET /catalogue/drugs`, `GET /catalogue/products` (public); `POST/PATCH` (admin only) |
 | Organizations | `POST/GET /organizations`, `GET/PATCH /organizations/{id}`, `POST /organizations/{id}/resubmit` |

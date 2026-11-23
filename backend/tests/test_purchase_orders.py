@@ -1,4 +1,4 @@
-from tests.helpers import World, location, login, organization, register, stock, user
+from tests.helpers import World, location, login, organization, register_for, stock, user
 
 
 def _create(client, world, items=None, **extra):
@@ -159,7 +159,7 @@ def test_price_change_requires_reprice(client):
 
 def test_staff_can_handle_orders_and_suspension_blocks(client):
     world = World(client)
-    register(client, "clerk@x.example.com")
+    register_for(client, "clerk@x.example.com", world.supplier)
     client.post(f"/organizations/{world.supplier}/members", json={"email": "clerk@x.example.com", "role": "staff"}, headers=world.supplier_owner)
     clerk = login(client, "clerk@x.example.com")
 
@@ -183,5 +183,5 @@ def test_order_with_preferred_warehouse_prices(client):
     assert cheapest["items"][0]["requested_unit_price"] == "120.00"
     chosen = _create(client, world, supplier_location_id=world.warehouse).json()
     assert chosen["items"][0]["requested_unit_price"] == "150.00"
-    other_org = organization(client, world.pharmacy_owner, "supplier", "Other")
+    other_org = organization(client, user(client, "other.supplier@x.example.com", account_type="supplier"), "supplier", "Other")
     assert _create(client, world, supplier_location_id=second, supplier_organization_id=other_org).status_code == 404

@@ -4,11 +4,11 @@ by the API itself, while keeping the operational routes they work with."""
 
 import pytest
 
-from tests.helpers import World, catalogue_product, login, register, stock, user
+from tests.helpers import World, catalogue_product, login, register_for, stock, user
 
 
 def _member(client, org_id, owner_headers, email, role):
-    register(client, email)
+    register_for(client, email, org_id)
     r = client.post(f"/organizations/{org_id}/members", json={"email": email, "role": role}, headers=owner_headers)
     assert r.status_code == 201, r.text
     return login(client, email), r.json()["membership_id"]

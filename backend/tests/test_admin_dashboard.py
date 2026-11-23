@@ -228,7 +228,7 @@ def test_invalid_transitions_are_rejected(client, orgs):
         assert _status_in_db(org_id) == before
 
     # Notes are mandatory for negative decisions; "pending" is not a decision.
-    pending = organization(client, orgs["owners"]["p3"], "supplier", "Second Org")
+    pending = organization(client, user(client, "second@x.example.com", account_type="supplier"), "supplier", "Second Org")
     assert _review(client, h, pending, "rejected").status_code == 422
     assert _review(client, h, pending, "suspended").status_code == 422
     assert _review(client, h, pending, "pending").status_code == 422

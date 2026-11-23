@@ -32,7 +32,7 @@ def _token(sub, key=None, **claims):
 def test_registration_cannot_set_admin(client):
     r = client.post(
         "/auth/register",
-        json={
+        json={"account_type": "patient",
             "name": "M",
             "email": "m@x.example.com",
             "password": PASSWORD,
@@ -60,7 +60,7 @@ def test_non_admin_cannot_use_admin_user_endpoint_on_self(client):
 
 
 def test_organization_requests_cannot_self_approve_or_promote(client):
-    h = user(client, "m@x.example.com")
+    h = user(client, "m@x.example.com", account_type="pharmacy")
     mark_email_verified(client, h)
     org = client.post(
         "/organizations",
@@ -75,7 +75,7 @@ def test_organization_requests_cannot_self_approve_or_promote(client):
 
 def test_admin_claims_in_token_are_ignored(client):
     register(client, "m@x.example.com")
-    uid = client.post("/auth/login", json={"email": "m@x.example.com", "password": PASSWORD})
+    uid = client.post("/auth/login", json={"account_type": "patient", "email": "m@x.example.com", "password": PASSWORD})
     me = client.get("/auth/me", headers={"Authorization": f"Bearer {uid.json()['access_token']}"}).json()
     # A real session id, so only the extra claims differ from a genuine token.
     sid = jwt.decode(uid.json()["access_token"], options={"verify_signature": False})["sid"]
@@ -119,7 +119,7 @@ def test_revocation_and_deactivation_apply_to_existing_tokens(client):
         c.execute(text("UPDATE app_user SET is_active = false WHERE email = 'boss@x.example.com'"))
     assert client.get("/auth/me", headers=h).status_code == 401
     # And a deactivated account cannot sign in again (generic 401).
-    r = client.post("/auth/login", json={"email": "boss@x.example.com", "password": PASSWORD})
+    r = client.post("/auth/login", json={"account_type": "patient", "email": "boss@x.example.com", "password": PASSWORD})
     assert r.status_code == 401 and r.json()["detail"] == "Invalid email or password."
 
 

@@ -40,7 +40,7 @@ REFERENCE = re.compile(r"RX-[A-Z0-9]{10}")
 
 
 def seed():
-    admin = call("POST", "/auth/login", {"email": D.ADMIN_EMAIL, "password": D.ADMIN_PASSWORD})["access_token"]
+    admin = call("POST", "/auth/login", {"email": D.ADMIN_EMAIL, "password": D.ADMIN_PASSWORD, "account_type": "admin"})["access_token"]
     drug = call("POST", "/catalogue/drugs", {"name": MED, "therapeutic_class": "Analgesic"}, admin)["drug_id"]
     product = call("POST", "/catalogue/products", {"drug_id": drug, "product_name": f"{MED} 500mg", "strength": "500mg",
                                                    "pack_size": "B/20"}, admin)["product_id"]
@@ -132,7 +132,7 @@ def main():
         patient.wait_for_selector("#rs-detail-title")
         shown_ref = patient.inner_text("#rs-detail-title .rs-reference")
         patient.wait_for_timeout(800)
-        personal = call("POST", "/auth/login", {"email": PATIENT["email"], "password": D.PW})["access_token"]
+        personal = call("POST", "/auth/login", {"email": PATIENT["email"], "password": D.PW, "account_type": "patient"})["access_token"]
         check("patient: opening the reservation marks its update read",
               call("GET", "/notifications", token=personal)["unread_count"] == 0)
         check("patient: the detail says confirmed, with the indicative price note",
@@ -187,8 +187,8 @@ def main():
 
         # ------------------------------------------------ signed in: public landing, own sign-in page
         patient.goto(f"{D.SITE}/index.html?lang=en")
-        check("landing: no account identity shown to a signed-in patient",
-              PATIENT["email"] not in patient.inner_text("header") and patient.locator(".am-btn, #signInBtn").count() == 0)
+        patient.wait_for_url("**/reservations.html*", timeout=15000)
+        check("landing: a signed-in patient opening the landing page goes to their reservations", True)
         patient.goto(f"{D.SITE}/patient-sign-in.html?lang=en")
         patient.wait_for_url("**/reservations.html*", timeout=15000)
         check("session: a signed-in patient visiting patient sign-in goes to their reservations", True)

@@ -6,11 +6,11 @@ import pytest
 from sqlalchemy import text
 
 from app.core.database import engine
-from tests.helpers import World, location, login, organization, register, user
+from tests.helpers import World, location, login, organization, register_for, user
 
 
 def _member(client, world, email, role):
-    register(client, email)
+    register_for(client, email, world.pharmacy)
     r = client.post(f"/organizations/{world.pharmacy}/members", json={"email": email, "role": role},
                     headers=world.pharmacy_owner)
     assert r.status_code == 201, r.text
@@ -123,7 +123,7 @@ def test_deactivated_manager_loses_order_access(client, team):
 # ---------------------------------------------------------------- supplier side unchanged
 def test_supplier_staff_workflow_unchanged(client, team):
     world, t = team
-    register(client, "clerk@x.example.com")
+    register_for(client, "clerk@x.example.com", world.supplier)
     client.post(f"/organizations/{world.supplier}/members", json={"email": "clerk@x.example.com", "role": "staff"},
                 headers=world.supplier_owner)
     clerk = login(client, "clerk@x.example.com")

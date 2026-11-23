@@ -42,7 +42,7 @@ def test_capabilities_say_what_is_unavailable(client):
 
 @pytest.mark.parametrize("type_", ["pharmacy", "supplier"])
 def test_registration_without_email_still_needs_approval(client, type_):
-    h = user(client, f"{type_}@noemail.example.com")
+    h = user(client, f"{type_}@noemail.example.com", account_type=type_)
     status = client.get("/auth/email/status", headers=h).json()
     assert status["required"] is False and status["verified"] is False and status["delivery_available"] is False
     r = client.post("/organizations", json={"name": f"No Email {type_}", "type": type_}, headers=h)
@@ -75,7 +75,7 @@ def test_forgot_password_is_unavailable_for_every_address(client):
 
 
 def test_invitation_link_is_shared_by_the_inviter(client):
-    owner = user(client, "owner@noemail.example.com")
+    owner = user(client, "owner@noemail.example.com", account_type="pharmacy")
     org = client.post("/organizations", json={"name": "Link Pharmacy", "type": "pharmacy"}, headers=owner).json()["organization_id"]
     r = client.post(f"/organizations/{org}/invitations", json={"email": "new@noemail.example.com", "role": "staff"},
                     headers=owner)
@@ -94,7 +94,7 @@ def test_invitation_link_is_shared_by_the_inviter(client):
     h = {"Authorization": f"Bearer {r.json()['access_token']}"}
     me = client.get("/auth/me", headers=h).json()
     assert me["email_verified"] is False and [m["role"] for m in me["memberships"]] == ["staff"]
-    assert client.post("/auth/login", json={"email": "new@noemail.example.com", "password": PW}).status_code == 200
+    assert client.post("/auth/login", json={"account_type": "pharmacy", "email": "new@noemail.example.com", "password": PW}).status_code == 200
     # Single use, and staff still cannot invite.
     again = client.post("/invitations/accept-new", json={"token": inv["share_token"], "name": "X", "password": PW})
     assert again.json()["reason"] == "used"
@@ -103,9 +103,9 @@ def test_invitation_link_is_shared_by_the_inviter(client):
 
 
 def test_new_link_replaces_the_old_one_and_existing_accounts_must_sign_in(client):
-    owner = user(client, "owner2@noemail.example.com")
+    owner = user(client, "owner2@noemail.example.com", account_type="pharmacy")
     org = client.post("/organizations", json={"name": "Link Two", "type": "pharmacy"}, headers=owner).json()["organization_id"]
-    existing = user(client, "existing@noemail.example.com")
+    existing = user(client, "existing@noemail.example.com", account_type="pharmacy")
     inv = client.post(f"/organizations/{org}/invitations", json={"email": "existing@noemail.example.com", "role": "manager"},
                       headers=owner).json()
     renewed = client.post(f"/organizations/{org}/invitations/{inv['invitation_id']}/resend", headers=owner).json()

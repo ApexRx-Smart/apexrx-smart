@@ -32,7 +32,7 @@ PH_NAME, SUP_NAME = f"Msg Pharmacy {RUN}", f"Msg Supplier {RUN}"
 
 
 def seed():
-    admin = call("POST", "/auth/login", {"email": D.ADMIN_EMAIL, "password": D.ADMIN_PASSWORD})["access_token"]
+    admin = call("POST", "/auth/login", {"email": D.ADMIN_EMAIL, "password": D.ADMIN_PASSWORD, "account_type": "admin"})["access_token"]
     w = {"admin": admin}
     for key, name in (("listed", "Msgcillin"), ("unlisted", "Msgformin")):
         drug = call("POST", "/catalogue/drugs", {"name": f"{name} {RUN}", "therapeutic_class": "Antibiotic"}, admin)["drug_id"]

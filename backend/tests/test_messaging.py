@@ -6,11 +6,11 @@ and rate limiting."""
 from sqlalchemy import text
 
 from app.core.database import engine
-from tests.helpers import World, approve, login, organization, register, user
+from tests.helpers import World, approve, login, organization, register_for, user
 
 
 def _member(client, owner_headers, org_id, email, role="staff"):
-    register(client, email)
+    register_for(client, email, org_id)
     r = client.post(f"/organizations/{org_id}/members", json={"email": email, "role": role}, headers=owner_headers)
     assert r.status_code == 201, r.text
     return login(client, email)

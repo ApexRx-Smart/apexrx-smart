@@ -176,7 +176,7 @@
     button.disabled = true;
     button.textContent = 'Signing in…';
     $('#login-error').textContent = '';
-    API.auth.login(email, password)
+    API.auth.login(email, password, 'admin')
       .then(enter)
       .catch(function (err) {
         API.session.clear();

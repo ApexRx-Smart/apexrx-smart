@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from app.api.deps import CurrentAuth, DbSession, SignedInUser
 from app.core import device_token
 from app.core.config import settings
-from app.core.errors import AppError, Conflict, TooManyRequests, Unauthorized
+from app.core.errors import AppError, Conflict, Forbidden, TooManyRequests, Unauthorized
 from app.core.rate_limit import account_subject, client_ip, device_subject, login_limiter
 from app.core.security import hash_password, verify_password, verify_password_and_update
 from app.models import Membership, Organization, User
@@ -52,8 +52,10 @@ def _personal_phone(raw: str | None) -> str | None:
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, db: DbSession):
-    """Create a personal user account. Patients do not need an account; this is
-    for pharmacy/supplier staff, who then create or join an organization."""
+    """Create a personal account of the given type: a patient (patient
+    registration), or a pharmacy / supplier owner who then registers the
+    business. The type is fixed: it decides which sign-in page accepts the
+    account. Staff join through an invitation instead (app/api/invitations.py)."""
     email = normalize_email(payload.email)
     phone = _personal_phone(payload.phone)
     if phone is None and settings.phone_verification_required:
@@ -67,6 +69,7 @@ def register(payload: RegisterRequest, db: DbSession):
         email=email,
         phone=phone,
         password_hash=hash_password(payload.password),
+        account_type=payload.account_type.value,
     )
     # Locked until the number is verified, when verification is required.
     otp.mark_new_account(user)
@@ -115,9 +118,29 @@ def login(payload: LoginRequest, request: Request, db: DbSession):
         user.password_hash = new_hash
         db.commit()
 
+    # Right password, but is this the right sign-in page for the account? Checked
+    # before any session exists: a refused account is never signed in.
+    if not account_type_matches(user, payload.account_type):
+        raise Forbidden(WRONG_PAGE[str(payload.account_type)], extra={"code": "wrong_account_type"})
+
     login_limiter.record_success(subject)
     issued = sessions.start(db, user)
     return token_response(issued, device_token=device_token.issue(user.user_id))
+
+
+# Says only which kind of account this page is for, never what the account is.
+WRONG_PAGE = {
+    "patient": "This sign-in is for patients. This account can't sign in here: use the sign-in page for your account.",
+    "pharmacy": "This sign-in is for pharmacies. This account can't sign in here: use the sign-in page for your account.",
+    "supplier": "This sign-in is for medicine suppliers. This account can't sign in here: use the sign-in page for your account.",
+    "admin": "This account is not an ApexRX administrator.",
+}
+
+
+def account_type_matches(user: User, requested: str) -> bool:
+    if requested == "admin":
+        return user.is_platform_admin
+    return user.account_type == requested
 
 
 def token_response(issued: sessions.IssuedToken, device_token: str | None = None) -> TokenResponse:

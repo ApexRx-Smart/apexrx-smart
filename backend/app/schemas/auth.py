@@ -3,7 +3,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, EmailStr, Field, StringConstraints, computed_field
 
-from app.models.enums import MembershipRole, OrganizationStatus, OrganizationType
+from app.models.enums import AccountType, MembershipRole, OrganizationStatus, OrganizationType
 from app.schemas.common import ORMModel, Phone
 
 PersonName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=150)]
@@ -15,11 +15,17 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     phone: Phone | None = None
     password: Password
+    # Which page the account is created on: it decides where it can sign in.
+    account_type: AccountType
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
+    # The sign-in page the request comes from. The account must be of this
+    # type ('admin': the operations console, platform administrators only),
+    # or no session is issued.
+    account_type: AccountType | Literal["admin"]
     # Returned by an earlier successful sign-in on this browser (see
     # app/core/device_token.py). Optional; never a credential on its own.
     device_token: str | None = Field(default=None, max_length=512)
@@ -49,6 +55,7 @@ class UserResponse(ORMModel):
     name: str
     email: EmailStr
     phone: str | None
+    account_type: AccountType = AccountType.PATIENT
     email_verified_at: datetime | None = None
     verified_phone: str | None = None
     phone_verified_at: datetime | None = None

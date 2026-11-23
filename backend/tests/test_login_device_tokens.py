@@ -35,7 +35,7 @@ def small_limits():
 
 
 def login(client, email, password=PASSWORD, token=None):
-    body = {"email": email, "password": password}
+    body = {"email": email, "password": password, "account_type": "patient"}
     if token is not None:
         body["device_token"] = token
     # ASCII JSON with \uXXXX escapes, exactly as an attacker can send it (this
@@ -232,12 +232,12 @@ def test_device_id_for_never_raises(bad):
 
 def test_validation_errors_never_echo_submitted_values(client):
     secret_password = "p" * 129  # over the 128-character limit
-    r = client.post("/auth/login", json={"email": "a@x.example.com", "password": secret_password})
+    r = client.post("/auth/login", json={"account_type": "patient", "email": "a@x.example.com", "password": secret_password})
     assert r.status_code == 422
     assert secret_password not in r.text and "input" not in r.json()["detail"][0]
     assert r.json()["detail"][0]["loc"] == ["body", "password"]
     r = client.post(
-        "/auth/login", json={"email": "a@x.example.com", "password": "x", "device_token": "t" * 600}
+        "/auth/login", json={"account_type": "patient", "email": "a@x.example.com", "password": "x", "device_token": "t" * 600}
     )
     assert r.status_code == 422 and "t" * 600 not in r.text
 

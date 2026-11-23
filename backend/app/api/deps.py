@@ -22,7 +22,7 @@ from app.core.database import get_db, set_session_actor
 from app.core.errors import Forbidden, NotFound, Unauthorized
 from app.core.security import decode_access_token
 from app.models import AuthSession, Location, Membership, Organization, User
-from app.models.enums import MembershipRole, OrganizationStatus, OrganizationType
+from app.models.enums import AccountType, MembershipRole, OrganizationStatus, OrganizationType
 from app.services import otp, sessions
 
 bearer_scheme = HTTPBearer(auto_error=False, description="JWT from POST /auth/login")
@@ -95,6 +95,17 @@ def get_current_user(auth: CurrentAuth) -> User:
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
+def require_patient(user: CurrentUser) -> User:
+    """Patient features (reservations) are for patient accounts only."""
+    if user.account_type != AccountType.PATIENT:
+        raise Forbidden("This is for patient accounts. Sign in with your patient account.",
+                        extra={"code": "wrong_account_type"})
+    return user
+
+
+PatientUser = Annotated[User, Depends(require_patient)]
+
+
 def require_platform_admin(user: CurrentUser) -> User:
     if not user.is_platform_admin:
         raise Forbidden("Platform administrator access is required.")
@@ -146,6 +157,10 @@ def get_org_access(
         )
     )
 
+    # A membership counts only for an account of the organization's kind (a
+    # patient account never acts for a pharmacy, nor a pharmacy for a supplier).
+    if membership is not None and user.account_type != organization.type:
+        membership = None
     if membership is None:
         if allow_admin_read and user.is_platform_admin:
             return OrgAccess(organization, None)

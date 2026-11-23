@@ -40,6 +40,7 @@ from app.api.deps import (
     CurrentUser,
     DbSession,
     Pagination,
+    PatientUser,
     bearer_scheme,
     get_auth,
     get_org_access,
@@ -436,7 +437,7 @@ def reservation_options(
     status_code=status.HTTP_201_CREATED,
     responses={200: {"description": "A retry of an earlier request (same client_request_id)."}},
 )
-def submit_reservation(payload: ReservationCreate, user: CurrentUser, db: DbSession, response: Response):
+def submit_reservation(payload: ReservationCreate, user: PatientUser, db: DbSession, response: Response):
     """Request one medicine at one branch. The price, unit, deadlines and
     status are set by the server. Retrying with the same ``client_request_id``
     returns the original reservation (200) instead of creating another; reusing
@@ -476,7 +477,7 @@ def submit_reservation(payload: ReservationCreate, user: CurrentUser, db: DbSess
 
 
 @patient_router.get("", response_model=Page[PatientReservation])
-def list_my_reservations(user: CurrentUser, db: DbSession, page: Pagination, status_: Annotated[Statuses, Query(alias="status")] = None):
+def list_my_reservations(user: PatientUser, db: DbSession, page: Pagination, status_: Annotated[Statuses, Query(alias="status")] = None):
     """Your reservations, newest first."""
     limit, offset = page
     stmt = _filtered(_query().where(R.patient_user_id == user.user_id), status_, None, None)
@@ -485,13 +486,13 @@ def list_my_reservations(user: CurrentUser, db: DbSession, page: Pagination, sta
 
 
 @patient_router.get("/{reference}", response_model=PatientReservationDetail)
-def get_my_reservation(reference: ReferencePath, user: CurrentUser, db: DbSession):
+def get_my_reservation(reference: ReferencePath, user: PatientUser, db: DbSession):
     return _patient_detail(db, user, reference)
 
 
 @patient_router.post("/{reference}/cancel", response_model=PatientReservationDetail)
 def cancel_my_reservation(
-    reference: ReferencePath, user: CurrentUser, db: DbSession, payload: ReservationCancel | None = None
+    reference: ReferencePath, user: PatientUser, db: DbSession, payload: ReservationCancel | None = None
 ):
     """Cancel a pending or confirmed reservation (repeating it is harmless)."""
     reservation_id = _own_reservation_row(db, user, reference).Reservation.reservation_id

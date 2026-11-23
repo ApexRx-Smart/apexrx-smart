@@ -49,7 +49,7 @@
 
   const form = $('patient-auth'), err = $('form-error'), panel = $('account-panel');
   function fail(text) { err.textContent = text || ''; }
-  function isPatient(me) { return !me.is_platform_admin && !(me.memberships || []).length; }
+  function isPatient(me) { return me.account_type === 'patient'; }
   function go(welcome, me) {
     let target = NEXT;
     if (welcome && target === 'reservations.html') target += '?welcome=1';
@@ -58,10 +58,17 @@
     if (me && me.phone_verification_pending) target = 'verify-phone.html?next=' + encodeURIComponent(target);
     location.replace(target);
   }
+  // Signed in already with a pharmacy or supplier account: never a patient
+  // session here. Offer that account's own workspace, or signing out.
   function notPatient(me) {
     form.hidden = true;
     panel.hidden = false;
-    $('account-panel-text').textContent = 'You are signed in with a pharmacy, supplier or ApexRX account, not a patient account. Sign out to use a patient account.';
+    $('account-panel-text').textContent = {
+      pharmacy: 'You are signed in with a pharmacy account, not a patient account. Go to your workspace, or sign out to use a patient account.',
+      supplier: 'You are signed in with a medicine supplier account, not a patient account. Go to your workspace, or sign out to use a patient account.'
+    }[me.account_type] || 'You are signed in with an account that is not a patient account. Sign out to use a patient account.';
+    const home = API.workspaceFor(me.account_type), link = $('account-workspace');
+    if (link) { link.hidden = !home; if (home) link.href = home; }
   }
   $('account-signout').addEventListener('click', () => { API.auth.logout(); location.replace('index.html'); });
 
@@ -81,14 +88,16 @@
     const button = $('auth-submit'); button.disabled = true;
     try {
       if (MODE === 'create') {
-        try { await API.auth.register({ name, email, phone, password }); } catch (x) {
+        try { await API.auth.register({ name, email, phone, password, account_type: 'patient' }); } catch (x) {
           if (x && x.status === 409) { fail('An account with this email already exists. Sign in instead.'); return; }
           if (x && x.status === 422 && x.data && (x.data.code === 'invalid_phone' || x.data.code === 'phone_required')) { fail(x.message); f.phone.focus(); return; }
           throw x;
         }
       }
-      try { await API.auth.login(email, password); } catch (x) {
+      try { await API.auth.login(email, password, 'patient'); } catch (x) {
         if (x && x.status === 401) { fail('Incorrect email or password.'); return; }
+        // A pharmacy or supplier account: refused by the server, never signed in.
+        if (x && x.status === 403 && x.data && x.data.code === 'wrong_account_type') { fail(x.message); return; }
         throw x;
       }
       f.password.value = ''; if (f.confirm) f.confirm.value = '';
