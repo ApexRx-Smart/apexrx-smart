@@ -154,7 +154,8 @@
 <form id="documents" class="step-form" hidden novalidate>
   <ul class="doc-list" id="doc-list"></ul>
   <p class="note">PDF, PNG or JPG, up to 10 MB each. Only ApexRX reviewers and members of your organization can open them.</p>
-  <div class="actions"><button type="button" class="secondary" id="documents-back">← Back</button><button class="primary" id="documents-submit">Continue to review →</button></div>
+  <p class="note" id="documents-required">Every document is required. ApexRX reviews your application once all of them are uploaded.</p>
+  <div class="actions"><button type="button" class="secondary" id="documents-back">← Back</button><button class="primary" id="documents-submit">Submit for review →</button></div>
 </form>
 
 <div id="review" class="step-form" hidden>
@@ -175,7 +176,7 @@
   <div class="actions">
     <button type="button" class="secondary" id="review-edit">Edit details</button>
     <button type="button" class="secondary" id="review-refresh">Check status</button>
-    <button type="button" class="secondary" id="review-resubmit" hidden>Resubmit for review</button>
+    <button type="button" class="secondary" id="review-resubmit" hidden>Submit for review</button>
     <button type="button" class="primary" id="open-workspace">Open your workspace →</button>
   </div>
 </div>
@@ -357,8 +358,11 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     if (ROLE === 'pharmacy' && mine.length > 1 && !opts.review && (opts.choose || !savedChoice())) return showOrgChoice(mine);
     if (canManage() && !reg.location) return showDetails();
     if (!opts.review) {
-      const needsDocuments = canManage() && !reg.documents.length && ['pending', 'rejected'].includes(reg.org.status);
-      if (!needsDocuments) return openWorkspace();
+      if (reg.org.status === 'approved') return openWorkspace();
+      // Not submitted yet: finish the registration (documents, then submit).
+      if (reg.org.status === 'pending' && !reg.org.submitted_at && canManage()) return showDocuments();
+      // Submitted, rejected or suspended (and staff of an unfinished one): the status page.
+      return openStatus();
     }
     return showReview();
   }
@@ -395,6 +399,11 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
   function openWorkspace() {
     if (reg && reg.membership) remember(reg.membership.organization_id);
     location.href = `${ROLE}-dashboard.html`;
+  }
+  // A business that is not approved: where its application stands (business-status.html).
+  function openStatus() {
+    if (reg && reg.membership) remember(reg.membership.organization_id);
+    location.href = 'business-status.html';
   }
 
   /* -------------------------------------------------------- step 0: account */
@@ -860,10 +869,12 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
         if (file && (file.size > MAX_FILE || !FILE_TYPES.test(file.name))) {
           input.value = ''; chosen.textContent = '';
           formError('Choose a PDF, PNG or JPG file of up to 10 MB.');
+          paintSubmit();
           return;
         }
         formError('');
         chosen.textContent = file ? `Selected: ${file.name}` : '';
+        paintSubmit();
       });
       return el('li', {}, [
         el('div', { class: 'doc-text' }, [el('strong', { text: label }), docState(d), chosen]),
@@ -872,6 +883,19 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     }));
     $('#documents-submit').hidden = !canManage();
     if (!canManage()) formError('Only the owner or a manager can upload documents.');
+    paintSubmit();
+  }
+  // A required document counts once one is uploaded and not rejected, or a file is chosen for it.
+  function usable(type) { return (reg.documents || []).some(d => d.document_type === type && d.verification_status !== 'rejected'); }
+  function missingDocuments() {
+    const chosen = new Set([...$('#doc-list').querySelectorAll('input[type=file][data-document-type]')]
+      .filter(i => i.files && i.files.length).map(i => i.dataset.documentType));
+    return T.docs.filter(([type]) => !usable(type) && !chosen.has(type)).map(([, label]) => label);
+  }
+  function paintSubmit() {
+    const missing = missingDocuments(), button = $('#documents-submit');
+    button.disabled = missing.length > 0;
+    button.title = missing.length ? 'Still needed: ' + missing.join(', ') : '';
   }
   $('#documents').addEventListener('submit', e => {
     e.preventDefault();
@@ -890,9 +914,13 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
           notice(inputs.length === 1 ? 'Document uploaded for review.' : 'Documents uploaded for review.');
         }
         await load();
-        showReview();
+        // The server checks again: every required document, uploaded and not rejected.
+        if (missingDocuments().length) { showDocuments(); formError('Upload every required document before submitting.'); return; }
+        await API.organizations.submit(reg.org.organization_id);
+        openStatus();
       } catch (err) {
         if (err.status === 401) { sessionExpired(); return; }
+        if (err.status === 409 && err.data && err.data.code === 'already_submitted') { openStatus(); return; }
         formError(errorText(err));
       }
     });
@@ -943,7 +971,9 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     const manage = canManage();
     $('#review-upload').hidden = !manage;
     $('#review-edit').hidden = !manage;
-    $('#review-resubmit').hidden = !(o.status === 'rejected' && reg.membership.role === 'owner');
+    // Submit when not submitted yet, or again after a rejection (owners and managers).
+    $('#review-resubmit').hidden = !(manage && (o.status === 'rejected' || (o.status === 'pending' && !o.submitted_at)));
+    $('#open-workspace').textContent = o.status === 'approved' ? 'Open your workspace →' : 'View application status →';
     renderOrgPick();
     $('#step-title').focus();
   }
@@ -974,8 +1004,8 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
   $('#review-edit').addEventListener('click', () => showDetails());
   $('#review-refresh').addEventListener('click', reviewAction($('#review-refresh'), () => refreshReview('Status updated.')));
   $('#review-resubmit').addEventListener('click', reviewAction($('#review-resubmit'), async () => {
-    await API.organizations.resubmit(reg.org.organization_id);
-    await refreshReview('Your registration is back in the ApexRX review queue.');
+    await API.organizations.submit(reg.org.organization_id);
+    openStatus();
   }));
   $('#upload-button').addEventListener('click', reviewAction($('#upload-button'), async () => {
     const file = $('#upload-file').files[0];
@@ -990,7 +1020,7 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     await refreshReview();
   }));
   const openButton = $('#open-workspace');
-  if (openButton) openButton.addEventListener('click', reviewAction(openButton, () => openWorkspace()));
+  if (openButton) openButton.addEventListener('click', reviewAction(openButton, () => (reg && reg.org && reg.org.status === 'approved' ? openWorkspace() : openStatus())));
 
   /* ------------------------------------------- joining an existing pharmacy */
   if ($('#join-existing')) {

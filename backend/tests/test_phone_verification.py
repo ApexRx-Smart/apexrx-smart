@@ -20,7 +20,7 @@ from app.core.database import engine
 from app.scripts import create_admin
 from app.services import otp
 from app.services.sms.mock import mock_provider as sms
-from tests.helpers import PASSWORD, login, organization
+from tests.helpers import PASSWORD, admin, approve, login, organization
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -127,6 +127,15 @@ def test_client_cannot_mark_itself_verified(client, required):
 def test_staff_invited_with_a_new_account_verify_at_first_sign_in(client, required):
     owner = admin_owner(client)
     org = organization(client, owner, "pharmacy", "Gate Pharmacy")
+    # An approved pharmacy (approved by an admin made before verification was required):
+    # only the phone gate is tested here.
+    previous = settings.phone_verification_required
+    settings.phone_verification_required = False
+    try:
+        reviewer = admin(client)
+    finally:
+        settings.phone_verification_required = previous
+    approve(client, reviewer, org)
     r = client.post(f"/organizations/{org}/invitations", json={"email": "staff@example.com", "role": "staff"},
                     headers=owner)
     assert r.status_code == 201, r.text

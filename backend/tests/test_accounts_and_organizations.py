@@ -7,6 +7,7 @@ from tests.helpers import (
     PASSWORD,
     admin,
     approve,
+    complete_application,
     location,
     login,
     organization,
@@ -71,6 +72,9 @@ def test_organization_registration_and_review(client):
     assert r.status_code == 422
     r = client.post(f"/admin/organizations/{org_id}/review", json={"decision": "rejected", "notes": "License unreadable"}, headers=admin_h)
     assert r.json()["status"] == "rejected"
+    # Resubmitting needs every required document (tests/test_applications.py covers uploads).
+    assert client.post(f"/organizations/{org_id}/resubmit", headers=owner).status_code == 409
+    complete_application(org_id)
     assert client.post(f"/organizations/{org_id}/resubmit", headers=owner).json()["status"] == "pending"
 
     queue = client.get("/admin/organizations", params={"status": "pending"}, headers=admin_h).json()
@@ -160,14 +164,14 @@ def test_documents(client):
     # Content must match the declared type; other types are refused.
     r = client.post(
         f"/organizations/{org_id}/documents",
-        data={"document_type": "x"},
+        data={"document_type": "owner_id"},
         files={"file": ("fake.pdf", io.BytesIO(b"MZ not a pdf"), "application/pdf")},
         headers=owner,
     )
     assert r.status_code == 415
     r = client.post(
         f"/organizations/{org_id}/documents",
-        data={"document_type": "x"},
+        data={"document_type": "owner_id"},
         files={"file": ("a.exe", io.BytesIO(b"MZ"), "application/octet-stream")},
         headers=owner,
     )

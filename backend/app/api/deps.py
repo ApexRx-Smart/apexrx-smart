@@ -172,8 +172,10 @@ def get_org_access(
         allowed = ", ".join(sorted(r.value for r in roles))
         raise Forbidden(f"Your role does not allow this action (requires: {allowed}).")
     if require_approved and organization.status != OrganizationStatus.APPROVED:
+        # The page shows the application status instead (business-status.html).
         raise Forbidden(
-            f"The organization must be approved by ApexRx first (current status: {organization.status})."
+            f"The organization must be approved by ApexRx first (current status: {organization.status}).",
+            extra={"code": "organization_not_approved", "status": organization.status},
         )
     return OrgAccess(organization, membership)
 

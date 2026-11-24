@@ -1,7 +1,7 @@
 """Platform administration: verify organizations and documents, manage access."""
 
 from datetime import datetime, timedelta, timezone
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query
 from sqlalchemy import func, or_, select
@@ -30,7 +30,7 @@ from app.schemas.organizations import (
     LocationResponse,
     OrganizationResponse,
 )
-from app.services import reservations
+from app.services import applications, reservations
 
 router = APIRouter()
 
@@ -55,13 +55,17 @@ def organization_counts(_: AdminUser, db: DbSession):
     """Totals by type and by status for the overview (one query instead of a
     request per number)."""
     counts = {key: 0 for key in AdminOrganizationCounts.model_fields}
+    submitted = Organization.submitted_at.is_not(None)
     rows = db.execute(
-        select(Organization.type, Organization.status, func.count()).group_by(Organization.type, Organization.status)
+        select(Organization.type, Organization.status, submitted, func.count())
+        .group_by(Organization.type, Organization.status, submitted)
     ).all()
-    for org_type, status, n in rows:
+    for org_type, status, was_submitted, n in rows:
         counts["total"] += n
         counts[OrganizationType(org_type).value] += n
         counts[OrganizationStatus(status).value] += n
+        if status == OrganizationStatus.PENDING:
+            counts["awaiting_review" if was_submitted else "in_progress"] += n
     return counts
 
 
@@ -73,12 +77,20 @@ def list_organizations(
     status: OrganizationStatus | None = None,
     type: OrganizationType | None = None,
     q: Annotated[str | None, Query(max_length=100)] = None,
+    stage: Annotated[
+        Literal["in_progress", "awaiting_review"] | None,
+        Query(description="Pending applications only: still in progress, or submitted and awaiting review."),
+    ] = None,
 ):
     """Registration review queue (oldest first, so pending requests are FIFO)."""
     limit, offset = page
     stmt = select(Organization)
     if status:
         stmt = stmt.where(Organization.status == status)
+    if stage:
+        stmt = stmt.where(Organization.status == OrganizationStatus.PENDING,
+                          Organization.submitted_at.is_(None) if stage == "in_progress"
+                          else Organization.submitted_at.is_not(None))
     if type:
         stmt = stmt.where(Organization.type == type)
     if q and q.strip():
@@ -151,6 +163,17 @@ def review_organization(
         )
         if pending_docs:
             raise Conflict(f"Review the {pending_docs} pending document(s) before approving.")
+        # A new or corrected application: submitted, with every required document
+        # approved. (Reinstating a suspended organization reviews nothing new.)
+        if current in (OrganizationStatus.PENDING, OrganizationStatus.REJECTED):
+            if organization.submitted_at is None:
+                raise Conflict("This application has not been submitted for review yet.",
+                               extra={"code": "not_submitted"})
+            unapproved = applications.not_approved(applications.checklist(db, organization))
+            if unapproved:
+                raise Conflict("Approve every required document first. Not approved: "
+                               + ", ".join(i.label for i in unapproved) + ".",
+                               extra={"code": "documents_not_approved"})
 
     organization.status = payload.decision.value
     organization.reviewed_at = _now()

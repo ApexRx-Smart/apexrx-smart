@@ -207,7 +207,7 @@ def list_requests(
     counterpart_organization_id: int | None = None,
 ):
     """Requests sent (pharmacy) or received (supplier), newest first."""
-    access = get_org_access(db, user, organization_id)
+    access = get_org_access(db, user, organization_id, require_approved=True)
     side = "pharmacy" if access.organization.type == OrganizationType.PHARMACY else "supplier"
     own = ProcurementRequest.pharmacy_organization_id if side == "pharmacy" else ProcurementRequest.supplier_organization_id
     other = ProcurementRequest.supplier_organization_id if side == "pharmacy" else ProcurementRequest.pharmacy_organization_id

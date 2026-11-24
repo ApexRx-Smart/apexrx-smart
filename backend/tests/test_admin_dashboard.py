@@ -159,6 +159,7 @@ def test_overview_counts_in_one_request(client, orgs):
     assert r.json() == {
         "total": 4, "pharmacy": 3, "supplier": 1,
         "pending": 1, "approved": 1, "rejected": 1, "suspended": 1,
+        "awaiting_review": 0, "in_progress": 1,  # the pending one has not submitted
     }
     # "counts" is not mistaken for an organization id.
     assert client.get("/admin/organizations/999999", headers=orgs["admin"]).status_code == 404
@@ -167,7 +168,8 @@ def test_overview_counts_in_one_request(client, orgs):
 def test_overview_counts_when_empty(client):
     r = client.get("/admin/organizations/counts", headers=admin(client))
     assert r.json() == dict.fromkeys(
-        ("total", "pharmacy", "supplier", "pending", "approved", "rejected", "suspended"), 0
+        ("total", "pharmacy", "supplier", "pending", "approved", "rejected", "suspended", "awaiting_review",
+         "in_progress"), 0
     )
 
 

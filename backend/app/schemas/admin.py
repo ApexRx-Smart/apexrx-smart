@@ -56,6 +56,9 @@ class AdminOrganizationCounts(BaseModel):
     approved: int
     rejected: int
     suspended: int
+    # Pending, split: submitted with every document (awaiting review), or not yet.
+    awaiting_review: int
+    in_progress: int
 
 
 class AdminOrganizationDetail(OrganizationResponse):

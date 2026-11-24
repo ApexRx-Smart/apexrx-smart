@@ -557,16 +557,19 @@ def main():
         owner.select_option("#lang", "en"); owner.wait_for_function("() => document.documentElement.lang === 'en'")
         owner.context.close()
 
-        # ========================================================= suspension: read only
+        # ========================================================= suspension: closed
         call("POST", f"/admin/organizations/{w['org']}/review", {"decision": "suspended", "notes": "Licence check"}, w["admin"])
-        owner = page_for(browser, w["owner_email"])
-        workspace(owner)
-        owner.click("#rv-groups [data-s='']")
-        rows = listed(owner)
-        open_ref(owner, w["r_short"])
-        check("suspended: reservations can still be read; open ones were closed by the suspension; no actions",
-              len(rows) > 0 and "read reservations but not act" in owner.inner_text("#view")
-              and owner.locator("#rv-detail [data-a=rvact]").count() == 0 and "Cancelled" in detail_text(owner))
+        owner = page_for(browser, None)  # signed out: sign in by hand, the helper expects a dashboard
+        owner.goto(f"{D.SITE}/pharmacy-sign-in.html")
+        owner.fill("#account [name=email]", w["owner_email"])
+        owner.fill("#account [name=password]", D.PW)
+        owner.click("#account button.primary")
+        owner.wait_for_url("**/business-status.html*", timeout=30000)
+        owner.wait_for_selector("#bs-main:not([hidden])", timeout=20000)
+        status, body = call("GET", f"/organizations/{w['org']}/reservations", token=w["owner"], expect_error=True)
+        check("suspended: the workspace and its reservations are closed (status page; API 403)",
+              "Your account is suspended." in owner.inner_text("#bs-main") and "Licence check" in owner.inner_text("#bs-main")
+              and status == 403 and body["code"] == "organization_not_approved")
         owner.context.close()
 
         check("no page errors", not errors, errors[:3])

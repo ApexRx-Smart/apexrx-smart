@@ -146,11 +146,14 @@ def test_validation_approval_and_rate_limit(client):
     r = client.post(f"/conversations/{cid}/messages", json={"body": "one too many"}, headers=w.pharmacy_owner)
     assert r.status_code == 429 and int(r.headers["Retry-After"]) >= 1
 
-    # A suspended counterpart: history stays readable, but no new messages.
+    # A suspended organization is closed to its own members (operational access
+    # needs approval); the other side keeps its history but cannot write to it.
     with engine.begin() as conn:
         conn.execute(text("UPDATE organization SET status = 'suspended' WHERE organization_id = :o"), {"o": w.supplier})
-    assert client.get(f"/conversations/{cid}/messages", headers=w.supplier_owner).status_code == 200
-    assert client.post(f"/conversations/{cid}/messages", json={"body": "hello"}, headers=w.supplier_owner).status_code == 403
+    assert client.get(f"/conversations/{cid}/messages", headers=w.supplier_owner).status_code == 404
+    assert client.post(f"/conversations/{cid}/messages", json={"body": "hello"}, headers=w.supplier_owner).status_code == 404
+    assert client.get(f"/conversations/{cid}/messages", headers=w.pharmacy_owner).status_code == 200
+    assert client.post(f"/conversations/{cid}/messages", json={"body": "hello"}, headers=w.pharmacy_owner).status_code == 403
     # Nor can a suspended organization start conversations.
     assert _start(client, w.supplier_owner, w.supplier, w.pharmacy).status_code == 403
 

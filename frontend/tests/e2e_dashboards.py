@@ -57,6 +57,40 @@ def call(method, path, body=None, token=None, expect_error=False):
         raise SystemExit(f"{method} {path} -> {e.code}: {payload}") from None
 
 
+# A labelled dummy file: never a real licence.
+TEST_PDF = b"%PDF-1.4\n% ApexRX browser-test document, not a real licence\n%%EOF\n"
+
+
+def upload_document(org, token, doc_type, content=TEST_PDF, name="test-licence.pdf", api=None):
+    """POST /organizations/{org}/documents (multipart), as the registration page does."""
+    boundary = "----apexrx" + uuid.uuid4().hex
+    head = (f'--{boundary}\r\nContent-Disposition: form-data; name="document_type"\r\n\r\n{doc_type}\r\n'
+            f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{name}"\r\n'
+            'Content-Type: application/pdf\r\n\r\n')
+    body = head.encode() + content + f"\r\n--{boundary}--\r\n".encode()
+    req = urllib.request.Request((api or API) + f"/organizations/{org}/documents", data=body, method="POST",
+                                 headers={"Content-Type": f"multipart/form-data; boundary={boundary}",
+                                          "Authorization": f"Bearer {token}", "Accept": "application/json"})
+    with urllib.request.urlopen(req) as r:
+        return json.loads(r.read().decode())
+
+
+def complete_application(org, token, admin, call_fn=None, api=None):
+    """The real application flow through the API: upload every required document,
+    submit, and an administrator approves each document. Then the organization
+    can be approved (POST /admin/organizations/{org}/review)."""
+    c = call_fn or call
+    application = c("GET", f"/organizations/{org}/application", token=token)
+    for d in application["required_documents"]:
+        if d["status"] in ("missing", "rejected"):
+            upload_document(org, token, d["document_type"], api=api)
+    if application["stage"] in ("in_progress", "rejected"):
+        c("POST", f"/organizations/{org}/submit", token=token)
+    for d in c("GET", f"/organizations/{org}/application", token=token)["required_documents"]:
+        if d["status"] == "pending":
+            c("POST", f"/admin/documents/{d['document_id']}/review", {"decision": "approved"}, admin)
+
+
 def account(email, name, kind="pharmacy"):
     call("POST", "/auth/register", {"name": name, "email": email, "password": PW, "account_type": kind})
     return call("POST", "/auth/login", {"email": email, "password": PW, "account_type": kind})["access_token"]
@@ -79,6 +113,7 @@ def org_with_owner(email, name, org_name, kind, locations, approve=True, admin=N
     org = call("POST", "/organizations", {"name": org_name, "type": kind}, token)["organization_id"]
     locs = [call("POST", f"/organizations/{org}/locations", loc, token)["location_id"] for loc in locations]
     if approve:
+        complete_application(org, token, admin)
         call("POST", f"/admin/organizations/{org}/review", {"decision": "approved"}, admin)
     return token, org, locs
 
@@ -176,12 +211,16 @@ def sign_in(page, email, kind="pharmacy", org=None, new=False):
 
 
 def _wait_signed_in(page):
-    page.wait_for_function("location.pathname.endsWith('-dashboard.html') || !document.querySelector('#org-choice').hidden"
+    page.wait_for_function("location.pathname.endsWith('-dashboard.html') || location.pathname.endsWith('business-status.html')"
+                           " || !document.querySelector('#org-choice').hidden || !document.querySelector('#documents').hidden"
                            " || !document.querySelector('#join-wait')?.hidden || !document.querySelector('#details').hidden"
                            " || !document.querySelector('#review').hidden || !document.querySelector('#verify-email').hidden", timeout=20000)
 
 
 def _after_sign_in(page, kind, email, org):
+    # A business that is not approved: its unfinished registration, or its status page.
+    if "business-status.html" in page.url or page.is_visible("#documents"):
+        return
     if "-dashboard.html" not in page.url and page.is_visible("#org-choice"):
         page.click(f"#org-choice-list button[data-org='{org}']" if org else "#org-choice-list button")
     if "-dashboard.html" not in page.url and page.is_visible("#review"):  # e.g. documents still to upload
@@ -514,11 +553,14 @@ def main():
         # ============================================================ pending organization
         pend = new_page(browser)
         sign_in(pend, w["pend_email"])
-        check("pending pharmacy: banner, status and locked supplier prices",
-              "Pending verification" in pend.inner_text("#ver") and "awaiting verification" in pend.inner_text(".banner"))
-        open_view(pend, "cmp")
-        wait_text(pend, "#rows", "open once your pharmacy is approved")
-        check("pending pharmacy: supplier prices locked", True)
+        check("pending pharmacy: signing in continues the unfinished registration (documents)",
+              pend.is_visible("#documents") and "-dashboard" not in pend.url)
+        pend.goto(f"{SITE}/pharmacy-dashboard.html")
+        pend.wait_for_url("**/business-status.html*", timeout=20000)
+        pend.wait_for_selector("#bs-main:not([hidden])", timeout=20000)
+        check("pending pharmacy: the dashboard is closed; the status page explains why",
+              "Registration not finished" in pend.inner_text("#bs-badge")
+              and "workspace stays closed" in pend.inner_text("#bs-main"))
 
         # ============================================================ joining an existing pharmacy
         joiner = new_page(browser)

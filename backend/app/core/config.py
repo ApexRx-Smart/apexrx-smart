@@ -169,6 +169,11 @@ class Settings(BaseSettings):
     # Unset: the webhook answers 404.
     esms_webhook_secret: SecretStr | None = None
 
+    # How pharmacies and suppliers reach ApexRX about their application (shown
+    # on the application status page). Unset: the page shows no contact details.
+    support_contact_email: str | None = None
+    support_contact_phone: str | None = None
+
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",
         env_file_encoding="utf-8",

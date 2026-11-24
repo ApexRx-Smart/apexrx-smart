@@ -719,14 +719,18 @@ def test_expired_reservation_cannot_be_collected(w):
     assert w.stock_quantity() == 10
 
 
-def test_suspended_pharmacy_can_read_but_not_act(w):
+def test_suspended_pharmacy_is_closed_and_its_reservations_cancelled(w):
     ref = reserve(w)
     r = w.client.post(f"/admin/organizations/{w.org}/review",
                       json={"decision": "suspended", "notes": "Licence check"}, headers=w.admin_headers)
     assert r.status_code == 200, r.text
-    data = pharmacy(w, ref).json()
-    assert data["status"] == "cancelled" and data["actions"] == [] and data["system_reason"]
-    assert pharmacy(w, ref, "confirm").status_code == 403
+    # The patient sees the reservation cancelled, closed, with the cancellation in its history.
+    data = w.client.get(f"/reservations/{ref}", headers=w.headers[w.patient]).json()
+    assert data["status"] == "cancelled" and data["closed_at"] and data["history"][-1]["to_status"] == "cancelled"
+    assert data["history"][-1]["by"] == "system" and data["history"][-1]["system_reason"]
+    # The suspended pharmacy reaches neither its reservations nor their actions.
+    for resp in (pharmacy(w, ref), pharmacy(w, ref, "confirm")):
+        assert resp.status_code == 403 and resp.json()["code"] == "organization_not_approved"
 
 
 # ---------------------------------------------------------------------------

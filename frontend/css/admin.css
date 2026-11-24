@@ -193,3 +193,7 @@ ol.demand { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 .pw-wrap input { padding-right: 44px !important; }
 .pw-eye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--muted); }
 .pw-eye:hover { color: var(--navy); background: var(--mint); }
+
+/* Pending card: how many of them are submitted and ready for review */
+.stat .stat-sub{display:block;font-size:11px;color:var(--muted, #677483);margin-top:2px}
+.stat .stat-sub b{font-weight:700}

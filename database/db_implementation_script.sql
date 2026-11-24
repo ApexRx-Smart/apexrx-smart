@@ -1,6 +1,6 @@
 -- =============================================================================
 -- ApexRx: complete database schema
--- Alembic revision: b8d2f6a3c1e7 (the head of backend/alembic/versions)
+-- Alembic revision: c9e4a7b2d6f1 (the head of backend/alembic/versions)
 -- PostgreSQL 13+
 -- =============================================================================
 --
@@ -13,7 +13,7 @@
 --
 -- How to use it
 --   * Run it on an EMPTY database:  psql -v ON_ERROR_STOP=1 -d <db> -f db_implementation_script.sql
---   * It ends by recording revision b8d2f6a3c1e7 in alembic_version, so Alembic treats
+--   * It ends by recording revision c9e4a7b2d6f1 in alembic_version, so Alembic treats
 --     the database as up to date and later migrations apply normally.
 --   * Real deployments are still built and upgraded with `alembic upgrade head`;
 --     the migrations are the source of truth. When a migration is added,
@@ -33,6 +33,7 @@
 --   SMS one-time codes via eSMS Africa (challenge_ref, delivery status,
 --   app_user.phone_verification_required)                    (a6c3e9d1f4b2)
 --   Account type (patient / pharmacy / supplier) per account (b8d2f6a3c1e7)
+--   Application submitted for review (organization.submitted_at) (c9e4a7b2d6f1)
 --
 -- Audit actor
 --   Every transaction that writes stock, product_offer, purchase orders or their
@@ -1243,6 +1244,7 @@ CREATE TABLE public.organization (
     reviewed_at timestamp with time zone,
     reviewed_by bigint,
     review_notes text,
+    submitted_at timestamp with time zone,
     CONSTRAINT organization_check CHECK ((((status)::text = 'pending'::text) OR (reviewed_at IS NOT NULL))),
     CONSTRAINT organization_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'approved'::character varying, 'rejected'::character varying, 'suspended'::character varying])::text[]))),
     CONSTRAINT organization_type_check CHECK (((type)::text = ANY ((ARRAY['pharmacy'::character varying, 'supplier'::character varying])::text[])))
@@ -3010,12 +3012,12 @@ ALTER TABLE ONLY public.stock
 --
 
 -- -----------------------------------------------------------------------------
--- Alembic bookkeeping: this database is at revision b8d2f6a3c1e7.
+-- Alembic bookkeeping: this database is at revision c9e4a7b2d6f1.
 -- -----------------------------------------------------------------------------
 CREATE TABLE public.alembic_version (
     version_num character varying(32) NOT NULL,
     CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
 );
-INSERT INTO public.alembic_version (version_num) VALUES ('b8d2f6a3c1e7');
+INSERT INTO public.alembic_version (version_num) VALUES ('c9e4a7b2d6f1');
 
 COMMIT;

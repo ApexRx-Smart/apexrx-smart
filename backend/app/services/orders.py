@@ -110,14 +110,19 @@ PHARMACY_MANAGER_ROLES = frozenset({"owner", "manager"})
 # ---------------------------------------------------------------------------
 def user_sides(db: Session, user: User, order: PurchaseOrder) -> set[Side]:
     """The sides of the order the user acts for (normally exactly one)."""
+    # Only an approved organization of the account's own type acts on orders.
     org_ids = set(
         db.scalars(
-            select(Membership.organization_id).where(
+            select(Membership.organization_id)
+            .join(Organization, Organization.organization_id == Membership.organization_id)
+            .where(
                 Membership.user_id == user.user_id,
                 Membership.is_active.is_(True),
                 Membership.organization_id.in_(
                     [order.pharmacy_organization_id, order.supplier_organization_id]
                 ),
+                Organization.status == OrganizationStatus.APPROVED,
+                Organization.type == user.account_type,
             )
         )
     )

@@ -138,7 +138,7 @@ def list_conversations(
 ):
     """The organization's conversations, most recent activity first, with the
     last message and the number of messages this user has not read."""
-    access = get_org_access(db, user, organization_id)
+    access = get_org_access(db, user, organization_id, require_approved=True)
     own = (
         Conversation.pharmacy_organization_id
         if access.organization.type == OrganizationType.PHARMACY
@@ -179,7 +179,7 @@ def contacts(
 ):
     """Approved organizations of the other type this organization can write
     to: suppliers for a pharmacy, pharmacies for a supplier."""
-    access = get_org_access(db, user, organization_id)
+    access = get_org_access(db, user, organization_id, require_approved=True)
     other_type = (
         OrganizationType.SUPPLIER
         if access.organization.type == OrganizationType.PHARMACY
@@ -294,7 +294,7 @@ def _audience(db: Session, user: User, organization_id: int | None):
     organization the caller's personal ones (e.g. a patient's reservations)."""
     if organization_id is None:
         return Notification.recipient_user_id == user.user_id
-    get_org_access(db, user, organization_id)
+    get_org_access(db, user, organization_id, require_approved=True)
     return Notification.organization_id == organization_id
 
 
