@@ -80,6 +80,12 @@ class MemberResponse(BaseModel):
 
 
 # Locations --------------------------------------------------------------------
+# Every pharmacy branch and supplier depot is in Rwanda: a box around the country
+# (with a small margin), the same one the map picker uses (js/location-picker.js).
+# Coordinates from the browser are never trusted beyond this check.
+RWANDA = {"lat_min": Decimal("-2.9"), "lat_max": Decimal("-1.0"), "lng_min": Decimal("28.8"), "lng_max": Decimal("31.0")}
+
+
 class _LocationFields(BaseModel):
     # Rwandan address: region = province, city = district, then sector, cell
     # and village; address = street or landmark.
@@ -101,6 +107,11 @@ class _LocationFields(BaseModel):
             raise ValueError("latitude and longitude must be provided together")
         if (self.latitude is None) != (self.longitude is None):
             raise ValueError("latitude and longitude must both be set or both be null")
+        if self.latitude is not None and not (
+            RWANDA["lat_min"] <= self.latitude <= RWANDA["lat_max"]
+            and RWANDA["lng_min"] <= self.longitude <= RWANDA["lng_max"]
+        ):
+            raise ValueError("The location must be in Rwanda. Choose the point on the map again.")
         return self
 
 

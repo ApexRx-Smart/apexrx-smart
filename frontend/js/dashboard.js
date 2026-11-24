@@ -1087,7 +1087,8 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
   }
 
   /* --------------------------------------------------------------- dialogs */
-  function ask(title, bodyHtml, submit) {
+  // onOpen(dialog): runs once the dialog is shown (e.g. to size a map inside it).
+  function ask(title, bodyHtml, submit, onOpen) {
     const d = $('#dlg');
     d.innerHTML = `<form method="dialog" id="dlgf"><h2>${esc(title)}</h2>${bodyHtml}<div class="dlg-a"><button type="button" class="ghost" id="dlg-x">${esc(t('Cancel'))}</button><button class="solid">${esc(submit)}</button></div></form>`;
     return new Promise(res => {
@@ -1097,6 +1098,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
       $('#dlg-x').addEventListener('click', () => finish(null));
       d.addEventListener('cancel', () => res(null), { once: true });
       d.showModal();
+      if (onOpen) onOpen(d);
     });
   }
   async function reload(view) {
@@ -1224,14 +1226,24 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
   // Branches (pharmacy) or depots (supplier): add and edit with the same dialog.
   async function locationDialog(l) {
     const v = k => esc(l && l[k] != null ? l[k] : '');
+    let picker = null;
     const fd = await ask(t(l ? 'Edit {n}' : IS_PH ? 'Add a branch' : 'Add a depot', { n: l ? l.name : '' }),
-      `<label>${esc(t('Name'))}<input name="name" required maxlength="200" value="${v('name')}"></label><label>${esc(t('Province'))}<input name="region" maxlength="100" value="${v('region')}"></label><label>${esc(t('District'))}<input name="city" maxlength="100" value="${v('city')}"></label><label>${esc(t('Sector'))}<input name="sector" maxlength="100" value="${v('sector')}"></label><label>${esc(t('Address'))}<input name="address" maxlength="500" value="${v('address')}"></label><label>${esc(t('Phone'))}<input name="phone" placeholder="+250 788 123 456" value="${v('phone')}"></label><label>${esc(t('WhatsApp'))}<input name="whatsapp_phone" placeholder="+250 788 123 456" value="${v('whatsapp_phone')}"></label><label>${esc(t('Latitude'))}<input name="latitude" type="number" step="any" min="-90" max="90" value="${v('latitude')}"></label><label>${esc(t('Longitude'))}<input name="longitude" type="number" step="any" min="-180" max="180" value="${v('longitude')}"></label>`, t('Save'));
+      `<label>${esc(t('Name'))}<input name="name" required maxlength="200" value="${v('name')}"></label><label>${esc(t('Province'))}<input name="region" maxlength="100" value="${v('region')}"></label><label>${esc(t('District'))}<input name="city" maxlength="100" value="${v('city')}"></label><label>${esc(t('Sector'))}<input name="sector" maxlength="100" value="${v('sector')}"></label><label>${esc(t('Address'))}<input name="address" maxlength="500" value="${v('address')}"></label><label>${esc(t('Phone'))}<input name="phone" placeholder="+250 788 123 456" value="${v('phone')}"></label><label>${esc(t('WhatsApp'))}<input name="whatsapp_phone" placeholder="+250 788 123 456" value="${v('whatsapp_phone')}"></label><div class="loc-map-field"><strong>${esc(t('Map location'))}</strong><p class="muted">${esc(t(IS_PH ? 'Place the branch on the map: search for its address or click the map. You do not need to be there.' : 'Place the depot on the map: search for its address or click the map. You do not need to be there.'))}</p><div id="loc-picker"></div></div>`, t('Save'),
+      () => {
+        // The map location (js/location-picker.js); the server checks it again.
+        if (!window.ApexLocationPicker) return;
+        picker = window.ApexLocationPicker.mount($('#loc-picker'), {
+          t, buttonClass: 'ghost',
+          value: l && l.latitude != null ? { lat: Number(l.latitude), lng: Number(l.longitude) } : null
+        });
+        setTimeout(() => picker.refresh(), 50); // sized once the dialog is visible
+      });
     if (!fd) return;
     const val = k => String(fd.get(k) || '').trim();
-    if (!!val('latitude') !== !!val('longitude')) { toast(t('Enter both latitude and longitude, or neither.')); return; }
     const body = { name: val('name') };
     ['region', 'city', 'sector', 'address', 'phone', 'whatsapp_phone'].forEach(k => { if (val(k) || l) body[k] = val(k) || null; });
-    if (val('latitude')) { body.latitude = Number(val('latitude')); body.longitude = Number(val('longitude')); } else if (l) { body.latitude = null; body.longitude = null; }
+    const at = picker ? picker.get() : null;
+    if (at) { body.latitude = at.lat; body.longitude = at.lng; } else if (l && picker) { body.latitude = null; body.longitude = null; }
     if (!l && !body.whatsapp_phone && body.phone) body.whatsapp_phone = body.phone;
     try {
       if (l) await data.updateLocation(l.location_id, body); else await data.addLocation(body);

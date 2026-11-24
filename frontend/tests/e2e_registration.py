@@ -24,6 +24,7 @@ EMAIL_PROVIDER=mock, frontend on http://127.0.0.1:5501, an admin account, then
 (E2E_BROWSER_CHANNEL=chrome uses the installed Chrome.)
 """
 
+import base64
 import json
 import os
 import sys
@@ -123,10 +124,18 @@ def wait_text(page, selector, text, timeout=15000):
                            arg=[selector, text], timeout=timeout)
 
 
+TILE = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/6XIRlUAAAAASUVORK5CYII=")
+PLACE = [{"display_name": "KG 11 Ave, Kimironko, Gasabo, Kigali, Rwanda", "lat": "-1.9490", "lon": "30.1260"}]
+
+
 def new_context(browser, viewport=None):
     ctx = browser.new_context(viewport=viewport or {"width": 1366, "height": 900})
     ctx.route("**/js/config.js", lambda route: route.fulfill(
         content_type="application/javascript", body=f'window.APEX_CONFIG = {{ API_BASE_URL: "{API}" }};'))
+    # OpenStreetMap is not contacted: map tiles and the address search are stubbed.
+    ctx.route("https://tile.openstreetmap.org/**", lambda r: r.fulfill(content_type="image/png", body=TILE))
+    ctx.route("https://nominatim.openstreetmap.org/**", lambda r: r.fulfill(
+        content_type="application/json", body=json.dumps(PLACE), headers={"Access-Control-Allow-Origin": "*"}))
     return ctx
 
 
@@ -255,8 +264,8 @@ def main():
         check("details: nothing is sent before validation", find_org(f"Reg Pharmacy {RUN}") == [])
         check("details: only supported fields (no license, NPC, TIN or FDA numbers)",
               sorted(page.eval_on_selector_all("#details input[name], #details select[name]", "els => els.map(e => e.name)"))
-              == sorted(["name", "phone", "place", "whatsapp", "street", "latitude", "longitude",
-                         "province", "district", "sector", "cell", "village"]))
+              == sorted(["name", "phone", "place", "whatsapp", "street",
+                         "province", "district", "sector", "cell", "village"]))  # the map picker has no typed coordinates
         name = f"Reg Pharmacy {RUN}"
         page.fill("#details [name=name]", name)
         page.fill("#details [name=phone]", "0788 123 456")
@@ -265,14 +274,14 @@ def main():
         check("details: the address lists cascade (district -> sector -> cell -> village)",
               page.locator("#address-fields [name=village] option").count() > 1)
         page.fill("#details [name=street]", "KG 11 Ave")
-        page.fill("#details [name=latitude]", "48.85")
-        page.fill("#details [name=longitude]", "2.35")
-        page.click("#details-submit")
-        wait_text(page, "#form-error", "outside Rwanda")
-        page.fill("#details [name=latitude]", "-1.9490")
-        page.fill("#details [name=longitude]", "30.1260")
-        check("details: a map link checks the coordinates",
-              "openstreetmap.org/?mlat=-1.949" in (page.get_attribute("#map-check", "href") or ""))
+        # The map location: searched (stubbed OpenStreetMap answer, see new_context).
+        page.fill("#location-picker .lp-query", "Kimironko")
+        page.click("#location-picker .lp-find")
+        page.click("#location-picker .lp-results button")
+        wait_text(page, "#location-picker .lp-status", "-1.949000")
+        check("details: the map location is chosen on the map (no coordinates to type)",
+              page.locator("#details [name=latitude]").count() == 0
+              and page.input_value("#details [name=street]") == "KG 11 Ave")  # an entered street is kept
         page.click("#details-submit")
         visible(page, "#documents")
         types = page.eval_on_selector_all("#doc-list input[type=file]", "els => els.map(e => e.dataset.documentType)")

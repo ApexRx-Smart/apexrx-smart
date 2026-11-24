@@ -1,0 +1,22 @@
+/* Map location picker (js/location-picker.js): registration and the dashboards.
+   Colours inherit from the page (light or dark), with neutral fallbacks. */
+.lp{display:grid;gap:10px;min-width:0;margin:6px 0 12px}
+.lp-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-width:0}
+.lp-search .lp-query{flex:1 1 200px;min-width:0;margin:0}
+.lp-search button,.lp-row .lp-gps{white-space:nowrap}
+.lp-results{list-style:none;margin:0;padding:0;display:grid;gap:4px;max-height:220px;overflow:auto}
+.lp-results button{width:100%;text-align:left;background:transparent;border:1px solid var(--border,#d6dde2);border-radius:8px;padding:8px 10px;font:inherit;font-size:12px;color:inherit;cursor:pointer;overflow-wrap:anywhere}
+.lp-results button:hover,.lp-results button:focus-visible{border-color:var(--green,#008f64)}
+.lp-map{height:260px;width:100%;border:1px solid var(--border,#d6dde2);border-radius:10px;overflow:hidden;z-index:0;background:#e8eef0}
+.lp-map .leaflet-control-attribution{font-size:10px}
+.lp-nomap{margin:0;padding:16px;font-size:12px;color:var(--muted,#677483)}
+.lp-hint,.lp-status{margin:0;font-size:12px;color:var(--muted,#677483)}
+.lp-status strong{color:inherit;font-variant-numeric:tabular-nums}
+.lp-message{margin:0;font-size:12px;color:#a93434}
+.lp-message:empty{display:none}
+.lp .lp-clear{justify-self:start;margin:0;padding:2px 0}
+@media(max-width:520px){.lp-map{height:220px}.lp-search button{flex:1 1 auto}}
+.lp .lp-search input.lp-query{display:block;width:auto;margin:0;padding:9px 11px;border:1px solid var(--border,#d6dde2);border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:13px}
+.loc-map-field{display:grid;gap:4px;margin-top:6px}
+.loc-map-field .muted{margin:0;font-size:12px}
+.lp-pin{width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#008f64;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4);cursor:grab}
