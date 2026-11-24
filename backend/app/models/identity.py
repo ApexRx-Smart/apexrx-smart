@@ -143,6 +143,19 @@ class Membership(Base):
     )
 
 
+
+class MembershipBranch(Base):
+    """A pharmacy branch a manager or staff member works at: they see that
+    branch's supplier conversations. Owners need no rows (every branch)."""
+
+    __tablename__ = "membership_branch"
+
+    membership_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    location_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    assigned_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.user_id"))
+    assigned_at: Mapped[datetime] = created_at_column()
+
 class Location(Base):
     """A pharmacy branch or a supplier warehouse (the org's type says which)."""
 

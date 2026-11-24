@@ -378,15 +378,36 @@ ${canManage() ? `<div class="up" style="margin-top:12px"><div class="row"><label
   const PARTY_TYPE = IS_PH ? 'Supplier' : 'Pharmacy';
   const ts = d => d ? +new Date(d) : 0;
   const lastAt = c => Math.max(ts(c.conv && (c.conv.last_message_at || c.conv.created_at)), ...c.orders.map(o => ts(o.updated_at)), ...c.reqs.map(r => ts(r.updated_at)), 0);
+  // A conversation belongs to a pharmacy BRANCH and a supplier. A pharmacy sees
+  // the threads of the branch it is viewing (S.loc); a supplier has one thread
+  // per pharmacy branch ("Pharmacy · Branch").
+  const keyOf = (orgId, branchId) => IS_PH ? orgId : `${orgId}:${branchId ?? ''}`;
+  const inBranch = ph => !IS_PH || !S.loc || !ph || ph.location_id == null || ph.location_id === S.loc;
   function threads() {
     const by = new Map();
-    const add = (id, party) => { if (!by.has(id)) by.set(id, { party, orders: [], reqs: [], conv: null }); return by.get(id); };
-    S.convs.forEach(c => { const x = c.counterpart; add(x.organization_id, { organization_id: x.organization_id, name: x.name, location_name: x.city, phone: x.phone }).conv = c; });
-    S.orders.forEach(o => { const p = partyOf(o); add(p.organization_id, p).orders.push(o); });
-    S.reqs.forEach(r => { const p = IS_PH ? r.supplier : r.pharmacy; add(p.organization_id, p).reqs.push(r); });
-    if (S.newParty) add(S.newParty.organization_id, S.newParty);
+    const add = (key, party) => { if (!by.has(key)) by.set(key, { party: { ...party, key }, orders: [], reqs: [], conv: null }); return by.get(key); };
+    S.convs.forEach(c => {
+      const x = c.counterpart, b = c.pharmacy_location || {};
+      add(keyOf(x.organization_id, b.location_id), { organization_id: x.organization_id, name: x.name,
+        location_name: IS_PH ? x.city : b.name, location_id: b.location_id, phone: x.phone }).conv = c;
+    });
+    S.orders.forEach(o => {
+      if (!inBranch(o.pharmacy)) return;
+      const p = partyOf(o), b = o.pharmacy && o.pharmacy.location_id;
+      add(keyOf(p.organization_id, b), IS_PH ? p : { ...p, location_id: b }).orders.push(o);
+    });
+    S.reqs.forEach(r => {
+      if (!inBranch(r.pharmacy)) return;
+      const p = IS_PH ? r.supplier : r.pharmacy, b = r.pharmacy && r.pharmacy.location_id;
+      add(keyOf(p.organization_id, b), IS_PH ? p : { ...p, location_id: b }).reqs.push(r);
+    });
+    if (S.newParty) add(S.newParty.key, S.newParty);
     return [...by.values()].sort((a, b) => lastAt(b) - lastAt(a));
   }
+  // The conversations of the branch being viewed (pharmacy) or all (supplier).
+  // A pharmacy member not assigned to that branch gets none (S.noBranch).
+  const convsFor = quiet => data.conversations(quiet, IS_PH ? S.loc : undefined).then(c => { S.noBranch = false; return c; },
+    err => { if (IS_PH && err && err.status === 404) { S.noBranch = true; return { items: [], unread_total: 0 }; } throw err; });
   const unreadOf = c => c.conv ? c.conv.unread_count || 0 : 0;
   const clip = (x, n) => x.length > n ? x.slice(0, n - 1) + '…' : x;
   const threadPreview = c => {
@@ -407,8 +428,12 @@ ${canManage() ? `<div class="up" style="margin-top:12px"><div class="row"><label
   function clist() {
     const el = $('#clist'); if (!el) return;
     const list = threads();
-    if (!S.party && list.length) S.party = list[0].party.organization_id;
-    el.innerHTML = `<button class="ghost cl-new" data-a="newconv"${approved() ? '' : ' disabled'}>${esc(t('New conversation'))}</button>` + (list.map(c => `<button class="citem" data-a="conv" data-c="${c.party.organization_id}"${c.party.organization_id === S.party ? ' aria-current="true"' : ''}><strong>${esc(c.party.name)}</strong><span class="ct"><i class="tag">${esc(t(PARTY_TYPE))}</i>${lastAt(c) ? ` <time>${esc(ago(lastAt(c)))}</time>` : ''}</span><span>${esc(threadPreview(c))}</span>${unreadMark(c)}</button>`).join('') || `<p class="empty">${esc(t('No conversations yet.'))}</p>`);
+    if (!S.party && list.length) S.party = list[0].party.key;
+    if (S.noBranch) {
+      el.innerHTML = `<p class="note">${esc(t('You are not assigned to this branch. Ask the pharmacy owner to add you to it in Settings → Team.'))}</p>`;
+      return;
+    }
+    el.innerHTML = `<button class="ghost cl-new" data-a="newconv"${approved() ? '' : ' disabled'}>${esc(t('New conversation'))}</button>` + (list.map(c => `<button class="citem" data-a="conv" data-c="${esc(c.party.key)}"${c.party.key === S.party ? ' aria-current="true"' : ''}><strong>${esc(c.party.name)}${!IS_PH && c.party.location_name ? ` · ${esc(c.party.location_name)}` : ''}</strong><span class="ct"><i class="tag">${esc(t(PARTY_TYPE))}</i>${lastAt(c) ? ` <time>${esc(ago(lastAt(c)))}</time>` : ''}</span><span>${esc(threadPreview(c))}</span>${unreadMark(c)}</button>`).join('') || `<p class="empty">${esc(t('No conversations yet.'))}</p>`);
   }
   const itemTable = (o, confirmed) => `<table class="lt"><thead><tr><th>${esc(t('Item'))}</th><th>${esc(t('Boxes'))}</th><th>${esc(t('Per box'))}</th></tr></thead><tbody>${o.items.map(i => `<tr><td>${esc(fullLabel(i))}</td><td>${confirmed ? i.confirmed_quantity ?? i.requested_quantity : i.requested_quantity}</td><td>${money(confirmed ? i.confirmed_unit_price ?? i.requested_unit_price : i.requested_unit_price, o.currency)}</td></tr>`).join('')}</tbody></table>`;
   function orderBubbles(o) {
@@ -426,12 +451,12 @@ ${canManage() ? `<div class="up" style="margin-top:12px"><div class="row"><label
     if (btns) parts.push(`<div class="qa" style="align-self:center">${btns}</div>`);
     return parts.join('');
   }
-  const msgBubble = m => `<div class="b ${m.mine ? 'out' : 'in'}" data-m="${m.message_id}">${m.mine ? '' : `<span class="who-s">${esc(m.sender_name || '')}</span>`}<p class="tx">${esc(m.body)}</p><span class="tm">${m.mine && m.sender_name ? esc(m.sender_name) + ' · ' : ''}${esc(fmtTime(m.created_at))}</span></div>`;
+  const msgBubble = m => `<div class="b ${m.mine ? 'out' : 'in'}" data-m="${m.message_id}">${m.mine ? '' : `<span class="who-s">${esc(m.sender_name || '')}${m.sender_organization_name ? ` · ${esc(m.sender_organization_name)}` : ''}</span>`}<p class="tx">${esc(m.body)}</p><span class="tm">${m.mine && m.sender_name ? esc(m.sender_name) + ' · ' : ''}${esc(fmtTime(m.created_at))}</span></div>`;
   const requestCard = r => `<div class="b ${IS_PH ? 'out' : 'in'} rqc"><strong>${esc(t('Procurement request #{id}', { id: r.procurement_request_id }))}</strong><p style="margin:4px 0">${esc(pl(r.item_count, '{n} medicine', '{n} medicines'))} · ${reqTag(r.status)}</p><button class="ghost" data-a="rqopen" data-r="${r.procurement_request_id}">${esc(t('Open request'))}</button><span class="tm">${esc(fmtTime(r.created_at))}</span></div>`;
   async function thread() {
     const el = $('#thread'); if (!el) return;
     clist();
-    const c = threads().find(x => x.party.organization_id === S.party);
+    const c = S.noBranch ? null : threads().find(x => x.party.key === S.party);
     S.chat = null;
     if (!c) { el.innerHTML = `<p class="empty">${esc(t(IS_PH ? 'Start a conversation with a supplier, or pick one in Compare prices.' : 'Start a conversation with a pharmacy.'))}</p>`; return; }
     const p = c.party, can = approved();
@@ -491,12 +516,13 @@ ${S.listOpen ? `<div class="lb"><strong>${esc(t('Order list'))}</strong><p class
   async function sendMessage() {
     const box = $('#msg'); if (!box || sending) return;
     const text = box.value.trim(); if (!text) return;
-    const c = threads().find(y => y.party.organization_id === S.party); if (!c) return;
+    const c = threads().find(y => y.party.key === S.party); if (!c) return;
     const party = S.party, btn = $('#sendf .solid');
     sending = true; if (btn) btn.disabled = true;
     try {
       let conv = c.conv;
-      if (!conv) { conv = upsertConv(await data.startConversation(party)); S.newParty = null; }
+      // Pharmacy: the branch being viewed. Supplier: the pharmacy branch of this thread.
+      if (!conv) { conv = upsertConv(await data.startConversation(c.party.organization_id, IS_PH ? S.loc : c.party.location_id)); S.newParty = null; }
       const m = await data.sendMessage(conv.conversation_id, text);
       box.value = '';
       Object.assign(conv, { last_message: m, last_message_at: m.created_at });
@@ -529,10 +555,23 @@ ${S.listOpen ? `<div class="lb"><strong>${esc(t('Order list'))}</strong><p class
       paintMsgs(false); markSeen(); clist();
     } catch (e) { /* the next tick tries again */ }
   }
+  // Open a conversation by id: a pharmacy switches to its branch first.
+  async function openConversation(conversationId, fallbackParty) {
+    let conv = S.convs.find(c => c.conversation_id === conversationId);
+    if (!conv && conversationId) { try { conv = await data.conversation(conversationId); } catch (e) { conv = null; } }
+    const branch = conv && conv.pharmacy_location ? conv.pharmacy_location.location_id : null;
+    if (IS_PH && branch && branch !== S.loc && activeLocations().some(l => l.location_id === branch)) {
+      S.loc = branch; if ($('#br')) $('#br').value = String(branch);
+      try { S.stock = await data.stock(S.loc); const c = await convsFor(); S.convs = c.items; S.unread = c.unread_total; } catch (err) { fail(err); }
+    }
+    S.party = conv ? keyOf(conv.counterpart.organization_id, branch) : fallbackParty;
+    S.listOpen = false; go('msg');
+  }
   // Start (or reopen) the conversation with an organization chosen in the directory.
   function openParty(p) {
-    if (!threads().some(c => c.party.organization_id === p.organization_id)) S.newParty = p;
-    S.party = p.organization_id; S.listOpen = false; go('msg');
+    const key = keyOf(p.organization_id, p.location_id);
+    if (!threads().some(c => c.party.key === key)) S.newParty = { ...p, key };
+    S.party = key; S.listOpen = false; go('msg');
   }
   function newConversation() {
     const d = $('#dlg');
@@ -545,7 +584,10 @@ ${S.listOpen ? `<div class="lb"><strong>${esc(t('Order list'))}</strong><p class
     try {
       const list = await data.contacts(q.trim());
       if (run !== contactRun || !$(target)) return;
-      $(target).innerHTML = list.map(c => `<button type="button" class="pick-i" data-a="${action}" data-s="${c.organization_id}" data-n="${esc(c.name)}" data-city="${esc(c.city || '')}"><strong>${esc(c.name)}</strong><small>${esc(c.city || t(PARTY_TYPE))}</small></button>`).join('')
+      const entries = list.flatMap(c => c.branches ? c.branches.map(b => ({ ...c, branch: b })) : [c]);
+      $(target).innerHTML = entries.map(c => c.branch
+        ? `<button type="button" class="pick-i" data-a="${action}" data-s="${c.organization_id}" data-b="${c.branch.location_id}" data-n="${esc(c.name)}" data-city="${esc(c.branch.name)}"><strong>${esc(c.name)} · ${esc(c.branch.name)}</strong><small>${esc(c.branch.city || t('Branch'))}</small></button>`
+        : `<button type="button" class="pick-i" data-a="${action}" data-s="${c.organization_id}" data-n="${esc(c.name)}" data-city="${esc(c.city || '')}"><strong>${esc(c.name)}</strong><small>${esc(c.city || t(PARTY_TYPE))}</small></button>`).join('')
         || `<p class="note">${esc(t(IS_PH ? 'No approved supplier matches.' : 'No approved pharmacy matches.'))}</p>`;
     } catch (err) { if ($(target)) $(target).innerHTML = `<p class="note">${esc(errorText(err))}</p>`; }
   }
@@ -780,7 +822,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
       });
       toast(t('Request #{id} sent to {s}.', { id: r.procurement_request_id, s: f.supplier.name }));
       S.rqNew = null; upsertReq(r); S.rq = r; S.rqOpen = r.procurement_request_id;
-      data.conversations().then(c => { S.convs = c.items; recount(); }).catch(() => {});
+      convsFor().then(c => { S.convs = c.items; recount(); }).catch(() => {});
       go('rq');
     } catch (err) { fail(err); btn.disabled = false; }
   }
@@ -1157,6 +1199,25 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
   /* ----------------------------------------------------------- after render */
   const INVITE_STATUS = { pending: ['low', 'Pending'], accepted: ['good', 'Accepted'], expired: ['', 'Expired'], revoked: ['out', 'Revoked'] };
   let members = [];
+  // Pharmacy branches a member works at: they see those branches' supplier
+  // conversations (owners see every branch; assigned by owners).
+  function branchesLine(m, viewerIsOwner) {
+    if (m.role === 'owner') return `<small>${esc(t('Messages: all branches'))}</small>`;
+    const names = (m.branch_ids || []).map(id => (ctx.locations.find(l => l.location_id === id) || {}).name).filter(Boolean);
+    const line = names.length
+      ? `<small>${esc(t('Messages: {b}', { b: names.join(', ') }))}</small>`
+      : `<small><span class="tag low">${esc(t('No branch: sees no supplier messages'))}</span></small>`;
+    return line + (viewerIsOwner && !isPreview ? `<button class="ghost" data-a="brs" data-m="${m.membership_id}">${esc(t('Branches'))}</button>` : '');
+  }
+  async function assignBranches(membershipId) {
+    const m = members.find(x => x.membership_id === membershipId); if (!m) return;
+    const fd = await ask(t('Branches for {n}', { n: m.name }),
+      `<p class="muted">${esc(t('They see the supplier conversations of these branches only.'))}</p>` +
+      activeLocations().map(l => `<label class="chk"><input type="checkbox" name="b" value="${l.location_id}"${(m.branch_ids || []).includes(l.location_id) ? ' checked' : ''}> ${esc(l.name)}</label>`).join(''),
+      t('Save'));
+    if (!fd) return;
+    try { await data.assignBranches(membershipId, fd.getAll('b').map(Number)); toast(t('Saved.')); loadTeam(); } catch (err) { fail(err); }
+  }
   async function loadTeam() {
     const ROLES = { owner: 'Everything, including team and branches', manager: 'Stock, prices and orders', staff: 'Update stock quantities and handle orders' };
     try {
@@ -1171,7 +1232,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
         const role = can && owner
           ? `<select data-member="${m.membership_id}" aria-label="${esc(t('Role'))}: ${esc(m.email)}">${['owner', 'manager', 'staff'].map(r => `<option value="${r}"${m.role === r ? ' selected' : ''}>${esc(t(ROLE_NAMES[r]))}</option>`).join('')}</select>`
           : esc(t(ROLE_NAMES[m.role] || m.role));
-        return `<tr data-member="${esc(m.email)}"><td><strong>${esc(m.name)}</strong>${m.user_id === me ? ` <small style="display:inline">${esc(t('(you)'))}</small>` : ''}<small>${esc(m.email)}</small></td><td>${role}</td><td>${esc(t(ROLES[m.role]))}</td><td><span class="tag ${m.is_active ? 'good' : ''}">${esc(t(m.is_active ? 'Active' : 'Deactivated'))}</span></td><td class="act">${can ? `<button class="ghost" data-a="tglmem" data-m="${m.membership_id}">${esc(t(m.is_active ? 'Deactivate' : 'Reactivate'))}</button><button class="ghost" data-a="rmmem" data-m="${m.membership_id}">${esc(t('Remove'))}</button>` : ''}</td></tr>`;
+        return `<tr data-member="${esc(m.email)}"><td><strong>${esc(m.name)}</strong>${m.user_id === me ? ` <small style="display:inline">${esc(t('(you)'))}</small>` : ''}<small>${esc(m.email)}</small></td><td>${role}</td><td>${esc(t(ROLES[m.role]))}${IS_PH ? branchesLine(m, owner) : ''}</td><td><span class="tag ${m.is_active ? 'good' : ''}">${esc(t(m.is_active ? 'Active' : 'Deactivated'))}</span></td><td class="act">${can ? `<button class="ghost" data-a="tglmem" data-m="${m.membership_id}">${esc(t(m.is_active ? 'Deactivate' : 'Reactivate'))}</button><button class="ghost" data-a="rmmem" data-m="${m.membership_id}">${esc(t('Remove'))}</button>` : ''}</td></tr>`;
       }).join('') || `<tr><td colspan="5" class="empty">${esc(t('No members.'))}</td></tr>`;
       if ($('#invites')) loadInvites();
       const names = Object.fromEntries(DOCS());
@@ -1318,10 +1379,10 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
     nav: d => go(d.v),
     compare: d => { S.q = d.m; S.cat = ''; go('cmp'); },
     cat: d => { S.cat = d.c; S.q = ''; go('cmp'); },
-    conv: d => { S.party = +d.c; S.listOpen = false; go('msg'); },
+    conv: d => { S.party = IS_PH ? +d.c : d.c; S.listOpen = false; go('msg'); },
     newconv: () => newConversation(),
     dlgx: () => $('#dlg').close(),
-    ncpick: d => { $('#dlg').close(); openParty({ organization_id: +d.s, name: d.n, location_name: d.city || '' }); },
+    ncpick: d => { $('#dlg').close(); openParty({ organization_id: +d.s, name: d.n, location_name: d.city || '', location_id: d.b ? +d.b : undefined }); },
     rqopen: d => { S.rqOpen = +d.r; S.rqNew = null; S.rq = null; go('rq'); },
     rqback: () => { S.rqOpen = null; S.rqNew = null; go('rq'); },
     rqorder: () => go('ord'),
@@ -1368,7 +1429,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
       const n = S.notes.items.find(x => x.notification_id === +d.n); if (!n) return;
       togglePanel(false);
       if (!n.read) { n.read = true; S.notes.unread_count = Math.max(0, S.notes.unread_count - 1); paintBell(); data.readNotifications([n.notification_id]).catch(() => {}); }
-      if (n.kind === 'message') { S.party = n.from_organization_id; S.listOpen = false; go('msg'); }
+      if (n.kind === 'message') { await openConversation(n.conversation_id, n.from_organization_id); }
       else if (n.procurement_request_id) { S.rqOpen = n.procurement_request_id; S.rqNew = null; S.rq = null; go('rq'); }
       else if (n.reservation_reference && RES) RES.openRef(n.reservation_reference);
     },
@@ -1426,6 +1487,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
       const l = ctx.locations.find(x => x.location_id === +d.l); if (!l) return;
       try { await data.updateLocation(l.location_id, { is_active: true }); await refreshLocations(); toast(t('{n} reactivated.', { n: l.name })); } catch (err) { fail(err); }
     },
+    brs: d => assignBranches(+d.m),
     async tglmem(d) {
       const m = members.find(x => x.membership_id === +d.m); if (!m) return;
       if (m.is_active && !await ask(t('Deactivate {n}?', { n: m.email }), `<p>${esc(t('They immediately lose access to {o}.', { o: ctx.org.name }))}</p>`, t('Deactivate'))) return;
@@ -1520,8 +1582,9 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
     else if (x.id === 'rq-need') S.rqNew.need = x.value;
     else if (x.dataset.q === 'av') qfTotals();
     else if (x.id === 'br') {
-      S.loc = +x.value; S.offers = [];
+      S.loc = +x.value; S.offers = []; S.party = null; S.newParty = null;
       try { S.stock = await data.stock(S.loc); } catch (err) { fail(err); }
+      try { const c = await convsFor(); S.convs = c.items; S.unread = c.unread_total; badges(); } catch (err) { fail(err); }
       go(S.view);
     }
     else if (x.id === 'csv') { readCSV(x.files[0]).catch(fail); x.value = ''; }
@@ -1574,7 +1637,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
     if ((document.hidden && !now) || !ctx || livePolling) return;
     livePolling = true;
     try {
-      const [cv, nt, rq] = await Promise.allSettled([data.conversations(true), data.notifications(true), data.requests(true)]);
+      const [cv, nt, rq] = await Promise.allSettled([convsFor(true), data.notifications(true), data.requests(true)]);
       if (cv.status === 'fulfilled') { S.convs = cv.value.items; S.unread = cv.value.unread_total; }
       if (nt.status === 'fulfilled') { S.notes = nt.value; paintBell(); }
       refreshReservations(true).catch(() => {});
@@ -1592,7 +1655,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
         if (S.chat && S.chat.conv) { const c = S.convs.find(x => x.conversation_id === S.chat.conv.conversation_id); if (c) { c.unread_count = 0; S.chat.conv = c; } recount(); }
         clist();
         // The other side started the conversation while it was open here.
-        if (S.chat && !S.chat.conv && !busy && S.convs.some(c => c.counterpart.organization_id === S.chat.party)) thread();
+        if (S.chat && !S.chat.conv && !busy && S.convs.some(c => keyOf(c.counterpart.organization_id, (c.pharmacy_location || {}).location_id) === S.chat.party)) thread();
       }
       if (S.view === 'rq' && changed && !busy) {
         if (!S.rqOpen && !S.rqNew && $('#rqrows')) $('#rqrows').innerHTML = reqRows();
@@ -1619,7 +1682,7 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
       if (!isPreview && c.org.status !== 'approved') { location.replace('business-status.html?lang=' + lang); return; }
       ctx = c;
       S.loc = (activeLocations()[0] || {}).location_id ?? null;
-      const [stock, orders, drugs, convs, reqs, notes] = await Promise.allSettled([S.loc ? data.stock(S.loc) : [], data.orders(), IS_PH ? data.drugs() : [], data.conversations(), data.requests(), data.notifications()]);
+      const [stock, orders, drugs, convs, reqs, notes] = await Promise.allSettled([S.loc ? data.stock(S.loc) : [], data.orders(), IS_PH ? data.drugs() : [], convsFor(), data.requests(), data.notifications()]);
       if (stock.status === 'fulfilled') S.stock = stock.value;
       if (orders.status === 'fulfilled') S.orders = orders.value;
       if (drugs.status === 'fulfilled') S.drugs = drugs.value;

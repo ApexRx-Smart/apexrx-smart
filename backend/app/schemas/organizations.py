@@ -77,6 +77,15 @@ class MemberResponse(BaseModel):
     role: MembershipRole
     is_active: bool
     created_at: datetime
+    # Pharmacy managers and staff: the branches whose supplier conversations
+    # they see (owners see every branch; suppliers are not split by branch).
+    branch_ids: list[int] = []
+
+
+class BranchAssignment(BaseModel):
+    """The pharmacy branches a manager or staff member works at."""
+
+    location_ids: list[int] = Field(max_length=200)
 
 
 # Locations --------------------------------------------------------------------

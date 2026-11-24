@@ -283,6 +283,9 @@ def _activate(db: Session, inv: OrganizationInvitation, user: User, *, account_c
     if user.email_verified_at is None and inv.sent_at is not None:
         user.email_verified_at = t  # opening the EMAILED link proved control of the address
     db.flush()
+    # A single-branch pharmacy: the new member works at its only branch.
+    from app.services.messaging import assign_only_branch
+    assign_only_branch(db, membership)
     return membership
 
 

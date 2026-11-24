@@ -1,9 +1,17 @@
-"""Conversations between a pharmacy and a supplier, and notifications.
+"""Conversations between a pharmacy branch and a supplier, and notifications.
 
-A conversation belongs to the two organizations: every active member of
-either one can read it and write in it. There is one conversation per
-pharmacy and supplier pair; procurement requests and orders between the
-two are shown alongside its messages.
+A conversation belongs to one pharmacy BRANCH and one supplier, like a shared
+chat for that branch: there is one per branch and supplier, and procurement
+requests and orders between them are shown alongside its messages.
+
+Who can read and write in it (checked here, on every request):
+* pharmacy owners: every branch of their pharmacy;
+* pharmacy managers and staff: the branches they are assigned to
+  (membership_branch), and no others; unassigned, they see none;
+* supplier members: every conversation of their supplier.
+Anyone else gets 404, so other branches' and organizations' conversations
+stay invisible. Every message keeps its sender, the sender's organization
+and, through its conversation, the pharmacy branch.
 
 Notifications are rows per organization (every active member sees them) or,
 for patient reservations, per user; read state is kept per user.
@@ -18,13 +26,15 @@ from app.models import (
     ChatMessage,
     Conversation,
     ConversationRead,
+    Location,
     Membership,
+    MembershipBranch,
     Notification,
     NotificationRead,
     Organization,
     User,
 )
-from app.models.enums import OrganizationStatus, OrganizationType
+from app.models.enums import MembershipRole, OrganizationStatus, OrganizationType
 
 
 def member_org_ids(db: Session, user: User, org_ids: list[int]) -> list[int]:
@@ -63,7 +73,82 @@ def load_conversation(
     if not mine:
         raise NotFound("Conversation not found.")
     # A user in both organizations (rare) acts for the pharmacy unless told otherwise.
-    return conv, conv.pharmacy_organization_id if conv.pharmacy_organization_id in mine else mine[0]
+    acting = conv.pharmacy_organization_id if conv.pharmacy_organization_id in mine else mine[0]
+    # Pharmacy managers and staff: only the conversations of their branches.
+    if acting == conv.pharmacy_organization_id and not can_see_branch(
+            db, user, conv.pharmacy_organization_id, conv.pharmacy_location_id):
+        raise NotFound("Conversation not found.")
+    return conv, acting
+
+
+def branch_scope(db: Session, user: User, pharmacy_id: int) -> set[int] | None:
+    """The pharmacy branches whose conversations the user may see: None for an
+    owner (every branch), otherwise the branches they are assigned to (maybe
+    none). Only called for a pharmacy the user is an active member of."""
+    membership = db.scalar(
+        select(Membership).where(Membership.user_id == user.user_id, Membership.organization_id == pharmacy_id,
+                                 Membership.is_active.is_(True))
+    )
+    if membership is None:
+        return set()
+    if membership.role == MembershipRole.OWNER:
+        return None
+    return set(db.scalars(select(MembershipBranch.location_id).where(
+        MembershipBranch.membership_id == membership.membership_id)))
+
+
+def assign_only_branch(db: Session, membership: Membership) -> None:
+    """A pharmacy manager or staff member of a pharmacy with exactly one active
+    branch works at that branch (no owner action needed). Several branches:
+    the owner assigns them (PUT .../members/{id}/branches)."""
+    if membership.role == MembershipRole.OWNER:
+        return
+    org_type = db.scalar(select(Organization.type).where(Organization.organization_id == membership.organization_id))
+    if org_type != OrganizationType.PHARMACY:
+        return
+    active = db.scalars(select(Location.location_id).where(
+        Location.organization_id == membership.organization_id, Location.is_active.is_(True))).all()
+    if len(active) != 1:
+        return
+    db.execute(insert(MembershipBranch).values(
+        membership_id=membership.membership_id, organization_id=membership.organization_id, location_id=active[0],
+    ).on_conflict_do_nothing())
+
+
+def can_see_branch(db: Session, user: User, pharmacy_id: int, location_id: int) -> bool:
+    scope = branch_scope(db, user, pharmacy_id)
+    return scope is None or location_id in scope
+
+
+def visible_conversations(db: Session, user: User, organization: Organization):
+    """A WHERE clause: the organization's conversations this user may see."""
+    if organization.type == OrganizationType.SUPPLIER:
+        return Conversation.supplier_organization_id == organization.organization_id
+    clause = Conversation.pharmacy_organization_id == organization.organization_id
+    scope = branch_scope(db, user, organization.organization_id)
+    if scope is not None:
+        clause = and_(clause, Conversation.pharmacy_location_id.in_(scope or [-1]))
+    return clause
+
+
+def pharmacy_branch(db: Session, pharmacy_id: int, location_id: int | None) -> Location:
+    """The pharmacy's ACTIVE branch for a new conversation: the one given, or
+    its only active branch when none is given (422 when it has several)."""
+    from app.core.errors import AppError
+
+    active = db.scalars(
+        select(Location).where(Location.organization_id == pharmacy_id, Location.is_active.is_(True))
+        .order_by(Location.location_id)
+    ).all()
+    if location_id is None:
+        if len(active) == 1:
+            return active[0]
+        raise AppError("Choose the pharmacy branch for this conversation.", status_code=422,
+                       extra={"code": "branch_required"})
+    branch = next((loc for loc in active if loc.location_id == location_id), None)
+    if branch is None:
+        raise NotFound("Branch not found.")
+    return branch
 
 
 def counterpart_id(conv: Conversation, my_org_id: int) -> int:
@@ -83,23 +168,25 @@ def require_approved(db: Session, *org_ids: int) -> None:
 
 
 def get_or_create_conversation(
-    db: Session, pharmacy_id: int, supplier_id: int, user_id: int
+    db: Session, pharmacy_id: int, pharmacy_location_id: int, supplier_id: int, user_id: int
 ) -> tuple[Conversation, bool]:
-    """The pair's single conversation; created if it does not exist yet. Safe
-    against two requests creating it at the same time (unique pair)."""
+    """The branch's single conversation with the supplier; created if it does
+    not exist yet. Safe against two requests creating it at the same time
+    (unique branch and supplier)."""
     created = db.execute(
         insert(Conversation)
         .values(
             pharmacy_organization_id=pharmacy_id,
+            pharmacy_location_id=pharmacy_location_id,
             supplier_organization_id=supplier_id,
             created_by=user_id,
         )
-        .on_conflict_do_nothing(constraint="uq_conversation_pair")
+        .on_conflict_do_nothing(constraint="uq_conversation_branch")
         .returning(Conversation.conversation_id)
     ).scalar()
     conv = db.scalar(
         select(Conversation).where(
-            Conversation.pharmacy_organization_id == pharmacy_id,
+            Conversation.pharmacy_location_id == pharmacy_location_id,
             Conversation.supplier_organization_id == supplier_id,
         )
     )

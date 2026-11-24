@@ -29,7 +29,9 @@ def test_supplier_starts_pharmacy_replies_history_and_unread(client):
     conv = r.json()
     cid = conv["conversation_id"]
     assert conv["counterpart"] == {"organization_id": w.pharmacy, "name": "Kigali Pharmacy", "type": "pharmacy",
-                                   "city": None, "phone": None}
+                                   "city": None, "phone": None, "branches": None}
+    # The pharmacy has one branch: the conversation is that branch's.
+    assert conv["pharmacy_location"]["location_id"] == w.branch
     # Starting again (from either side) returns the same conversation, never a duplicate.
     again = _start(client, w.supplier_owner, w.supplier, w.pharmacy)
     assert again.status_code == 200 and again.json()["conversation_id"] == cid

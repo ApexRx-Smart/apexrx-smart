@@ -165,6 +165,9 @@ def create_request(payload: ProcurementRequestCreate, user: CurrentUser, db: DbS
                    require_approved=True)
     supplier = order_svc.get_supplier(db, payload.supplier_organization_id)
     order_svc.check_location(db, payload.pharmacy_location_id, payload.pharmacy_organization_id, "Pharmacy")
+    # A request goes into its branch's conversation: only for a branch the sender may see.
+    if not messaging.can_see_branch(db, user, payload.pharmacy_organization_id, payload.pharmacy_location_id):
+        raise NotFound("Location not found.")
     product_ids = [i.product_id for i in payload.items if i.product_id is not None]
     products = {p.product_id: p for p in db.scalars(select(Product).where(Product.product_id.in_(product_ids)))}
     missing = [pid for pid in product_ids if pid not in products or not products[pid].is_active]
@@ -175,7 +178,7 @@ def create_request(payload: ProcurementRequestCreate, user: CurrentUser, db: DbS
         raise TooManyRequests("Too many requests sent. Please try again later.", headers={"Retry-After": str(wait)})
 
     conv, _ = messaging.get_or_create_conversation(
-        db, payload.pharmacy_organization_id, supplier.organization_id, user.user_id
+        db, payload.pharmacy_organization_id, payload.pharmacy_location_id, supplier.organization_id, user.user_id
     )
     req = ProcurementRequest(
         pharmacy_organization_id=payload.pharmacy_organization_id,

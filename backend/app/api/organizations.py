@@ -4,12 +4,13 @@ from typing import Annotated
 from urllib.parse import quote
 
 from fastapi import APIRouter, File, Form, Response, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from app.api.auth import find_user_by_email
 from app.api.deps import (
     ALL_ROLES,
     MANAGERS,
+    OWNERS,
     CurrentUser,
     DbSession,
     get_org_access,
@@ -17,12 +18,13 @@ from app.api.deps import (
 )
 from app.core.config import settings
 from app.core.errors import AppError, Conflict, Forbidden, NotFound
-from app.models import Location, Membership, Organization, OrganizationDocument, User
+from app.models import Location, Membership, MembershipBranch, Organization, OrganizationDocument, User
 from app.models.enums import DocumentStatus, MembershipRole, OrganizationStatus, OrganizationType
 from app.schemas.common import Message
 from app.schemas.organizations import (
     ApplicationDocument,
     ApplicationResponse,
+    BranchAssignment,
     DocumentResponse,
     LocationCreate,
     LocationResponse,
@@ -35,7 +37,7 @@ from app.schemas.organizations import (
     OrganizationResponse,
     OrganizationUpdate,
 )
-from app.services import applications, reservations, storage
+from app.services import applications, messaging, reservations, storage
 from app.services.phone import PhoneNumberError, normalize_phone
 
 router = APIRouter()
@@ -205,7 +207,16 @@ def resubmit_organization(organization_id: int, user: CurrentUser, db: DbSession
 # ---------------------------------------------------------------------------
 # Members
 # ---------------------------------------------------------------------------
-def _member_response(membership: Membership, member: User) -> MemberResponse:
+def _branch_ids(db, membership_ids: list[int]) -> dict[int, list[int]]:
+    out: dict[int, list[int]] = {}
+    for mid, lid in db.execute(select(MembershipBranch.membership_id, MembershipBranch.location_id)
+                               .where(MembershipBranch.membership_id.in_(membership_ids))
+                               .order_by(MembershipBranch.location_id)):
+        out.setdefault(mid, []).append(lid)
+    return out
+
+
+def _member_response(membership: Membership, member: User, branch_ids: list[int] | None = None) -> MemberResponse:
     return MemberResponse(
         membership_id=membership.membership_id,
         user_id=member.user_id,
@@ -215,7 +226,12 @@ def _member_response(membership: Membership, member: User) -> MemberResponse:
         role=membership.role,
         is_active=membership.is_active,
         created_at=membership.created_at,
+        branch_ids=branch_ids or [],
     )
+
+
+def _member_out(db, membership: Membership, member: User) -> MemberResponse:
+    return _member_response(membership, member, _branch_ids(db, [membership.membership_id]).get(membership.membership_id))
 
 
 def list_member_responses(db, organization_id: int) -> list[MemberResponse]:
@@ -225,7 +241,8 @@ def list_member_responses(db, organization_id: int) -> list[MemberResponse]:
         .where(Membership.organization_id == organization_id)
         .order_by(Membership.created_at)
     ).all()
-    return [_member_response(m, u) for m, u in rows]
+    branches = _branch_ids(db, [m.membership_id for m, _ in rows])
+    return [_member_response(m, u, branches.get(m.membership_id)) for m, u in rows]
 
 
 def _assert_can_manage(actor_role: MembershipRole, target_role: MembershipRole) -> None:
@@ -294,8 +311,10 @@ def add_member(organization_id: int, payload: MemberCreate, user: CurrentUser, d
     else:
         membership = Membership(user_id=member.user_id, organization_id=organization_id, role=payload.role)
         db.add(membership)
+    db.flush()
+    messaging.assign_only_branch(db, membership)
     db.commit()
-    return _member_response(membership, member)
+    return _member_out(db, membership, member)
 
 
 @router.patch("/{organization_id}/members/{membership_id}", response_model=MemberResponse)
@@ -323,8 +342,38 @@ def update_member(
 
     membership.role = new_role
     membership.is_active = new_active
+    db.flush()
+    messaging.assign_only_branch(db, membership)
     db.commit()
-    return _member_response(membership, db.get(User, membership.user_id))
+    return _member_out(db, membership, db.get(User, membership.user_id))
+
+
+@router.put("/{organization_id}/members/{membership_id}/branches", response_model=MemberResponse)
+def assign_branches(organization_id: int, membership_id: int, payload: BranchAssignment, user: CurrentUser,
+                    db: DbSession):
+    """The pharmacy branches a manager or staff member works at (owners only).
+    They see those branches' supplier conversations and no others; an empty
+    list leaves them with none. Owners always see every branch."""
+    access = get_org_access(db, user, organization_id, roles=OWNERS)
+    if access.organization.type != OrganizationType.PHARMACY:
+        raise Conflict("Only pharmacy staff work at branches.")
+    membership = db.scalar(select(Membership).where(
+        Membership.membership_id == membership_id, Membership.organization_id == organization_id))
+    if membership is None:
+        raise NotFound("Member not found.")
+    if membership.role == MembershipRole.OWNER:
+        raise Conflict("Owners see every branch; they are not assigned to branches.")
+    wanted = set(payload.location_ids)
+    valid = set(db.scalars(select(Location.location_id).where(
+        Location.organization_id == organization_id, Location.is_active.is_(True), Location.location_id.in_(wanted))))
+    if wanted - valid:
+        raise NotFound("Branch not found.")
+    db.execute(delete(MembershipBranch).where(MembershipBranch.membership_id == membership_id))
+    for location_id in sorted(wanted):
+        db.add(MembershipBranch(membership_id=membership_id, organization_id=organization_id,
+                                location_id=location_id, assigned_by=user.user_id))
+    db.commit()
+    return _member_out(db, membership, db.get(User, membership.user_id))
 
 
 @router.delete("/{organization_id}/members/{membership_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -15,6 +15,9 @@ class Conversation(Base):
     conversation_id: Mapped[int] = identity_pk()
     pharmacy_organization_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     supplier_organization_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # The pharmacy branch this conversation belongs to (one per branch and
+    # supplier); its pharmacy managers and staff are those assigned to it.
+    pharmacy_location_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     pharmacy_org_type: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default=text("'pharmacy'"), default="pharmacy"
     )

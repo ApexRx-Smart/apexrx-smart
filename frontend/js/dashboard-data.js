@@ -101,6 +101,7 @@
 
       members: () => A.organizations.members(orgId),
       updateMember: (id, data) => A.organizations.updateMember(orgId, id, data),
+      assignBranches: (id, locationIds) => A.organizations.assignBranches(orgId, id, locationIds),
       removeMember: id => A.organizations.removeMember(orgId, id),
       // Staff invitations (owners and managers). Email is temporarily disabled:
       // the backend then returns a single-use link for the inviter to share.
@@ -117,8 +118,10 @@
 
       // Messaging (stored in ApexRX; the page polls for new messages).
       orgId: () => orgId,
-      conversations: quiet => A.conversations.list(orgId, quiet ? QUIET : undefined),
-      startConversation: otherId => A.conversations.start(orgId, otherId),
+      // Pharmacies: the conversations of one branch (the one being viewed).
+      conversations: (quiet, branchId) => A.conversations.list(orgId, quiet ? QUIET : undefined, branchId),
+      startConversation: (otherId, branchId) => A.conversations.start(orgId, otherId, branchId),
+      conversation: id => A.conversations.get(id, orgId),
       contacts: q => A.conversations.contacts(orgId, q),
       messages: (cid, params, quiet) => A.conversations.messages(cid, orgId, params, quiet ? QUIET : undefined),
       sendMessage: (cid, body) => A.conversations.send(cid, orgId, body),
@@ -421,6 +424,7 @@
         return delay(convOut(c));
       },
       contacts: q => delay(contactList.filter(c => !q || c.name.toLowerCase().includes(q.toLowerCase()))),
+      conversation: id => delay(convOut(convs.find(c => c.conversation_id === +id))),
       messages(cid, params = {}) {
         const list = msgs.filter(m => m.conversation_id === +cid && (!params.after_id || m.message_id > params.after_id));
         return delay({ items: list.map(msgOut), has_more: false, last_read_message_id: reads[cid] || null });

@@ -277,3 +277,7 @@ background:radial-gradient(70% 50% at 100% 0,#0da7de1f,transparent 70%),var(--bg
 
 /* The page dialog's own message (a required field, such as a branch's map location). */
 .dlg-err{margin:8px 0 0;color:var(--red);font-size:13px}.dlg-err:empty{display:none}
+
+/* Branch assignment (team): checkboxes in the dialog, and the line under a member */
+.chk{display:flex;gap:8px;align-items:center;margin:6px 0;font-weight:500}.chk input{width:auto;margin:0}
+#team td small+button{margin-top:6px}
