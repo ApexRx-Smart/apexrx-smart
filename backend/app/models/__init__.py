@@ -4,6 +4,7 @@ from app.models.catalogue import Drug, Product
 from app.models.identity import (
     Location,
     Membership,
+    MembershipBranch,
     Organization,
     OrganizationDocument,
     User,
@@ -63,6 +64,7 @@ __all__ = [
     "PhoneVerification",
     "Location",
     "Membership",
+    "MembershipBranch",
     "Organization",
     "OrganizationDocument",
     "Product",

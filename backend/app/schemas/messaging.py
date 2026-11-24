@@ -10,6 +10,9 @@ MessageBody = Annotated[str, StringConstraints(strip_whitespace=True, min_length
 class ConversationCreate(BaseModel):
     organization_id: int
     counterpart_organization_id: int
+    # The pharmacy branch the conversation is for (yours, or the pharmacy's you
+    # write to). May be left out when that pharmacy has a single active branch.
+    pharmacy_location_id: int | None = None
 
 
 class MessageCreate(BaseModel):
@@ -20,12 +23,20 @@ class ReadRequest(BaseModel):
     last_message_id: int
 
 
+class Branch(BaseModel):
+    location_id: int
+    name: str
+    city: str | None = None
+
+
 class Counterpart(BaseModel):
     organization_id: int
     name: str
     type: str
     city: str | None = None
     phone: str | None = None
+    # Pharmacies (as a supplier's contacts): their active branches to write to.
+    branches: list[Branch] | None = None
 
 
 class MessageResponse(BaseModel):
@@ -34,6 +45,7 @@ class MessageResponse(BaseModel):
     sender_organization_id: int
     sender_user_id: int | None
     sender_name: str | None
+    sender_organization_name: str | None = None
     mine: bool
     body: str
     created_at: datetime
@@ -43,6 +55,8 @@ class ConversationResponse(BaseModel):
     conversation_id: int
     organization_id: int
     counterpart: Counterpart
+    # The pharmacy branch the conversation belongs to.
+    pharmacy_location: Branch
     created_at: datetime
     last_message_at: datetime | None
     last_message: MessageResponse | None

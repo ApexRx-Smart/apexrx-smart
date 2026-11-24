@@ -1,6 +1,6 @@
 -- =============================================================================
 -- ApexRx: complete database schema
--- Alembic revision: c9e4a7b2d6f1 (the head of backend/alembic/versions)
+-- Alembic revision: d5f1b8c3a7e2 (the head of backend/alembic/versions)
 -- PostgreSQL 13+
 -- =============================================================================
 --
@@ -13,7 +13,7 @@
 --
 -- How to use it
 --   * Run it on an EMPTY database:  psql -v ON_ERROR_STOP=1 -d <db> -f db_implementation_script.sql
---   * It ends by recording revision c9e4a7b2d6f1 in alembic_version, so Alembic treats
+--   * It ends by recording revision d5f1b8c3a7e2 in alembic_version, so Alembic treats
 --     the database as up to date and later migrations apply normally.
 --   * Real deployments are still built and upgraded with `alembic upgrade head`;
 --     the migrations are the source of truth. When a migration is added,
@@ -34,6 +34,7 @@
 --   app_user.phone_verification_required)                    (a6c3e9d1f4b2)
 --   Account type (patient / pharmacy / supplier) per account (b8d2f6a3c1e7)
 --   Application submitted for review (organization.submitted_at) (c9e4a7b2d6f1)
+--   Branch-scoped messaging: conversation branch, membership_branch (d5f1b8c3a7e2)
 --
 -- Audit actor
 --   Every transaction that writes stock, product_offer, purchase orders or their
@@ -1024,6 +1025,7 @@ CREATE TABLE public.conversation (
     created_by bigint,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     last_message_at timestamp with time zone,
+    pharmacy_location_id bigint NOT NULL,
     CONSTRAINT conversation_pharmacy_org_type_check CHECK (((pharmacy_org_type)::text = 'pharmacy'::text)),
     CONSTRAINT conversation_supplier_org_type_check CHECK (((supplier_org_type)::text = 'supplier'::text))
 );
@@ -1142,6 +1144,16 @@ CREATE TABLE public.membership (
     is_active boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT membership_role_check CHECK (((role)::text = ANY ((ARRAY['owner'::character varying, 'manager'::character varying, 'staff'::character varying])::text[])))
+);
+
+-- TABLE: membership_branch
+
+CREATE TABLE public.membership_branch (
+    membership_id bigint NOT NULL,
+    organization_id bigint NOT NULL,
+    location_id bigint NOT NULL,
+    assigned_by bigint,
+    assigned_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 -- SEQUENCE: membership_membership_id_seq
@@ -2009,6 +2021,16 @@ ALTER TABLE ONLY public.location
 ALTER TABLE ONLY public.location
     ADD CONSTRAINT location_pkey PRIMARY KEY (location_id);
 
+-- CONSTRAINT: membership_branch membership_branch_pkey
+
+ALTER TABLE ONLY public.membership_branch
+    ADD CONSTRAINT membership_branch_pkey PRIMARY KEY (membership_id, location_id);
+
+-- CONSTRAINT: membership membership_membership_id_organization_id_key
+
+ALTER TABLE ONLY public.membership
+    ADD CONSTRAINT membership_membership_id_organization_id_key UNIQUE (membership_id, organization_id);
+
 -- CONSTRAINT: membership membership_pkey
 
 ALTER TABLE ONLY public.membership
@@ -2214,10 +2236,10 @@ ALTER TABLE ONLY public.stock
 ALTER TABLE ONLY public.stock
     ADD CONSTRAINT stock_pkey PRIMARY KEY (stock_id);
 
--- CONSTRAINT: conversation uq_conversation_pair
+-- CONSTRAINT: conversation uq_conversation_branch
 
 ALTER TABLE ONLY public.conversation
-    ADD CONSTRAINT uq_conversation_pair UNIQUE (pharmacy_organization_id, supplier_organization_id);
+    ADD CONSTRAINT uq_conversation_branch UNIQUE (pharmacy_location_id, supplier_organization_id);
 
 -- CONSTRAINT: reservation uq_reservation_client_request
 
@@ -2367,6 +2389,10 @@ CREATE INDEX ix_email_verification_ip_created ON public.email_verification USING
 -- INDEX: ix_email_verification_user_created
 
 CREATE INDEX ix_email_verification_user_created ON public.email_verification USING btree (user_id, created_at);
+
+-- INDEX: ix_membership_branch_location
+
+CREATE INDEX ix_membership_branch_location ON public.membership_branch USING btree (location_id);
 
 -- INDEX: ix_organization_invitation_org
 
@@ -2578,6 +2604,11 @@ ALTER TABLE ONLY public.auth_session
 ALTER TABLE ONLY public.conversation
     ADD CONSTRAINT conversation_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.app_user(user_id) ON DELETE SET NULL;
 
+-- FK CONSTRAINT: conversation conversation_pharmacy_location_fkey
+
+ALTER TABLE ONLY public.conversation
+    ADD CONSTRAINT conversation_pharmacy_location_fkey FOREIGN KEY (pharmacy_location_id, pharmacy_organization_id) REFERENCES public.location(location_id, organization_id);
+
 -- FK CONSTRAINT: conversation conversation_pharmacy_organization_id_pharmacy_org_type_fkey
 
 ALTER TABLE ONLY public.conversation
@@ -2607,6 +2638,21 @@ ALTER TABLE ONLY public.email_verification
 
 ALTER TABLE ONLY public.location
     ADD CONSTRAINT location_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organization(organization_id) ON DELETE CASCADE;
+
+-- FK CONSTRAINT: membership_branch membership_branch_assigned_by_fkey
+
+ALTER TABLE ONLY public.membership_branch
+    ADD CONSTRAINT membership_branch_assigned_by_fkey FOREIGN KEY (assigned_by) REFERENCES public.app_user(user_id);
+
+-- FK CONSTRAINT: membership_branch membership_branch_location_fkey
+
+ALTER TABLE ONLY public.membership_branch
+    ADD CONSTRAINT membership_branch_location_fkey FOREIGN KEY (location_id, organization_id) REFERENCES public.location(location_id, organization_id);
+
+-- FK CONSTRAINT: membership_branch membership_branch_membership_fkey
+
+ALTER TABLE ONLY public.membership_branch
+    ADD CONSTRAINT membership_branch_membership_fkey FOREIGN KEY (membership_id, organization_id) REFERENCES public.membership(membership_id, organization_id) ON DELETE CASCADE;
 
 -- FK CONSTRAINT: membership membership_organization_id_fkey
 
@@ -3012,12 +3058,12 @@ ALTER TABLE ONLY public.stock
 --
 
 -- -----------------------------------------------------------------------------
--- Alembic bookkeeping: this database is at revision c9e4a7b2d6f1.
+-- Alembic bookkeeping: this database is at revision d5f1b8c3a7e2.
 -- -----------------------------------------------------------------------------
 CREATE TABLE public.alembic_version (
     version_num character varying(32) NOT NULL,
     CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
 );
-INSERT INTO public.alembic_version (version_num) VALUES ('c9e4a7b2d6f1');
+INSERT INTO public.alembic_version (version_num) VALUES ('d5f1b8c3a7e2');
 
 COMMIT;

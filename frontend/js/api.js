@@ -605,6 +605,10 @@
       members: function (id) { return get(org(id) + '/members'); },
       addMember: function (id, email, role) { return post(org(id) + '/members', { email: email, role: role }); },
       updateMember: function (id, membershipId, data) { return patch(org(id) + '/members/' + enc(membershipId), data); },
+      // Pharmacy managers and staff: the branches they work at (owners only).
+      assignBranches: function (id, membershipId, locationIds) {
+        return put(org(id) + '/members/' + enc(membershipId) + '/branches', { location_ids: locationIds });
+      },
       removeMember: function (id, membershipId) { return del(org(id) + '/members/' + enc(membershipId)); },
 
       locations: function (id, params) { return get(org(id) + '/locations', params); },
@@ -678,9 +682,18 @@
      * shared by both organizations' members. Delivery is by polling (after_id);
      * pass opts {quiet: true} for background polls (no progress bar). */
     conversations: {
-      list: function (orgId, opts) { return get('/conversations', { organization_id: orgId }, opts); },
-      // Returns the existing conversation if the two already have one.
-      start: function (orgId, otherId) { return post('/conversations', { organization_id: orgId, counterpart_organization_id: otherId }); },
+      // locationId: only that pharmacy branch's conversations (pharmacies; optional).
+      list: function (orgId, opts, locationId) {
+        return get('/conversations', { organization_id: orgId, location_id: locationId || undefined }, opts);
+      },
+      // A conversation is a pharmacy BRANCH's with a supplier: branchId is the
+      // pharmacy branch (optional when that pharmacy has a single branch).
+      // Returns the existing conversation if there is one.
+      start: function (orgId, otherId, branchId) {
+        var body = { organization_id: orgId, counterpart_organization_id: otherId };
+        if (branchId) body.pharmacy_location_id = branchId;
+        return post('/conversations', body);
+      },
       contacts: function (orgId, q) { return get('/conversations/contacts', { organization_id: orgId, q: q || undefined }); },
       get: function (id, orgId) { return get('/conversations/' + enc(id), { organization_id: orgId }); },
       // params: {after_id?, before_id?, limit?}

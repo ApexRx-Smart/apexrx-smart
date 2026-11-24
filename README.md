@@ -423,6 +423,33 @@ Pharmacies and suppliers place their main branch (during registration) and every
 - **The server checks the coordinates itself** (`app/schemas/organizations.py`). Both coordinates or neither, and only inside Rwanda (latitude −2.9 to −1.0, longitude 28.8 to 31.0); otherwise 422. They are saved on the branch of the organization the user belongs to; another organization's branch is 404.
 - **A map location is required for every branch and depot** (registration and the dashboard refuse to save without one; the server answers 422 to a new branch without coordinates and never lets a location be removed, only moved). Branches saved before this rule keep working and appear in search without a distance; the dashboard marks them "No map location" until their owner places them.
 
+## Branch-scoped pharmacy messaging
+
+A pharmacy-to-supplier conversation belongs to one **pharmacy branch** and one supplier, like a shared chat for that branch (`conversation.pharmacy_location_id`, migration `d5f1b8c3a7e2`). There is one conversation per branch and supplier, and a procurement request goes into its branch's conversation.
+
+| Who | Sees |
+|---|---|
+| Pharmacy owner | every branch's conversations |
+| Pharmacy manager / staff | the conversations of the branches they are assigned to (`membership_branch`), none when unassigned |
+| Supplier owner / staff | every conversation of their supplier (one per pharmacy branch) |
+| Anyone else | nothing (404), whatever ids they try |
+
+- **Enforced in the backend** (`app/services/messaging.py`):
+  - listing (`GET /conversations?organization_id=…&location_id=…`), opening, reading and writing;
+  - starting a conversation (`pharmacy_location_id`, required when the pharmacy has several branches);
+  - procurement requests;
+  - organization notifications about conversations.
+- **Branch assignment:** owners assign their managers and staff to branches with `PUT /organizations/{id}/members/{membership_id}/branches {location_ids}`, or Settings → Team → Branches. Members of a pharmacy with a single active branch are assigned to it automatically when they join.
+- **Accountability:** every message keeps its sender, the sender's organization (`sender_organization_name`) and, through its conversation, the pharmacy branch (`pharmacy_location`), with its time.
+- **In the dashboard:**
+  - A pharmacy sees the conversations of the branch selected at the top, and an owner switches branch to see another's.
+  - A member not assigned to that branch is told so.
+  - A supplier sees one thread per pharmacy branch ("Pharmacy · Branch") and chooses the branch when starting one.
+- **Existing records (migration):**
+  - Each conversation takes the branch of its procurement requests, or else the pharmacy's main branch (first active).
+  - Managers and staff of a single-branch pharmacy are assigned to it. In a multi-branch pharmacy they see no conversation until an owner assigns their branches; the migration prints how many are waiting.
+  - No message is changed or deleted.
+
 ## Sessions
 
 Every sign-in creates a server-side session (`auth_session`), and every access token names it (`sid`). The backend accepts a token only while its session is usable, so a frontend timer is never the only protection:

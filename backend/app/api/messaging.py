@@ -10,7 +10,7 @@ than the last one they have (``after_id``).
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Response, status
-from sqlalchemy import func, literal, or_, select
+from sqlalchemy import and_, func, literal, or_, select
 from sqlalchemy.dialects.postgresql import distinct_on, insert
 from sqlalchemy.orm import Session
 
@@ -31,6 +31,7 @@ from app.models import (
 )
 from app.models.enums import OrganizationStatus, OrganizationType
 from app.schemas.messaging import (
+    Branch,
     ConversationCreate,
     ConversationList,
     ConversationResponse,
@@ -80,6 +81,12 @@ def messages_out(db: Session, rows: list[ChatMessage], my_org_id: int) -> list[M
             select(User.user_id, User.name).where(User.user_id.in_({m.sender_user_id for m in rows if m.sender_user_id}))
         ).all()
     )
+    org_names = dict(
+        db.execute(
+            select(Organization.organization_id, Organization.name).where(
+                Organization.organization_id.in_({m.sender_organization_id for m in rows}))
+        ).all()
+    )
     return [
         MessageResponse(
             message_id=m.message_id,
@@ -87,6 +94,7 @@ def messages_out(db: Session, rows: list[ChatMessage], my_org_id: int) -> list[M
             sender_organization_id=m.sender_organization_id,
             sender_user_id=m.sender_user_id,
             sender_name=names.get(m.sender_user_id),
+            sender_organization_name=org_names.get(m.sender_organization_id),
             mine=m.sender_organization_id == my_org_id,
             body=m.body,
             created_at=m.created_at,
@@ -109,11 +117,16 @@ def conversations_out(db: Session, user: User, convs: list[Conversation], my_org
     ).all()
     last = {m.conversation_id: m for m in messages_out(db, last_rows, my_org_id)}
     parties = counterparts(db, {svc.counterpart_id(c, my_org_id) for c in convs})
+    branches = {
+        loc.location_id: Branch(location_id=loc.location_id, name=loc.name, city=loc.city)
+        for loc in db.scalars(select(Location).where(Location.location_id.in_({c.pharmacy_location_id for c in convs})))
+    }
     return [
         ConversationResponse(
             conversation_id=c.conversation_id,
             organization_id=my_org_id,
             counterpart=parties[svc.counterpart_id(c, my_org_id)],
+            pharmacy_location=branches[c.pharmacy_location_id],
             created_at=c.created_at,
             last_message_at=c.last_message_at,
             last_message=last.get(c.conversation_id),
@@ -135,18 +148,21 @@ def list_conversations(
     user: CurrentUser,
     db: DbSession,
     organization_id: Annotated[int, Query(description="Your pharmacy or supplier organization")],
+    location_id: Annotated[int | None, Query(description="Only this pharmacy branch's conversations")] = None,
 ):
-    """The organization's conversations, most recent activity first, with the
-    last message and the number of messages this user has not read."""
+    """The conversations this user may see, most recent activity first, with
+    the last message and the number of messages this user has not read.
+    Pharmacy owners see every branch; managers and staff their assigned
+    branches; supplier members every conversation of their supplier."""
     access = get_org_access(db, user, organization_id, require_approved=True)
-    own = (
-        Conversation.pharmacy_organization_id
-        if access.organization.type == OrganizationType.PHARMACY
-        else Conversation.supplier_organization_id
-    )
+    stmt = select(Conversation).where(svc.visible_conversations(db, user, access.organization))
+    if location_id is not None:
+        if access.organization.type == OrganizationType.PHARMACY and not svc.can_see_branch(
+                db, user, organization_id, location_id):
+            raise NotFound("Branch not found.")
+        stmt = stmt.where(Conversation.pharmacy_location_id == location_id)
     convs = db.scalars(
-        select(Conversation)
-        .where(own == organization_id)
+        stmt
         .order_by(func.coalesce(Conversation.last_message_at, Conversation.created_at).desc())
         .limit(200)
     ).all()
@@ -164,7 +180,12 @@ def start_conversation(payload: ConversationCreate, user: CurrentUser, db: DbSes
     if other is None or other.status != OrganizationStatus.APPROVED or other.type == access.organization.type:
         raise NotFound("Organization not found.")
     pharmacy_id, supplier_id = svc.pair_for(access.organization, other)
-    conv, created = svc.get_or_create_conversation(db, pharmacy_id, supplier_id, user.user_id)
+    branch = svc.pharmacy_branch(db, pharmacy_id, payload.pharmacy_location_id)
+    # A pharmacy member opens conversations only for branches they may see.
+    if access.organization.type == OrganizationType.PHARMACY and not svc.can_see_branch(
+            db, user, pharmacy_id, branch.location_id):
+        raise NotFound("Branch not found.")
+    conv, created = svc.get_or_create_conversation(db, pharmacy_id, branch.location_id, supplier_id, user.user_id)
     db.commit()
     response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
     return conversation_out(db, user, conv, payload.organization_id)
@@ -192,6 +213,14 @@ def contacts(
         stmt = stmt.where(Organization.name.ilike(contains(q.strip()), escape="\\"))
     ids = db.scalars(stmt.order_by(Organization.name).limit(20)).all()
     found = counterparts(db, set(ids))
+    if other_type == OrganizationType.PHARMACY and ids:
+        # A supplier writes to a pharmacy BRANCH.
+        by_org: dict[int, list[Branch]] = {}
+        for loc in db.scalars(select(Location).where(Location.organization_id.in_(ids), Location.is_active.is_(True))
+                              .order_by(Location.organization_id, Location.name)):
+            by_org.setdefault(loc.organization_id, []).append(Branch(location_id=loc.location_id, name=loc.name, city=loc.city))
+        for i in ids:
+            found[i].branches = by_org.get(i, [])
     return [found[i] for i in ids]
 
 
@@ -294,8 +323,18 @@ def _audience(db: Session, user: User, organization_id: int | None):
     organization the caller's personal ones (e.g. a patient's reservations)."""
     if organization_id is None:
         return Notification.recipient_user_id == user.user_id
-    get_org_access(db, user, organization_id, require_approved=True)
-    return Notification.organization_id == organization_id
+    access = get_org_access(db, user, organization_id, require_approved=True)
+    audience = Notification.organization_id == organization_id
+    if access.organization.type == OrganizationType.PHARMACY:
+        scope = svc.branch_scope(db, user, organization_id)
+        if scope is not None:
+            # Managers and staff: only notifications about their branches' conversations.
+            audience = and_(audience, or_(
+                Notification.conversation_id.is_(None),
+                Notification.conversation_id.in_(
+                    select(Conversation.conversation_id).where(Conversation.pharmacy_location_id.in_(scope or [-1]))),
+            ))
+    return audience
 
 
 @notifications_router.get("", response_model=NotificationList)
