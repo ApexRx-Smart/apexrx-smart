@@ -6,6 +6,7 @@
  *     t: text => text,             // translation (dashboard); the registration
  *                                  // pages translate the DOM text instead
  *     buttonClass: 'secondary',    // the page's button style
+ *     required: true,              // no "Remove the location" (every branch needs one)
  *     onChange(value, meta)        // value { lat, lng } or null; meta.address
  *   });                            // when a searched place was chosen
  *   picker.get(); picker.set(v); picker.refresh(); picker.disable(bool)
@@ -74,7 +75,7 @@
       } else {
         status.replaceChildren(el('span', { text: t('No location chosen yet.') }));
       }
-      clear.hidden = !value || disabled;
+      clear.hidden = !value || disabled || !!opts.required;
     }
     function placeMarker(zoom) {
       if (!map) return;

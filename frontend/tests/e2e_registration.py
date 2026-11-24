@@ -432,7 +432,7 @@ def main():
               and page.input_value("#details [name=phone]") == "+250788000111")
         call("POST", f"/organizations/{org3['organization_id']}/locations",
              {"name": "Main branch", "region": "Kigali City", "city": "Nyarugenge", "sector": "Nyamirambo",
-              "cell": "Cyivugiza", "village": "Amizero"}, t3)
+              "cell": "Cyivugiza", "village": "Amizero", "latitude": -1.9785, "longitude": 30.0448}, t3)
         page.goto(SITE + "/pharmacies.html")
         visible(page, "#documents")
         check("resume: an address but no documents opens the documents step, nothing submittable yet",
@@ -467,6 +467,13 @@ def main():
         page.fill("#details [name=phone]", "+250 788 111 222")
         page.fill("#details [name=place]", "Gikondo Warehouse")
         choose_address(page)
+        page.click("#details-submit")
+        wait_text(page, "#form-error", "Place your warehouse on the map")
+        check("supplier: the warehouse cannot be saved without a map location", find_org(f"Reg Supplies {RUN}") == [])
+        page.fill("#location-picker .lp-query", "Gikondo")
+        page.click("#location-picker .lp-find")
+        page.click("#location-picker .lp-results button")
+        wait_text(page, "#location-picker .lp-status", "-1.949000")
         page.click("#details-submit")
         visible(page, "#documents")
         types = page.eval_on_selector_all("#doc-list input[type=file]", "els => els.map(e => e.dataset.documentType)")

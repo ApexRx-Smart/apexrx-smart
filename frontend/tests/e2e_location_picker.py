@@ -91,6 +91,7 @@ def main():
         page.wait_for_selector("#location-picker .lp-results:not([hidden]) button")
         page.click("#location-picker .lp-results button")
         page.wait_for_function("document.querySelector('#location-picker .lp-status').textContent.includes('-1.949000')")
+        check("1. a location is required: no 'Remove the location' button", page.is_hidden("#location-picker .lp-clear"))
         check("1. a searched place moves the pin and fills the empty street field",
               "30.126000" in coords(page) and page.input_value("#details [name=street]").startswith("KG 11 Ave"))
 
@@ -188,6 +189,13 @@ def main():
                 page.wait_for_selector("#dlg[open] #loc-picker .lp-map")
                 page.fill("#dlgf [name=name]", f"Remote Branch {RUN}")
                 page.wait_for_timeout(300)
+                page.click("#dlgf button.solid")  # no pin yet
+                page.wait_for_function("document.querySelector('#dlg-err').textContent.length > 0")
+                check("3. a branch cannot be saved without a map location (the dialog stays open, nothing saved)",
+                      page.evaluate("document.querySelector('#dlg').open")
+                      and "Place the branch on the map" in page.inner_text("#dlg-err")
+                      and not [l for l in D.call("GET", f"/organizations/{org}/locations", token=token)
+                               if l["name"] == f"Remote Branch {RUN}"])
                 the_map = page.locator("#loc-picker .lp-map")
                 the_map.scroll_into_view_if_needed()
                 box = the_map.bounding_box()
@@ -208,6 +216,34 @@ def main():
                 page.click("#dlg-x")
             all_errors += errors
             ctx.close()
+
+        # ---- 5. a branch saved before map locations were required
+        old = D.call("POST", f"/organizations/{org}/locations", {"name": f"Old Branch {RUN}", **D.KIGALI}, token)
+        D.unplace_location(old["location_id"])
+        ctx, page, errors = fresh(browser, place=REMERA)
+        sign_in(page, email)
+        page.wait_for_url("**/pharmacy-dashboard.html*", timeout=30000)
+        D.ready(page)
+        D.open_view(page, "set")
+        row = f"tr[data-branch='{old['location_id']}']"
+        check("5. a branch without a map location is flagged in the list", "No map location" in page.inner_text(row))
+        page.click(f"{row} [data-a=editloc]")
+        page.wait_for_selector("#dlg[open] #loc-picker .lp-map")
+        page.click("#dlgf button.solid")
+        page.wait_for_function("document.querySelector('#dlg-err').textContent.length > 0")
+        check("5. ...and editing it asks for the location first", page.evaluate("document.querySelector('#dlg').open"))
+        page.fill("#loc-picker .lp-query", "Remera")
+        page.click("#loc-picker .lp-find")
+        page.click("#loc-picker .lp-results button")
+        page.wait_for_function("document.querySelector('#loc-picker .lp-status').textContent.includes('-1.957700')")
+        page.click("#dlgf button.solid")
+        page.wait_for_function("!document.querySelector('#dlg').open")
+        page.wait_for_timeout(800)
+        placed = next(l for l in D.call("GET", f"/organizations/{org}/locations", token=token) if l["location_id"] == old["location_id"])
+        check("5. ...and once placed it is saved and no longer flagged",
+              placed["latitude"] is not None and "No map location" not in page.inner_text(row), placed)
+        all_errors += errors
+        ctx.close()
 
         check("no script errors", not all_errors, all_errors[:3])
         browser.close()

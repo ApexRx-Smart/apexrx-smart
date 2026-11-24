@@ -73,10 +73,12 @@ def seed():
         call("POST", "/auth/register", {"name": name, "email": email, "password": PW, "account_type": "pharmacy"})
         token = call("POST", "/auth/login", {"email": email, "password": PW, "account_type": "pharmacy"})["access_token"]
         org = call("POST", "/organizations", {"name": f"{name} {RUN}", "type": "pharmacy"}, token)["organization_id"]
-        loc_body = {"name": f"{name} Branch", "address": place, "city": "Kigali", "phone": "+250788123456"}
-        if lat is not None:
-            loc_body.update(latitude=lat, longitude=lng)
+        loc_body = {"name": f"{name} Branch", "address": place, "city": "Kigali", "phone": "+250788123456",
+                    "latitude": lat if lat is not None else D.KIGALI["latitude"],
+                    "longitude": lng if lng is not None else D.KIGALI["longitude"]}
         loc = call("POST", f"/organizations/{org}/locations", loc_body, token)["location_id"]
+        if lat is None:
+            D.unplace_location(loc)  # a branch saved before map locations were required
         D.complete_application(org, token, admin)
         call("POST", f"/admin/organizations/{org}/review", {"decision": "approved"}, admin)
         call("PUT", f"/organizations/{org}/locations/{loc}/stock/{product}", {"quantity": 40}, token)

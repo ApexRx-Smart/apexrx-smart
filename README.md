@@ -421,7 +421,7 @@ Pharmacies and suppliers place their main branch (during registration) and every
 - **Click or tap the map**, and **drag the pin** to adjust it. Nobody needs to be at the branch to place it.
 - **Map:** the Leaflet copy in `frontend/vendor/leaflet` with OpenStreetMap tiles. These are free and keyless, the same services patient search uses; no paid service is involved. If the map can't load, search and "Use my current location" still work.
 - **The server checks the coordinates itself** (`app/schemas/organizations.py`). Both coordinates or neither, and only inside Rwanda (latitude −2.9 to −1.0, longitude 28.8 to 31.0); otherwise 422. They are saved on the branch of the organization the user belongs to; another organization's branch is 404.
-- Locations stay optional, as before. A branch can be saved without one and placed later.
+- **A map location is required for every branch and depot** (registration and the dashboard refuse to save without one; the server answers 422 to a new branch without coordinates and never lets a location be removed, only moved). Branches saved before this rule keep working and appear in search without a distance; the dashboard marks them "No map location" until their owner places them.
 
 ## Sessions
 

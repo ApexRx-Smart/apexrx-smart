@@ -93,7 +93,7 @@ def owner_with_pharmacy(email, name, org_name):
     ok("POST", "/auth/email/send", {"next": "pharmacy"}, token)
     ok("POST", "/auth/email/verify", {"token": mail_to(email)["token"]})
     org = ok("POST", "/organizations", {"name": org_name, "type": "pharmacy", "phone": "0788 100 200"}, token)["organization_id"]
-    ok("POST", f"/organizations/{org}/locations", {"name": "Main branch", "region": "Kigali City", "city": "Gasabo"}, token)
+    ok("POST", f"/organizations/{org}/locations", {"name": "Main branch", "region": "Kigali City", "city": "Gasabo", **D.KIGALI}, token)
     admin = login(ADMIN_EMAIL, ADMIN_PASSWORD)
     D.complete_application(org, token, admin)
     ok("POST", f"/admin/organizations/{org}/review", {"decision": "approved"}, admin)

@@ -111,7 +111,8 @@ def test_member_roles(client):
 
     # Staff cannot manage members or locations.
     assert client.post(f"/organizations/{org_id}/members", json={"email": "other@x.example.com", "role": "staff"}, headers=staff).status_code == 403
-    assert client.post(f"/organizations/{org_id}/locations", json={"name": "X"}, headers=staff).status_code == 403
+    assert client.post(f"/organizations/{org_id}/locations", json={"name": "X", "latitude": -1.95, "longitude": 30.06},
+                       headers=staff).status_code == 403
     assert client.patch(f"/organizations/{org_id}/members/{manager_membership}", json={"role": "staff"}, headers=manager).status_code == 403
 
     members = client.get(f"/organizations/{org_id}/members", headers=staff).json()

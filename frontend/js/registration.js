@@ -67,7 +67,8 @@
       address: 'Main branch address', docsTitle: 'Licensing documents', docsDesc: 'Upload the documents ApexRX uses to verify your pharmacy.',
       docs: [['pharmacy_license', 'Pharmacy license'], ['business_license', 'Business license'], ['owner_id', 'Owner ID']],
       reviewDesc: 'ApexRX reviews every pharmacy before it is listed for patients.', type: 'Pharmacy', places: 'Branches',
-      geoNote: 'Place your pharmacy on the map so patients can find it: use your current location if you are there, search for the address, or click the map. You can add it later.',
+      geoNote: 'Place your pharmacy on the map so patients can find it: use your current location if you are there, search for the address, or click the map.',
+      geoMissing: 'Place your pharmacy on the map. Patients find it by its location.',
       status: {
         pending: 'Your pharmacy is awaiting verification by ApexRX. Supplier search opens once it is approved.',
         approved: 'Your pharmacy is approved by ApexRX. Listed medicines are visible to patients on ApexRX.',
@@ -88,7 +89,8 @@
       address: 'Main warehouse address', docsTitle: 'Verification documents', docsDesc: 'Upload the documents ApexRX uses to verify your business.',
       docs: [['business_license', 'Business license'], ['owner_id', 'Owner ID']],
       reviewDesc: 'ApexRX reviews every supplier before it can work with pharmacies.', type: 'Supplier', places: 'Warehouses',
-      geoNote: 'Place your warehouse on the map: use your current location if you are there, search for the address, or click the map. You can add it later.',
+      geoNote: 'Place your warehouse on the map so pharmacies can find it: use your current location if you are there, search for the address, or click the map.',
+      geoMissing: 'Place your warehouse on the map. Pharmacies find it by its location.',
       status: {
         pending: 'Your business is awaiting verification by ApexRX.',
         approved: 'Your business is approved by ApexRX. It can publish stock and prices and receive orders from pharmacies.',
@@ -143,7 +145,7 @@
   <div class="fields address-fields" id="address-fields"></div>
   <label>Street or landmark (optional)<input name="street" maxlength="500" placeholder="KG 11 Ave, near the market"></label>
   <p class="note address-summary" id="address-summary" hidden><span>Address</span>: <span id="address-text"></span></p>
-  <strong class="document-heading">Map location <small>Optional</small></strong>
+  <strong class="document-heading">Map location <small>Required</small></strong>
   <p class="note">${T.geoNote}</p>
   <div id="location-picker"></div>
   <div class="actions"><button type="button" class="secondary" id="details-back">← Back</button><button class="primary" id="details-submit">Save and continue →</button></div>
@@ -722,6 +724,7 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
   function locationPicker() {
     if (picker || !window.ApexLocationPicker) return picker;
     picker = window.ApexLocationPicker.mount($('#location-picker'), {
+      required: true, // every branch and depot must be on the map
       onChange: (value, meta) => {
         // A searched place fills an empty "street or landmark" with its first part.
         const street = $('#details').elements.street;
@@ -788,8 +791,14 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     if (!v.place) return invalid('place', `Enter a ${T.place.toLowerCase()}.`);
     const missing = LEVELS.find(([level]) => !addr[level]);
     if (missing) return invalid(missing[0], 'Choose the province, district, sector, cell and village.');
-    // The picker only keeps points in Rwanda; the server checks again.
-    const latitude = v.location ? v.location.lat : null, longitude = v.location ? v.location.lng : null;
+    // Required: the picker only keeps points in Rwanda; the server checks again.
+    if (!v.location) {
+      formError(T.geoMissing);
+      const q = document.querySelector('#location-picker .lp-query');
+      if (q) { q.scrollIntoView({ block: 'center' }); q.focus(); }
+      return;
+    }
+    const latitude = v.location.lat, longitude = v.location.lng;
     formError('');
     busy(form, async () => {
       try {

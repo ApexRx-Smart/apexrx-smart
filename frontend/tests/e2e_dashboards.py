@@ -76,6 +76,25 @@ def upload_document(org, token, doc_type, content=TEST_PDF, name="test-licence.p
         return json.loads(r.read().decode())
 
 
+KIGALI = {"latitude": -1.9441, "longitude": 30.0619}
+
+
+def unplace_location(location_id):
+    """Test shortcut for a branch saved before map locations were required (the
+    API never removes one): clear its coordinates directly in the LOCAL test
+    database, through the project's own Python (it has the database driver)."""
+    import subprocess
+    db = os.environ.get("DATABASE_URL", "")
+    if "@localhost:" not in db and "@127.0.0.1:" not in db:
+        raise SystemExit("refusing: DATABASE_URL is not a local test database")
+    py = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".venv", "Scripts", "python.exe")
+    code = ("import os, sys, psycopg\n"
+            "u = os.environ['DATABASE_URL'].replace('postgresql+psycopg://', 'postgresql://')\n"
+            "with psycopg.connect(u) as c:\n"
+            "    c.execute('UPDATE location SET latitude = NULL, longitude = NULL WHERE location_id = %s', (int(sys.argv[1]),))\n")
+    subprocess.run([py, "-c", code, str(location_id)], check=True)
+
+
 def complete_application(org, token, admin, call_fn=None, api=None):
     """The real application flow through the API: upload every required document,
     submit, and an administrator approves each document. Then the organization
@@ -112,7 +131,8 @@ def org_with_owner(email, name, org_name, kind, locations, approve=True, admin=N
     token = account(email, name, kind)
     verify_email(token)
     org = call("POST", "/organizations", {"name": org_name, "type": kind}, token)["organization_id"]
-    locs = [call("POST", f"/organizations/{org}/locations", loc, token)["location_id"] for loc in locations]
+    # Every branch is on the map (Kigali unless the test gives a place).
+    locs = [call("POST", f"/organizations/{org}/locations", {**KIGALI, **loc}, token)["location_id"] for loc in locations]
     if approve:
         complete_application(org, token, admin)
         call("POST", f"/admin/organizations/{org}/review", {"decision": "approved"}, admin)

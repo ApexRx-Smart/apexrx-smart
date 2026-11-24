@@ -116,13 +116,23 @@ def approve(client, admin_headers, organization_id: int) -> None:
     assert r.status_code == 200, r.text
 
 
-def location(client, headers, organization_id: int, name: str, lat=None, lng=None, **extra) -> int:
+KIGALI = (-1.9441, 30.0619)
+
+
+def location(client, headers, organization_id: int, name: str, lat=None, lng=None, *, on_map=True, **extra) -> int:
+    """A branch (its map location is required: Kigali unless lat/lng are given).
+    on_map=False: a branch saved before locations were required (the location is
+    removed directly in the database, which the API never allows)."""
     body = {"name": name, **extra}
-    if lat is not None:
-        body.update(latitude=lat, longitude=lng)
+    body.update(latitude=lat if lat is not None else KIGALI[0], longitude=lng if lng is not None else KIGALI[1])
     r = client.post(f"/organizations/{organization_id}/locations", json=body, headers=headers)
     assert r.status_code == 201, r.text
-    return r.json()["location_id"]
+    location_id = r.json()["location_id"]
+    if not on_map:
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE location SET latitude = NULL, longitude = NULL WHERE location_id = :l"),
+                         {"l": location_id})
+    return location_id
 
 
 def catalogue_product(client, admin_headers, drug: str, product: str, **extra) -> int:
