@@ -80,6 +80,12 @@ class MemberResponse(BaseModel):
 
 
 # Locations --------------------------------------------------------------------
+# Every pharmacy branch and supplier depot is in Rwanda: a box around the country
+# (with a small margin), the same one the map picker uses (js/location-picker.js).
+# Coordinates from the browser are never trusted beyond this check.
+RWANDA = {"lat_min": Decimal("-2.9"), "lat_max": Decimal("-1.0"), "lng_min": Decimal("28.8"), "lng_max": Decimal("31.0")}
+
+
 class _LocationFields(BaseModel):
     # Rwandan address: region = province, city = district, then sector, cell
     # and village; address = street or landmark.
@@ -101,15 +107,37 @@ class _LocationFields(BaseModel):
             raise ValueError("latitude and longitude must be provided together")
         if (self.latitude is None) != (self.longitude is None):
             raise ValueError("latitude and longitude must both be set or both be null")
+        if self.latitude is not None and not (
+            RWANDA["lat_min"] <= self.latitude <= RWANDA["lat_max"]
+            and RWANDA["lng_min"] <= self.longitude <= RWANDA["lng_max"]
+        ):
+            raise ValueError("The location must be in Rwanda. Choose the point on the map again.")
         return self
 
 
 class LocationCreate(_LocationFields):
     name: Name
 
+    @model_validator(mode="after")
+    def _location_required(self):
+        # Every branch and depot must be on the map: that is how patients and
+        # pharmacies find it (search distances, directions).
+        if self.latitude is None:
+            raise ValueError("Place the branch on the map: its location is required.")
+        return self
+
 
 class LocationUpdate(_LocationFields):
     name: Name | None = None
+
+    @model_validator(mode="after")
+    def _location_not_removed(self):
+        # A location can be moved, never removed (branches saved before it was
+        # required may still lack one until it is added).
+        if "latitude" in self.model_fields_set and self.latitude is None:
+            raise ValueError("A branch's map location cannot be removed. Move the pin instead.")
+        return self
+
     # Locations are deactivated, never deleted: their stock audit trail and
     # purchase orders keep referencing them.
     is_active: bool | None = None

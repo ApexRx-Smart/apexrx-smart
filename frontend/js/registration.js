@@ -51,7 +51,6 @@
   const FILE_TYPES = /\.(pdf|png|jpe?g)$/i;
   // Keys of data/rwanda-locations.json, and the names stored in location.region.
   const PROVINCES = [['Kigali', 'Kigali City'], ['East', 'Eastern Province'], ['West', 'Western Province'], ['North', 'Northern Province'], ['South', 'Southern Province']];
-  const RWANDA = { latMin: -2.9, latMax: -1.0, lngMin: 28.8, lngMax: 31.0 };
   const STEP_NAMES = ['Account', 'Verify email', 'Details', 'Documents', 'Review'];
 
   const T = {
@@ -68,7 +67,8 @@
       address: 'Main branch address', docsTitle: 'Licensing documents', docsDesc: 'Upload the documents ApexRX uses to verify your pharmacy.',
       docs: [['pharmacy_license', 'Pharmacy license'], ['business_license', 'Business license'], ['owner_id', 'Owner ID']],
       reviewDesc: 'ApexRX reviews every pharmacy before it is listed for patients.', type: 'Pharmacy', places: 'Branches',
-      geoNote: 'Use your device’s location while you are at the pharmacy, or enter the coordinates. You can leave them empty and add them later.',
+      geoNote: 'Place your pharmacy on the map so patients can find it: use your current location if you are there, search for the address, or click the map.',
+      geoMissing: 'Place your pharmacy on the map. Patients find it by its location.',
       status: {
         pending: 'Your pharmacy is awaiting verification by ApexRX. Supplier search opens once it is approved.',
         approved: 'Your pharmacy is approved by ApexRX. Listed medicines are visible to patients on ApexRX.',
@@ -89,7 +89,8 @@
       address: 'Main warehouse address', docsTitle: 'Verification documents', docsDesc: 'Upload the documents ApexRX uses to verify your business.',
       docs: [['business_license', 'Business license'], ['owner_id', 'Owner ID']],
       reviewDesc: 'ApexRX reviews every supplier before it can work with pharmacies.', type: 'Supplier', places: 'Warehouses',
-      geoNote: 'Use your device’s location while you are at the warehouse, or enter the coordinates. You can leave them empty and add them later.',
+      geoNote: 'Place your warehouse on the map so pharmacies can find it: use your current location if you are there, search for the address, or click the map.',
+      geoMissing: 'Place your warehouse on the map. Pharmacies find it by its location.',
       status: {
         pending: 'Your business is awaiting verification by ApexRX.',
         approved: 'Your business is approved by ApexRX. It can publish stock and prices and receive orders from pharmacies.',
@@ -144,10 +145,9 @@
   <div class="fields address-fields" id="address-fields"></div>
   <label>Street or landmark (optional)<input name="street" maxlength="500" placeholder="KG 11 Ave, near the market"></label>
   <p class="note address-summary" id="address-summary" hidden><span>Address</span>: <span id="address-text"></span></p>
-  <strong class="document-heading">Map location <small>Optional</small></strong>
-  <div class="geo-row"><button type="button" class="secondary" id="use-location">Use my current location</button><a id="map-check" href="#" target="_blank" rel="noopener" hidden>Check on OpenStreetMap ↗</a></div>
-  <div class="fields coordinates"><label>Latitude<input name="latitude" type="number" step="any" min="-90" max="90" inputmode="decimal" placeholder="-1.9441"></label><label>Longitude<input name="longitude" type="number" step="any" min="-180" max="180" inputmode="decimal" placeholder="30.0619"></label></div>
+  <strong class="document-heading">Map location <small>Required</small></strong>
   <p class="note">${T.geoNote}</p>
+  <div id="location-picker"></div>
   <div class="actions"><button type="button" class="secondary" id="details-back">← Back</button><button class="primary" id="details-submit">Save and continue →</button></div>
 </form>
 
@@ -719,29 +719,23 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
   });
   $('#details').elements.street.addEventListener('input', paintAddressSummary);
 
-  function paintMapLink() {
-    const f = $('#details').elements, lat = Number(f.latitude.value), lng = Number(f.longitude.value);
-    const ok = f.latitude.value !== '' && f.longitude.value !== '' && Number.isFinite(lat) && Number.isFinite(lng);
-    const link = $('#map-check');
-    link.hidden = !ok;
-    if (ok) link.href = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=17/${lat}/${lng}`;
+  // The map location (js/location-picker.js), created the first time the details show.
+  let picker = null;
+  function locationPicker() {
+    if (picker || !window.ApexLocationPicker) return picker;
+    picker = window.ApexLocationPicker.mount($('#location-picker'), {
+      required: true, // every branch and depot must be on the map
+      onChange: (value, meta) => {
+        // A searched place fills an empty "street or landmark" with its first part.
+        const street = $('#details').elements.street;
+        if (meta && meta.address && !street.value.trim()) {
+          street.value = meta.address.split(',').slice(0, 2).join(',').trim().slice(0, 500);
+          paintAddressSummary();
+        }
+      }
+    });
+    return picker;
   }
-  ['latitude', 'longitude'].forEach(n => $('#details').elements[n].addEventListener('input', paintMapLink));
-  $('#use-location').addEventListener('click', () => {
-    const button = $('#use-location');
-    if (!navigator.geolocation) { formError('This browser cannot share its location. Enter the coordinates instead.'); return; }
-    button.disabled = true; formError('');
-    navigator.geolocation.getCurrentPosition(pos => {
-      const f = $('#details').elements;
-      f.latitude.value = pos.coords.latitude.toFixed(6);
-      f.longitude.value = pos.coords.longitude.toFixed(6);
-      button.disabled = false; paintMapLink();
-      notice('Location added. Check it on the map before saving.');
-    }, () => {
-      button.disabled = false;
-      formError('Your location could not be read. Allow location access, or enter the coordinates instead.');
-    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
-  });
 
   async function showDetails() {
     show(2);
@@ -755,15 +749,19 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     if (l) {
       Object.assign(addr, { province: provinceKey(l.region), district: l.city || '', sector: l.sector || '', cell: l.cell || '', village: l.village || '' });
       f.street.value = l.address || '';
-      f.latitude.value = l.latitude != null ? l.latitude : '';
-      f.longitude.value = l.longitude != null ? l.longitude : '';
     }
     const managed = !o || canManage();
-    [...$('#details').elements].forEach(x => { if (x.tagName !== 'BUTTON' || x.id === 'details-submit' || x.id === 'use-location') x.disabled = !managed; });
+    [...$('#details').elements].forEach(x => { if (x.tagName !== 'BUTTON' || x.id === 'details-submit') x.disabled = !managed; });
+    const map = locationPicker();
+    if (map) {
+      map.set(l && l.latitude != null ? { lat: Number(l.latitude), lng: Number(l.longitude) } : map.get());
+      map.disable(!managed);
+      map.refresh(); // the form was hidden while the map was built
+    }
     $('#address-fields').replaceChildren(el('p', { class: 'note', text: 'Loading Rwandan places…' }));
     await loadPlaces();
     renderAddress();
-    paintMapLink();
+    if (map) map.refresh();
     if (!managed) formError('Only the owner or a manager can change these details.');
   }
 
@@ -771,7 +769,7 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     const f = $('#details').elements;
     const v = {
       name: f.name.value.trim(), phone: f.phone.value.trim(), place: f.place.value.trim(), whatsapp: f.whatsapp.value.trim(),
-      street: f.street.value.trim(), lat: f.latitude.value.trim(), lng: f.longitude.value.trim()
+      street: f.street.value.trim(), location: picker ? picker.get() : null
     };
     LEVELS.forEach(([level]) => { const c = $(`#address-fields [name=${level}]`); addr[level] = c ? c.value.trim() : addr[level]; });
     return v;
@@ -793,13 +791,14 @@ ${ROLE === 'pharmacy' ? `<div id="join-wait" class="step-form" hidden>
     if (!v.place) return invalid('place', `Enter a ${T.place.toLowerCase()}.`);
     const missing = LEVELS.find(([level]) => !addr[level]);
     if (missing) return invalid(missing[0], 'Choose the province, district, sector, cell and village.');
-    let latitude = null, longitude = null;
-    if (v.lat || v.lng) {
-      latitude = Number(v.lat); longitude = Number(v.lng);
-      if (!v.lat || !v.lng || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return invalid(v.lat ? 'longitude' : 'latitude', 'Enter both latitude and longitude, or leave both empty.');
-      if (latitude < RWANDA.latMin || latitude > RWANDA.latMax || longitude < RWANDA.lngMin || longitude > RWANDA.lngMax) return invalid('latitude', 'These coordinates are outside Rwanda. Check them on the map.');
-      latitude = Number(latitude.toFixed(6)); longitude = Number(longitude.toFixed(6));
+    // Required: the picker only keeps points in Rwanda; the server checks again.
+    if (!v.location) {
+      formError(T.geoMissing);
+      const q = document.querySelector('#location-picker .lp-query');
+      if (q) { q.scrollIntoView({ block: 'center' }); q.focus(); }
+      return;
     }
+    const latitude = v.location.lat, longitude = v.location.lng;
     formError('');
     busy(form, async () => {
       try {

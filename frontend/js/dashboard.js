@@ -347,7 +347,7 @@ ${IS_PH ? `<p class="note">${esc(t('Quantity is the stock on your shelf as recor
       const branches = [...(ctx.locations || [])].sort((a, b) => (b.is_active - a.is_active) || a.name.localeCompare(b.name));
       const place = l => [l.address, l.village, l.cell, l.sector].filter(Boolean).join(', ');
       return `<h2 style="margin-top:0">${esc(t(IS_PH ? 'Your pharmacy profile' : 'Your supplier profile'))}</h2><div class="panel"><dl class="kv">${rows.filter(r => r[1]).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${isPreview ? '' : `<p style="margin:12px 0 0"><a class="ghost" id="open-registration" href="${IS_PH ? SIGN_IN : ONBOARD}?lang=${lang}#review">${esc(t('Registration details and review →'))}</a></p>`}</div>
-<h2>${esc(t(IS_PH ? 'Branches' : 'Depots'))}</h2><div class="tbl"><table><thead><tr><th>${esc(t(IS_PH ? 'Branch' : 'Depot'))}</th><th>${esc(t('District'))}</th><th>${esc(t('Address'))}</th><th>${esc(t('Phone'))}</th><th>${esc(t('Status'))}</th><th></th></tr></thead><tbody>${branches.map(l => `<tr data-branch="${l.location_id}"><td><strong>${esc(l.name)}</strong>${l.region ? `<small>${esc(l.region)}</small>` : ''}</td><td>${esc(l.city || '—')}</td><td>${esc(place(l) || '—')}</td><td>${esc(l.phone || '—')}</td><td><span class="tag ${l.is_active ? 'good' : ''}">${esc(t(l.is_active ? 'Active' : 'Inactive'))}</span></td><td class="act">${mgr && !isPreview ? `<button class="ghost" data-a="editloc" data-l="${l.location_id}">${esc(t('Edit'))}</button><button class="ghost" data-a="${l.is_active ? 'offloc' : 'onloc'}" data-l="${l.location_id}">${esc(t(l.is_active ? 'Deactivate' : 'Reactivate'))}</button>` : ''}</td></tr>`).join('') || `<tr><td colspan="6" class="empty">${esc(t('No location yet.'))}</td></tr>`}</tbody></table></div>
+<h2>${esc(t(IS_PH ? 'Branches' : 'Depots'))}</h2><div class="tbl"><table><thead><tr><th>${esc(t(IS_PH ? 'Branch' : 'Depot'))}</th><th>${esc(t('District'))}</th><th>${esc(t('Address'))}</th><th>${esc(t('Phone'))}</th><th>${esc(t('Status'))}</th><th></th></tr></thead><tbody>${branches.map(l => `<tr data-branch="${l.location_id}"><td><strong>${esc(l.name)}</strong>${l.region ? `<small>${esc(l.region)}</small>` : ''}${l.latitude == null ? `<span class="tag low">${esc(t('No map location'))}</span>` : ''}</td><td>${esc(l.city || '—')}</td><td>${esc(place(l) || '—')}</td><td>${esc(l.phone || '—')}</td><td><span class="tag ${l.is_active ? 'good' : ''}">${esc(t(l.is_active ? 'Active' : 'Inactive'))}</span></td><td class="act">${mgr && !isPreview ? `<button class="ghost" data-a="editloc" data-l="${l.location_id}">${esc(t('Edit'))}</button><button class="ghost" data-a="${l.is_active ? 'offloc' : 'onloc'}" data-l="${l.location_id}">${esc(t(l.is_active ? 'Deactivate' : 'Reactivate'))}</button>` : ''}</td></tr>`).join('') || `<tr><td colspan="6" class="empty">${esc(t('No location yet.'))}</td></tr>`}</tbody></table></div>
 ${mgr ? `<p><button class="ghost" data-a="addloc">${esc(t(IS_PH ? 'Add a branch' : 'Add a depot'))}</button></p>` : `<p class="note">${esc(t(IS_PH ? 'Only owners and managers can add or change branches.' : 'Only owners and managers can add or change depots.'))}</p>`}
 <h2>${esc(t('Team and permissions'))}</h2><div class="tbl"><table><thead><tr><th>${esc(t('Name'))}</th><th>${esc(t('Role'))}</th><th>${esc(t('Can do'))}</th><th>${esc(t('Status'))}</th><th></th></tr></thead><tbody id="team"><tr><td colspan="5" class="empty">${esc(t('Loading…'))}</td></tr></tbody></table></div>
 ${!mgr ? `<p class="note">${esc(t('Only owners and managers can invite or change team members.'))}</p>`
@@ -1087,16 +1087,24 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
   }
 
   /* --------------------------------------------------------------- dialogs */
-  function ask(title, bodyHtml, submit) {
+  // onOpen(dialog): runs once the dialog is shown (e.g. to size a map inside it).
+  // check(form): a message keeps the dialog open and shows it; nothing closes it.
+  function ask(title, bodyHtml, submit, onOpen, check) {
     const d = $('#dlg');
-    d.innerHTML = `<form method="dialog" id="dlgf"><h2>${esc(title)}</h2>${bodyHtml}<div class="dlg-a"><button type="button" class="ghost" id="dlg-x">${esc(t('Cancel'))}</button><button class="solid">${esc(submit)}</button></div></form>`;
+    d.innerHTML = `<form method="dialog" id="dlgf"><h2>${esc(title)}</h2>${bodyHtml}<p class="dlg-err" id="dlg-err" role="alert"></p><div class="dlg-a"><button type="button" class="ghost" id="dlg-x">${esc(t('Cancel'))}</button><button class="solid">${esc(submit)}</button></div></form>`;
     return new Promise(res => {
       const form = $('#dlgf');
       const finish = v => { d.close(); res(v); };
-      form.addEventListener('submit', e => { e.preventDefault(); finish(new FormData(form)); });
+      form.addEventListener('submit', e => {
+        e.preventDefault();
+        const problem = check ? check(form) : '';
+        if (problem) { $('#dlg-err').textContent = problem; return; }
+        finish(new FormData(form));
+      });
       $('#dlg-x').addEventListener('click', () => finish(null));
       d.addEventListener('cancel', () => res(null), { once: true });
       d.showModal();
+      if (onOpen) onOpen(d);
     });
   }
   async function reload(view) {
@@ -1224,14 +1232,26 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
   // Branches (pharmacy) or depots (supplier): add and edit with the same dialog.
   async function locationDialog(l) {
     const v = k => esc(l && l[k] != null ? l[k] : '');
+    let picker = null;
     const fd = await ask(t(l ? 'Edit {n}' : IS_PH ? 'Add a branch' : 'Add a depot', { n: l ? l.name : '' }),
-      `<label>${esc(t('Name'))}<input name="name" required maxlength="200" value="${v('name')}"></label><label>${esc(t('Province'))}<input name="region" maxlength="100" value="${v('region')}"></label><label>${esc(t('District'))}<input name="city" maxlength="100" value="${v('city')}"></label><label>${esc(t('Sector'))}<input name="sector" maxlength="100" value="${v('sector')}"></label><label>${esc(t('Address'))}<input name="address" maxlength="500" value="${v('address')}"></label><label>${esc(t('Phone'))}<input name="phone" placeholder="+250 788 123 456" value="${v('phone')}"></label><label>${esc(t('WhatsApp'))}<input name="whatsapp_phone" placeholder="+250 788 123 456" value="${v('whatsapp_phone')}"></label><label>${esc(t('Latitude'))}<input name="latitude" type="number" step="any" min="-90" max="90" value="${v('latitude')}"></label><label>${esc(t('Longitude'))}<input name="longitude" type="number" step="any" min="-180" max="180" value="${v('longitude')}"></label>`, t('Save'));
+      `<label>${esc(t('Name'))}<input name="name" required maxlength="200" value="${v('name')}"></label><label>${esc(t('Province'))}<input name="region" maxlength="100" value="${v('region')}"></label><label>${esc(t('District'))}<input name="city" maxlength="100" value="${v('city')}"></label><label>${esc(t('Sector'))}<input name="sector" maxlength="100" value="${v('sector')}"></label><label>${esc(t('Address'))}<input name="address" maxlength="500" value="${v('address')}"></label><label>${esc(t('Phone'))}<input name="phone" placeholder="+250 788 123 456" value="${v('phone')}"></label><label>${esc(t('WhatsApp'))}<input name="whatsapp_phone" placeholder="+250 788 123 456" value="${v('whatsapp_phone')}"></label><div class="loc-map-field"><strong>${esc(t('Map location'))}</strong><p class="muted">${esc(t(IS_PH ? 'Place the branch on the map: search for its address or click the map. You do not need to be there.' : 'Place the depot on the map: search for its address or click the map. You do not need to be there.'))}</p><div id="loc-picker"></div></div>`, t('Save'),
+      () => {
+        // The map location (js/location-picker.js); the server checks it again.
+        if (!window.ApexLocationPicker) return;
+        picker = window.ApexLocationPicker.mount($('#loc-picker'), {
+          t, buttonClass: 'ghost', required: true,
+          value: l && l.latitude != null ? { lat: Number(l.latitude), lng: Number(l.longitude) } : null
+        });
+        setTimeout(() => picker.refresh(), 50); // sized once the dialog is visible
+      },
+      // Every branch and depot must be on the map (the server refuses one without).
+      () => (picker && !picker.get() ? t(IS_PH ? 'Place the branch on the map before saving.' : 'Place the depot on the map before saving.') : ''));
     if (!fd) return;
     const val = k => String(fd.get(k) || '').trim();
-    if (!!val('latitude') !== !!val('longitude')) { toast(t('Enter both latitude and longitude, or neither.')); return; }
     const body = { name: val('name') };
     ['region', 'city', 'sector', 'address', 'phone', 'whatsapp_phone'].forEach(k => { if (val(k) || l) body[k] = val(k) || null; });
-    if (val('latitude')) { body.latitude = Number(val('latitude')); body.longitude = Number(val('longitude')); } else if (l) { body.latitude = null; body.longitude = null; }
+    const at = picker ? picker.get() : null;
+    if (at) { body.latitude = at.lat; body.longitude = at.lng; }
     if (!l && !body.whatsapp_phone && body.phone) body.whatsapp_phone = body.phone;
     try {
       if (l) await data.updateLocation(l.location_id, body); else await data.addLocation(body);

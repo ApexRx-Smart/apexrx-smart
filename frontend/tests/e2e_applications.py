@@ -49,7 +49,7 @@ def main():
     token = D.account(email, "Apply Owner", "pharmacy")
     D.verify_email(token)
     org = D.call("POST", "/organizations", {"name": f"Apply Pharmacy {RUN}", "type": "pharmacy"}, token)["organization_id"]
-    D.call("POST", f"/organizations/{org}/locations", {"name": "Apply Branch", "city": "Gasabo"}, token)
+    D.call("POST", f"/organizations/{org}/locations", {"name": "Apply Branch", "city": "Gasabo", **D.KIGALI}, token)
 
     with sync_playwright() as p:
         browser = p.chromium.launch(channel=D.os.environ.get("E2E_BROWSER_CHANNEL") or None, headless=True)

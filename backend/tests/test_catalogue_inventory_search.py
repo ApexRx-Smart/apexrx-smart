@@ -166,7 +166,7 @@ def test_patient_search_price_and_location_filters(client):
     stock(client, world.pharmacy_owner, world.pharmacy, world.branch, world.paracetamol, 50, "300.00")
     far = location(client, world.pharmacy_owner, world.pharmacy, "Far Branch", -2.6, 29.74)
     stock(client, world.pharmacy_owner, world.pharmacy, far, world.paracetamol, 20, "100.00")
-    nowhere = location(client, world.pharmacy_owner, world.pharmacy, "No Map Branch")  # no coordinates
+    nowhere = location(client, world.pharmacy_owner, world.pharmacy, "No Map Branch", on_map=False)  # saved before locations were required
     stock(client, world.pharmacy_owner, world.pharmacy, nowhere, world.paracetamol, 20, "200.00")
     search = lambda **p: client.get("/search/pharmacies", params={"q": "paracetamol", **p})  # noqa: E731
 

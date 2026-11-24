@@ -274,3 +274,6 @@ background:radial-gradient(70% 50% at 100% 0,#0da7de1f,transparent 70%),var(--bg
   .top h1,#title{font-size:22px}
   .who{gap:8px}
 }
+
+/* The page dialog's own message (a required field, such as a branch's map location). */
+.dlg-err{margin:8px 0 0;color:var(--red);font-size:13px}.dlg-err:empty{display:none}

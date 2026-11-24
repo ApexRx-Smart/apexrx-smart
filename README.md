@@ -412,6 +412,17 @@ A business registration moves through: **registration started → documents uplo
   - Pending organizations missing a document go back to "in progress": they upload what is missing and submit.
   - The migration prints how many organizations are in each group.
 
+## Branch and depot map locations
+
+Pharmacies and suppliers place their main branch (during registration) and every other branch or depot (dashboard → Settings → Add / Edit) on a map. There are no latitude or longitude fields to type. The picker is `frontend/js/location-picker.js`, and one component serves both places:
+
+- **Use my current location:** the browser Geolocation API, asked for only when this button is pressed. If permission is refused, the location can't be read, or the device is outside Rwanda, the page says so and the map stays usable.
+- **Search an address or place:** OpenStreetMap Nominatim, limited to Rwanda, only when "Search" is pressed, at most one request per second. A chosen result fills an empty "street or landmark" field.
+- **Click or tap the map**, and **drag the pin** to adjust it. Nobody needs to be at the branch to place it.
+- **Map:** the Leaflet copy in `frontend/vendor/leaflet` with OpenStreetMap tiles. These are free and keyless, the same services patient search uses; no paid service is involved. If the map can't load, search and "Use my current location" still work.
+- **The server checks the coordinates itself** (`app/schemas/organizations.py`). Both coordinates or neither, and only inside Rwanda (latitude −2.9 to −1.0, longitude 28.8 to 31.0); otherwise 422. They are saved on the branch of the organization the user belongs to; another organization's branch is 404.
+- **A map location is required for every branch and depot** (registration and the dashboard refuse to save without one; the server answers 422 to a new branch without coordinates and never lets a location be removed, only moved). Branches saved before this rule keep working and appear in search without a distance; the dashboard marks them "No map location" until their owner places them.
+
 ## Sessions
 
 Every sign-in creates a server-side session (`auth_session`), and every access token names it (`sid`). The backend accepts a token only while its session is usable, so a frontend timer is never the only protection:

@@ -67,6 +67,11 @@ def context(browser, viewport=None):
     ctx = browser.new_context(viewport=viewport or {"width": 1366, "height": 900})
     ctx.route("**/js/config.js", lambda route: route.fulfill(
         content_type="application/javascript", body=f'window.APEX_CONFIG = {{ API_BASE_URL: "{API}" }};'))
+    # OpenStreetMap is not contacted: map tiles and the address search are stubbed.
+    ctx.route("https://tile.openstreetmap.org/**", lambda r: r.fulfill(content_type="image/png", body=D.BLANK_TILE))
+    ctx.route("https://nominatim.openstreetmap.org/**", lambda r: r.fulfill(
+        content_type="application/json", headers={"Access-Control-Allow-Origin": "*"},
+        body=json.dumps([{"display_name": "KG 11 Ave, Kimironko, Gasabo, Kigali, Rwanda", "lat": "-1.9490", "lon": "30.1260"}])))
     return ctx
 
 
@@ -128,6 +133,10 @@ def main():
         for level in ("cell", "village"):
             value = page.eval_on_selector(f"#address-fields [name={level}]", "s => s.options[1].value")
             page.select_option(f"#address-fields [name={level}]", value)
+        page.fill("#location-picker .lp-query", "Kimironko")  # the map location is required
+        page.click("#location-picker .lp-find")
+        page.click("#location-picker .lp-results button")
+        wait_text(page, "#location-picker .lp-status", "-1.949000")
         page.click("#details-submit")
         visible(page, "#documents")
         for doc_type in ("pharmacy_license", "business_license", "owner_id"):

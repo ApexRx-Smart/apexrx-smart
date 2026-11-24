@@ -46,9 +46,10 @@ def test_full_registration_profile_is_persisted(client, type_):
 def test_address_parts_are_optional_and_length_checked(client):
     h = user(client, "addr@x.example.com")
     org_id = organization(client, h, "pharmacy", "Address Checks")
-    r = client.post(f"/organizations/{org_id}/locations", json={"name": "Bare"}, headers=h)
+    here = {"latitude": -1.9441, "longitude": 30.0619}  # the map location is required
+    r = client.post(f"/organizations/{org_id}/locations", json={"name": "Bare", **here}, headers=h)
     assert r.status_code == 201 and r.json()["sector"] is None
-    r = client.post(f"/organizations/{org_id}/locations", json={"name": "Long", "sector": "x" * 101}, headers=h)
+    r = client.post(f"/organizations/{org_id}/locations", json={"name": "Long", "sector": "x" * 101, **here}, headers=h)
     assert r.status_code == 422
 
 
