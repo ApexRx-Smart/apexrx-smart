@@ -47,7 +47,7 @@ def dashboard_insights(
 ):
     """Overview charts and management figures. Owners and managers only:
     staff get 403, non-members 404."""
-    access = get_org_access(db, user, organization_id, roles=MANAGERS)
+    access = get_org_access(db, user, organization_id, roles=MANAGERS, require_approved=True)
     if location_id is not None:
         get_org_location(db, organization_id, location_id)
 

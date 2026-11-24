@@ -1594,6 +1594,9 @@ ${sent.length > 1 ? `<details class="hist"><summary>${esc(pl(sent.length - 1, '{
         else location.replace(ONBOARD + '?lang=' + lang + '#profile');
         return;
       }
+      // Only an approved business uses the workspace; the server refuses the rest.
+      // Pending, rejected or suspended: the application status page instead.
+      if (!isPreview && c.org.status !== 'approved') { location.replace('business-status.html?lang=' + lang); return; }
       ctx = c;
       S.loc = (activeLocations()[0] || {}).location_id ?? null;
       const [stock, orders, drugs, convs, reqs, notes] = await Promise.allSettled([S.loc ? data.stock(S.loc) : [], data.orders(), IS_PH ? data.drugs() : [], data.conversations(), data.requests(), data.notifications()]);

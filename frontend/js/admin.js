@@ -41,7 +41,8 @@
     ['pending', { status: 'pending' }],
     ['approved', { status: 'approved' }],
     ['rejected', { status: 'rejected' }],
-    ['suspended', { status: 'suspended' }]
+    ['suspended', { status: 'suspended' }],
+    ['awaiting_review', { status: 'pending' }]  // submitted, inside the Pending card
   ];
 
   var $ = function (sel) { return document.querySelector(sel); };
@@ -267,7 +268,9 @@
       el('td', {}, [el('strong', { text: o.name })]),
       el('td', { text: cap(o.type) }),
       el('td', { text: date(o.created_at) }),
-      el('td', {}, [badge(o.status)]),
+      el('td', {}, o.status === 'pending'
+        ? [badge(o.status), el('small', { text: o.submitted_at ? 'Submitted for review' : 'Not submitted yet' })]
+        : [badge(o.status)]),
       el('td', {}, contact.length ? contact.map(function (c, i) { return i ? el('small', { text: c }) : c; }) : ['—']),
       el('td', {}, [el('button', {
         type: 'button', class: 'secondary small', text: 'Open',
@@ -333,6 +336,7 @@
       ['Email', org.email || '—'],
       ['Phone', org.phone || '—'],
       ['Registered', date(org.created_at, true)],
+      ['Submitted for review', org.submitted_at ? date(org.submitted_at, true) : 'Not submitted yet'],
       ['Last updated', date(org.updated_at, true)],
       ['Last reviewed', org.reviewed_at ? date(org.reviewed_at, true) : 'Not reviewed yet'],
       ['Review notes', org.review_notes || '—']
@@ -347,17 +351,32 @@
     renderMembers(org.members);
   }
 
+  // The documents every application needs (as app/services/applications.py).
+  var REQUIRED_DOCS = {
+    pharmacy: [['pharmacy_license', 'Pharmacy license'], ['business_license', 'Business license'], ['owner_id', 'Owner ID']],
+    supplier: [['business_license', 'Business license'], ['owner_id', 'Owner ID']]
+  };
   function renderReview(org) {
     var allowed = TRANSITIONS[org.status] || [];
     var pendingDocs = org.documents.filter(function (d) { return d.verification_status === 'pending'; }).length;
+    // A new or corrected application: submitted, every required document approved.
+    var application = org.status === 'pending' || org.status === 'rejected';
+    var notSubmitted = application && !org.submitted_at;
+    var unapproved = application ? (REQUIRED_DOCS[org.type] || []).filter(function (r) {
+      return !org.documents.some(function (d) { return d.document_type === r[0] && d.verification_status === 'approved'; });
+    }).map(function (r) { return r[1]; }) : [];
     var hints = [];
     document.querySelectorAll('#review-box [data-decision]').forEach(function (b) {
       var decision = b.dataset.decision;
       b.hidden = allowed.indexOf(decision) === -1;
-      b.disabled = decision === 'approved' && pendingDocs > 0;
+      b.disabled = decision === 'approved' && (pendingDocs > 0 || notSubmitted || unapproved.length > 0);
     });
-    if (allowed.indexOf('approved') !== -1 && pendingDocs) {
+    if (allowed.indexOf('approved') !== -1 && notSubmitted) {
+      hints.push('The applicant has not submitted the application yet (every required document must be uploaded first).');
+    } else if (allowed.indexOf('approved') !== -1 && pendingDocs) {
       hints.push('Review the ' + pendingDocs + ' pending document' + (pendingDocs > 1 ? 's' : '') + ' below before approving.');
+    } else if (allowed.indexOf('approved') !== -1 && unapproved.length) {
+      hints.push('Approve every required document before approving: ' + unapproved.join(', ') + '.');
     }
     if (org.status === 'approved') hints.push('Approved organizations can be suspended. Reject a suspended organization to close it.');
     if (org.status === 'pending' && !org.documents.length) hints.push('This organization has not uploaded any verification documents.');

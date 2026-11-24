@@ -34,6 +34,8 @@ import uuid
 
 from playwright.sync_api import sync_playwright
 
+import e2e_dashboards as D  # noqa: E402  (shared helper: the real application flow)
+
 SITE = os.environ.get("E2E_SITE", "http://127.0.0.1:5501")
 API = os.environ.get("E2E_API", "http://127.0.0.1:8000")
 IDLE_API = os.environ.get("E2E_IDLE_API", "http://127.0.0.1:8001")
@@ -93,6 +95,7 @@ def owner_with_pharmacy(email, name, org_name):
     org = ok("POST", "/organizations", {"name": org_name, "type": "pharmacy", "phone": "0788 100 200"}, token)["organization_id"]
     ok("POST", f"/organizations/{org}/locations", {"name": "Main branch", "region": "Kigali City", "city": "Gasabo"}, token)
     admin = login(ADMIN_EMAIL, ADMIN_PASSWORD)
+    D.complete_application(org, token, admin)
     ok("POST", f"/admin/organizations/{org}/review", {"decision": "approved"}, admin)
     return org
 

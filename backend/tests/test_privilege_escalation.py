@@ -10,7 +10,16 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.database import engine
-from tests.helpers import PASSWORD, admin, login, mark_email_verified, organization, register, user
+from tests.helpers import (
+    PASSWORD,
+    admin,
+    complete_application,
+    login,
+    mark_email_verified,
+    organization,
+    register,
+    user,
+)
 
 
 def _is_admin(email):
@@ -127,6 +136,7 @@ def test_admin_functionality_still_works(client):
     a = admin(client)
     owner = user(client, "owner@x.example.com")
     org_id = organization(client, owner, "pharmacy", "Review Me")
+    complete_application(org_id)
     r = client.post(f"/admin/organizations/{org_id}/review", json={"decision": "approved"}, headers=a)
     assert r.status_code == 200 and r.json()["status"] == "approved"
     me = client.get("/auth/me", headers=owner).json()

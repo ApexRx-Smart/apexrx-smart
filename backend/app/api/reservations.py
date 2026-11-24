@@ -304,7 +304,7 @@ def _pharmacy_item(row, role: MembershipRole | None, user: User) -> PharmacyRese
 
 
 def _pharmacy_access(db: Session, user: User, organization_id: int):
-    return get_org_access(db, user, organization_id, org_type=OrganizationType.PHARMACY)
+    return get_org_access(db, user, organization_id, org_type=OrganizationType.PHARMACY, require_approved=True)
 
 
 def _org_reservation_id(db: Session, organization_id: int, reference: str) -> int:
@@ -545,7 +545,8 @@ def get_pharmacy_reservation(organization_id: int, reference: ReferencePath, use
 
 
 def _act(db: Session, user: User, organization_id: int, reference: str, roles=ALL_ROLES) -> int:
-    get_org_access(db, user, organization_id, roles=roles, org_type=OrganizationType.PHARMACY)
+    get_org_access(db, user, organization_id, roles=roles, org_type=OrganizationType.PHARMACY,
+                   require_approved=True)
     return _org_reservation_id(db, organization_id, reference)
 
 

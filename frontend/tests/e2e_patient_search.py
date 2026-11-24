@@ -27,6 +27,8 @@ import uuid
 
 from playwright.sync_api import sync_playwright
 
+import e2e_dashboards as D  # noqa: E402  (shared helper: the real application flow)
+
 SITE = os.environ.get("E2E_SITE", "http://127.0.0.1:5501")
 API = os.environ.get("E2E_API", "http://127.0.0.1:8000")
 ADMIN_EMAIL, ADMIN_PASSWORD = os.environ["E2E_ADMIN_EMAIL"], os.environ["E2E_ADMIN_PASSWORD"]
@@ -75,6 +77,7 @@ def seed():
         if lat is not None:
             loc_body.update(latitude=lat, longitude=lng)
         loc = call("POST", f"/organizations/{org}/locations", loc_body, token)["location_id"]
+        D.complete_application(org, token, admin)
         call("POST", f"/admin/organizations/{org}/review", {"decision": "approved"}, admin)
         call("PUT", f"/organizations/{org}/locations/{loc}/stock/{product}", {"quantity": 40}, token)
         call("PUT", f"/organizations/{org}/locations/{loc}/stock/{product}/offer", {"unit_price": price}, token)

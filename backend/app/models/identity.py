@@ -92,6 +92,10 @@ class Organization(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     reviewed_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.user_id"))
     review_notes: Mapped[str | None] = mapped_column(Text)
+    # When the application was submitted for review (every required document
+    # uploaded); NULL while the registration is still in progress. See
+    # app/services/applications.py.
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     memberships: Mapped[list["Membership"]] = relationship(
         back_populates="organization", passive_deletes=True

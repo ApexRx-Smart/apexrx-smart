@@ -164,6 +164,11 @@ def capabilities():
         "phone_verification_required": settings.phone_verification_required,
         "password_reset": email,
         "invitation_emails": email,
+        # Shown to pharmacies and suppliers waiting for review (None when not configured).
+        "support_contact": {
+            "email": (settings.support_contact_email or "").strip() or None,
+            "phone": (settings.support_contact_phone or "").strip() or None,
+        },
     }
 
 

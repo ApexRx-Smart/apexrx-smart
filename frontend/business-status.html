@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Application status — ApexRX Smart</title>
+<meta name="robots" content="noindex">
+<meta name="description" content="Where your pharmacy or supplier application stands.">
+<link rel="icon" href="assets/logos/logo-mark.svg">
+<link rel="stylesheet" href="css/pharmacies.css">
+</head>
+<body class="patient-page business-status-page">
+<!-- Application status for pharmacies and suppliers that are not approved yet
+     (js/business-status.js). The server decides: it refuses every operational
+     feature until ApexRX approves the business. -->
+<header><a class="brand" href="index.html"><img src="assets/logos/logo-mark.svg" alt="" width="38"><span>ApexRX<span class="green"> Smart</span><small>Smarter access. Better health.</small></span></a><label class="language-control"><span class="sr-only">Language</span><select id="workflow-language" aria-label="Language"><option value="en">English</option><option value="fr">Français</option><option value="rw">Kinyarwanda</option></select></label></header>
+
+<main id="onboarding" class="onboarding">
+<aside class="story">
+<span class="eyebrow">VERIFIED BUSINESSES ONLY</span>
+<h1>Checked by people, <br><em>before anyone trades.</em></h1>
+<p>Every pharmacy and supplier on ApexRX is reviewed by the ApexRX team, with its licences, before it can list stock, take orders or answer patients.</p>
+<div class="story-foot"><span class="dot"></span> Your documents are only seen by ApexRX reviewers and your team</div>
+</aside>
+
+<section class="workspace">
+<div class="form-area">
+<span class="eyebrow" id="bs-org"></span>
+<h2 id="bs-title" tabindex="-1">Your application</h2>
+<p id="bs-loading" class="muted">Loading…</p>
+
+<div id="bs-main" hidden>
+  <p class="bs-state"><span class="ws-badge" id="bs-badge"></span></p>
+  <p id="bs-lead"></p>
+  <p id="bs-submitted" class="muted" hidden><span>Submitted</span>: <span id="bs-submitted-date"></span></p>
+  <ul id="bs-points" class="bs-points"></ul>
+  <p id="bs-notes-row" class="review-notes" hidden><span>Note from ApexRX</span>: <span id="bs-notes"></span></p>
+
+  <strong class="document-heading">Required documents</strong>
+  <ul id="bs-docs" class="supplier-docs"></ul>
+
+  <p id="bs-contact" class="note"></p>
+  <div class="actions">
+    <a class="primary button-link" id="bs-action" href="index.html" hidden></a>
+    <button type="button" class="secondary" id="bs-refresh">Check again</button>
+  </div>
+  <p id="bs-error" role="alert"></p>
+  <p id="bs-status" role="status" aria-live="polite"></p>
+  <p class="auth-switch"><button type="button" class="text-button" id="bs-signout">Sign out</button></p>
+</div>
+</div>
+<div class="workspace-foot">Medicines, closer to you. <span>APEXRX SMART</span></div>
+</section>
+</main>
+<script src="js/pharmacies-i18n.js"></script>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/business-status.js"></script>
+</body></html>

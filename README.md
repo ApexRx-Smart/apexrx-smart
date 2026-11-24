@@ -181,6 +181,7 @@ cp .env.example .env    # then edit DATABASE_URL and JWT_SECRET_KEY
 | `ESMS_SENDER_ID` | no | Approved sender ID (letters, digits, hyphen; up to 11). Unset: the route's default sender |
 | `ESMS_BASE_URL` / `ESMS_TIMEOUT_SECONDS` | no | Defaults `https://sms.esmsafrica.io/api` / 10 |
 | `ESMS_WEBHOOK_SECRET` | no | eSMS webhook signing secret, for delivery reports at `POST /webhooks/esms/delivery`. Unset: that endpoint answers 404 |
+| `SUPPORT_CONTACT_EMAIL` / `SUPPORT_CONTACT_PHONE` | no | How pharmacies and suppliers reach ApexRX about their application, shown on the application status page (`GET /auth/capabilities` → `support_contact`). Unset: the page shows no contact details |
 | `OTP_TTL_SECONDS` / `OTP_MAX_ATTEMPTS` / `OTP_RESEND_COOLDOWN_SECONDS` | no | Defaults 300 (5 minutes) / 5 / 60 |
 | `OTP_MAX_SENDS_PER_PHONE_PER_HOUR` / `_PER_USER_PER_HOUR` / `_PER_IP_PER_HOUR` | no | Defaults 5 / 5 / 20 (per IP only with a verified `TRUSTED_CLIENT_IP_HEADER`) |
 | `OTP_MAX_FAILED_ATTEMPTS_PER_USER_PER_HOUR` / `OTP_MAX_SENDS_GLOBAL_PER_HOUR` | no | Defaults 15 / 300 |
@@ -394,6 +395,22 @@ Every account is a **patient**, **pharmacy** or **supplier** account (`app_user.
 - **Every request is checked too.** A membership counts only for an account of the organization's type (`get_org_access`), and patient reservations (`/reservations`) are for patient accounts only (`PatientUser`, 403 otherwise). So a session obtained on one page opens nothing from another group.
 - **In the browser:** each page sends its own type. A signed-in customer who opens another group's sign-in page is offered their own workspace or signing out, never a registration. The ApexRX logo leads signed-in customers to their workspace (`reservations.html`, `pharmacy-dashboard.html` or `supplier-dashboard.html`), and the public landing page sends them there. Signed-out visitors, or visitors whose session expired, keep the public site (`js/api.js`).
 - **Existing accounts (migration):** each account takes the type of its first membership's organization; an account with no membership becomes a patient. The migration prints how many accounts belong to both a pharmacy and a supplier (they keep the first), and how many patient accounts have no membership and no reservation. The second group includes anyone who started a business registration without creating the organization: they cannot continue it on the business pages until an administrator corrects the type in the database.
+
+## Pharmacy and supplier applications
+
+A business registration moves through: **registration started → documents uploaded → submitted for review → approved, rejected or suspended**. The existing `organization.status` keeps its meaning; `organization.submitted_at` (migration `c9e4a7b2d6f1`) marks the submission (`app/services/applications.py`).
+
+- **Required documents:** pharmacy: pharmacy licence, business licence, owner ID; supplier: business licence, owner ID (the documents the registration has always asked for). Uploads must be one of these types (422 `invalid_document_type`), and pass the existing checks (PDF/PNG/JPG, content matches the type, size limit, private storage).
+- **`GET /organizations/{id}/application`** (members, admins): stage (`in_progress`, `awaiting_review`, `approved`, `rejected`, `suspended`), review notes, and each required document's status and rejection reason.
+- **`POST /organizations/{id}/submit`** (owners, managers): refused with 409 `documents_missing` until every required document is uploaded and not rejected. It also resubmits a rejected application (`/resubmit` follows the same rules).
+- **Approval:** an administrator can approve a pending or rejected application only once it is submitted and every required document is approved (409 `not_submitted` / `documents_not_approved`). Reinstating a suspended organization reviews nothing new. The admin overview counts pending applications that are `awaiting_review` separately from those still `in_progress`, and `GET /admin/organizations?stage=…` filters them.
+- **Pending, rejected and suspended businesses** can use only their registration: profile, branches, documents, team, and the application status. Every operational API (stock and offers, conversations and messages, procurement, purchase orders, organization notifications, pharmacy reservations, dashboard insights) answers **403 `organization_not_approved`**, reads included. A resource reached by its own id (an order, a conversation) is 404 to them. This is enforced in `get_org_access(require_approved=True)` and in the membership checks of `app/services/messaging.py` and `orders.py`, not by hiding links.
+- **In the browser:** the registration's documents step submits only when every document is chosen. Afterwards, signing in, the dashboards and the logo lead a business that is not approved to **`business-status.html`**. That page shows the stage, what happens next, ApexRX's notes, each document's status and reason, and the support contact (`SUPPORT_CONTACT_*`), with "Continue registration" or "Correct and resubmit" where they apply.
+- **Existing organizations (migration):**
+  - Approved, rejected and suspended organizations count as submitted, and nothing changes for them.
+  - Pending organizations with every required document (none rejected) are submitted, and stay in the review queue.
+  - Pending organizations missing a document go back to "in progress": they upload what is missing and submit.
+  - The migration prints how many organizations are in each group.
 
 ## Sessions
 

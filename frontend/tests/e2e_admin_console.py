@@ -29,6 +29,8 @@ import uuid
 
 from playwright.sync_api import sync_playwright
 
+import e2e_dashboards as D  # noqa: E402  (shared helper: the real application flow)
+
 SITE = os.environ.get("E2E_SITE", "http://127.0.0.1:5501")
 API = os.environ.get("E2E_API", "http://127.0.0.1:8000")
 ADMIN_EMAIL, ADMIN_PASSWORD = os.environ["E2E_ADMIN_EMAIL"], os.environ["E2E_ADMIN_PASSWORD"]
@@ -397,6 +399,7 @@ def main():
         check("7. reactivated", ok("GET", f"/catalogue/products/{product['product_id']}")["is_active"] is True)
 
         # ---- 7b. Organization detail: stock, stock history and orders (read only).
+        D.complete_application(org_id, world["owner"], admin_token())
         ok("POST", f"/admin/organizations/{org_id}/review", {"decision": "approved"}, admin_token())
         loc = ok("POST", f"/organizations/{org_id}/locations", {"name": f"Branch {RUN}", "latitude": -1.95, "longitude": 30.06}, world["owner"])
         stock = f"/organizations/{org_id}/locations/{loc['location_id']}/stock/{product['product_id']}"

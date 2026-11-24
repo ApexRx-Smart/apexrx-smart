@@ -26,6 +26,8 @@ import uuid
 
 from playwright.sync_api import sync_playwright
 
+import e2e_dashboards as D  # noqa: E402  (shared helper: the real application flow)
+
 SITE = os.environ.get("E2E_SITE", "http://127.0.0.1:5501")
 API = os.environ.get("E2E_NO_EMAIL_API", "http://127.0.0.1:8002")
 ADMIN_EMAIL, ADMIN_PASSWORD = os.environ["E2E_ADMIN_EMAIL"], os.environ["E2E_ADMIN_PASSWORD"]
@@ -128,9 +130,14 @@ def main():
             page.select_option(f"#address-fields [name={level}]", value)
         page.click("#details-submit")
         visible(page, "#documents")
-        page.set_input_files("#doc-list input[data-document-type=pharmacy_license]",
-                             files=[{"name": f"license-{RUN}.pdf", "mimeType": "application/pdf", "buffer": PDF}])
+        for doc_type in ("pharmacy_license", "business_license", "owner_id"):
+            page.set_input_files(f"#doc-list input[data-document-type={doc_type}]",
+                                 files=[{"name": f"{doc_type}-{RUN}.pdf", "mimeType": "application/pdf", "buffer": PDF}])
         page.click("#documents-submit")
+        page.wait_for_url("**/business-status.html*", timeout=30000)
+        page.wait_for_selector("#bs-main:not([hidden])")
+        check("registration: submitted, awaiting ApexRX review", "We have received your application." in page.inner_text("#bs-main"))
+        page.goto(SITE + "/pharmacy-sign-in.html#review")
         visible(page, "#review")
         wait_text(page, "#review-status", "Pending review")
         facts = page.inner_text("#review-facts")
@@ -138,8 +145,17 @@ def main():
               "Pharmacy" in facts and owner_email in facts and "(verified)" not in facts)
         check("registration: no email was produced", no_email_to(owner_email))
 
+        # ApexRX approves the application (documents, then the pharmacy).
+        owner_token = page.evaluate("JSON.parse(sessionStorage.getItem('apexrx_session')).token")
+        org_id = call("GET", "/organizations", token=owner_token)[1][0]["organization_id"]
+        admin_token = call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD,
+                                                   "account_type": "admin"})[1]["access_token"]
+        D.complete_application(org_id, owner_token, admin_token,
+                               call_fn=lambda m, path, body=None, token=None: call(m, path, body, token)[1], api=API)
+        call("POST", f"/admin/organizations/{org_id}/review", {"decision": "approved"}, admin_token)
+
         # ===================================== invitations shared as links
-        page.click("#open-workspace")
+        page.goto(SITE + "/pharmacy-dashboard.html")
         on_dashboard(page)
         page.click(".nav[data-v=set]")
         page.wait_for_selector("#invite-form")

@@ -125,3 +125,13 @@ header{background:#ffffffcc;backdrop-filter:blur(20px)}.onboarding{padding:24px;
 .verify-phone-page .vp-number-line .text-button,.verify-phone-page .vp-resend .text-button,.verify-phone-page .vp-actions .text-button{display:inline;margin:0;padding:2px 4px;font-weight:700}
 .verify-phone-page .vp-number .muted{margin:0}
 .verify-phone-page .vp-resend .text-button:disabled{color:var(--muted);cursor:default}
+
+/* Application status (business-status.html) */
+.business-status-page .form-area>.eyebrow{display:block;color:var(--green);overflow-wrap:anywhere}
+.business-status-page .bs-state{margin:4px 0 10px}
+.business-status-page #bs-lead{font-size:15px;font-weight:600;margin:0 0 6px}
+.business-status-page #bs-submitted{margin:0 0 8px}
+.business-status-page .bs-points{margin:0 0 16px;padding-left:20px;display:grid;gap:6px;font-size:13px;color:var(--navy)}
+.business-status-page .bs-contact-value{overflow-wrap:anywhere}
+.business-status-page #bs-error{color:#a93434;font-size:12px}
+.business-status-page .actions .primary{flex:1}

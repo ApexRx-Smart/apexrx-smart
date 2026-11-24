@@ -270,6 +270,9 @@
           if (res.status === 403 && data && data.code === 'phone_verification_required' && headers.Authorization) {
             phoneVerificationRequired();
           }
+          if (res.status === 403 && data && data.code === 'organization_not_approved' && headers.Authorization) {
+            organizationNotApproved();
+          }
           throw new ApiError(res.status, messageFrom(res.status, data), data);
         }
         return data;
@@ -293,6 +296,19 @@
     if (/^verify-phone(\.html)?$/.test(page)) return;
     phoneRedirecting = true;
     location.assign('verify-phone.html?next=' + encodeURIComponent(page + location.search));
+  }
+
+  // A pending, rejected or suspended business: the server refuses its
+  // operational features (403 organization_not_approved). From a dashboard,
+  // show the application status page instead. The server enforces this; the
+  // redirect only spares the user a page of errors.
+  var statusRedirecting = false;
+  function organizationNotApproved() {
+    emit('apexrx:organization-not-approved', {});
+    var page = (location.pathname.split('/').pop() || 'index.html');
+    if (statusRedirecting || !/-dashboard(\.html)?$/.test(page)) return;
+    statusRedirecting = true;
+    location.replace('business-status.html');
   }
 
   // Authenticated file download. Resolves with a Blob (use URL.createObjectURL).
@@ -581,6 +597,10 @@
       get: function (id) { return get(org(id)); },
       update: function (id, data) { return patch(org(id), data); },
       resubmit: function (id) { return post(org(id) + '/resubmit'); },
+      // Where the registration stands: stage, review notes, required documents.
+      application: function (id) { return get(org(id) + '/application'); },
+      // Submit (or resubmit after a rejection) once every required document is uploaded.
+      submit: function (id) { return post(org(id) + '/submit'); },
 
       members: function (id) { return get(org(id) + '/members'); },
       addMember: function (id, email, role) { return post(org(id) + '/members', { email: email, role: role }); },

@@ -167,11 +167,14 @@ def test_staff_can_handle_orders_and_suspension_blocks(client):
     client.post(f"/purchase-orders/{oid}/submit", headers=world.pharmacy_owner)
     assert client.post(f"/purchase-orders/{oid}/accept", headers=clerk).status_code == 200
 
-    # A suspended pharmacy cannot create orders but can still cancel.
+    # A suspended pharmacy is closed off from its orders (no new ones, no access to
+    # existing ones); the supplier still sees the order.
     client.post(f"/admin/organizations/{world.pharmacy}/review", json={"decision": "suspended", "notes": "x"}, headers=world.admin)
     assert _create(client, world).status_code == 403
+    assert client.get(f"/purchase-orders/{oid}", headers=world.pharmacy_owner).status_code == 404
     r = client.post(f"/purchase-orders/{oid}/cancel", json={"reason": "Suspended"}, headers=world.pharmacy_owner)
-    assert r.json()["status"] == "cancelled"
+    assert r.status_code == 404
+    assert client.get(f"/purchase-orders/{oid}", headers=clerk).status_code == 200
 
 
 def test_order_with_preferred_warehouse_prices(client):

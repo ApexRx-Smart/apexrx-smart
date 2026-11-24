@@ -28,13 +28,20 @@ from app.models.enums import OrganizationStatus, OrganizationType
 
 
 def member_org_ids(db: Session, user: User, org_ids: list[int]) -> list[int]:
-    """Which of ``org_ids`` the user is an active member of."""
+    """Which of ``org_ids`` the user acts for: an active member, of an APPROVED
+    organization of the account's own type. Conversations, procurement requests
+    and quotations of a pending, rejected or suspended organization stay closed
+    to its members (404) until it is approved."""
     return list(
         db.scalars(
-            select(Membership.organization_id).where(
+            select(Membership.organization_id)
+            .join(Organization, Organization.organization_id == Membership.organization_id)
+            .where(
                 Membership.user_id == user.user_id,
                 Membership.is_active.is_(True),
                 Membership.organization_id.in_(org_ids),
+                Organization.status == OrganizationStatus.APPROVED,
+                Organization.type == user.account_type,
             )
         )
     )

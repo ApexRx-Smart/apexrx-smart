@@ -296,43 +296,44 @@ def main():
         page.set_input_files("#doc-list input[data-document-type=business_license]",
                              files=[{"name": "notes.txt", "mimeType": "text/plain", "buffer": b"not a document"}])
         wait_text(page, "#form-error", "PDF, PNG or JPG")
+        check("documents: submitting is impossible while a required document is missing",
+              page.is_disabled("#documents-submit") and "Business license" in (page.get_attribute("#documents-submit", "title") or ""))
+        page.set_input_files("#doc-list input[data-document-type=business_license]",
+                             files=[{"name": f"business-registration-{RUN}.pdf", "mimeType": "application/pdf", "buffer": PDF}])
+        check("documents: enabled once every required document is chosen", page.is_enabled("#documents-submit"))
         page.click("#documents-submit")
-        visible(page, "#review")
-        wait_text(page, "#review-documents", f"owner-{RUN}.pdf")
-        facts = page.inner_text("#review-facts")
-        check("review: pending status, both documents, summary of what was stored",
-              page.inner_text("#review-status") == "Pending review"
-              and f"pharmacy-license-{RUN}.pdf" in page.inner_text("#review-documents")
-              and "Kimironko" in facts and "Gasabo" in facts and f"{email} (verified)" in facts and "Pharmacy" in facts)
+        page.wait_for_url("**/business-status.html*", timeout=30000)
+        page.wait_for_selector("#bs-main:not([hidden])")
+        check("submitted: the status page says the application is received and awaiting review",
+              "We have received your application." in page.inner_text("#bs-main")
+              and page.inner_text("#bs-docs").count("Awaiting review") == 3)
         docs = call("GET", f"/organizations/{orgs[0]['organization_id']}/documents", token=token)[1]
-        check("documents: stored and listed for the owner", sorted(d["document_type"] for d in docs) == ["owner_id", "pharmacy_license"])
+        check("documents: the three required documents are stored",
+              sorted(d["document_type"] for d in docs) == ["business_license", "owner_id", "pharmacy_license"])
         status, other = call("GET", f"/organizations/{orgs[0]['organization_id']}", token=account(f"stranger-{RUN}@example.com"))
         check("authorization: another account cannot read the new pharmacy", status == 404)
-
-        page.click("#open-workspace")
-        on_dashboard(page)
-        check("dashboard: opens after registration, with the real status and no plan price",
-              name in page.inner_text("#me-name") and "Pending verification" in page.inner_text("#ver")
-              and "awaiting verification" in page.inner_text(".banner") and "/ month" not in page.inner_text("#view")
-              and "not live yet" in page.inner_text("#plan-card").lower())
-        page.click(".nav[data-v=set]")
-        page.wait_for_function("!document.querySelector('#docs').textContent.includes('Loading')")
-        check("dashboard: the uploaded documents are listed with their status",
-              f"pharmacy-license-{RUN}.pdf" in page.inner_text("#docs") and "Pending verification" in page.inner_text("#docs"))
-        page.click("#open-registration")
-        page.wait_for_url("**/pharmacy-sign-in.html*#review")
+        page.goto(SITE + "/pharmacy-dashboard.html")
+        page.wait_for_url("**/business-status.html*", timeout=30000)
+        check("dashboard: closed until approval (the status page instead)", True)
+        page.goto(SITE + "/pharmacy-sign-in.html#review")
         visible(page, "#review")
-        check("dashboard: 'Registration details' leads back to the review", page.inner_text("#review-status") == "Pending review")
+        facts = page.inner_text("#review-facts")
+        check("review: pending status, the documents and the stored details",
+              page.inner_text("#review-status") == "Pending review"
+              and f"pharmacy-license-{RUN}.pdf" in page.inner_text("#review-documents")
+              and "Kimironko" in facts and "Gasabo" in facts and f"{email} (verified)" in facts and "Pharmacy" in facts
+              and page.inner_text("#open-workspace").startswith("View application status"))
         ctx.close()
 
-        # Signing in again: a complete pharmacy goes to the workspace.
+        # Signing in again: a submitted application opens the status page.
         ctx = new_context(browser)
         page = ctx.new_page()
         watch(page, errors)
         page.goto(SITE + "/pharmacy-sign-in.html")
         fill_account(page, email, confirm=False)
-        on_dashboard(page)
-        check("sign in: a registered pharmacy opens its dashboard", name in page.inner_text("#me-name"))
+        page.wait_for_url("**/business-status.html*", timeout=30000)
+        page.wait_for_selector("#bs-main:not([hidden])")
+        check("sign in: a submitted pharmacy sees its application status", name in page.inner_text("#bs-org"))
         ctx.close()
 
         # ================================== verification link problems, resend
@@ -424,10 +425,10 @@ def main():
              {"name": "Main branch", "region": "Kigali City", "city": "Nyarugenge", "sector": "Nyamirambo",
               "cell": "Cyivugiza", "village": "Amizero"}, t3)
         page.goto(SITE + "/pharmacies.html")
-        visible(page, "#review")
-        check("resume: an address but no documents opens the review to upload them",
-              "No documents uploaded yet" in page.inner_text("#review-documents") and page.is_visible("#review-upload"))
-        page.click("#review-edit")
+        visible(page, "#documents")
+        check("resume: an address but no documents opens the documents step, nothing submittable yet",
+              page.is_disabled("#documents-submit"))
+        page.click("#documents-back")
         visible(page, "#details")
         page.wait_for_function("document.querySelector('#address-fields [name=village]')?.value === 'Amizero'")
         check("resume: editing shows the stored address in the lists",
@@ -463,24 +464,32 @@ def main():
         check("supplier: supplier documents (no pharmacy license)", types == ["business_license", "owner_id"], types)
         page.set_input_files("#doc-list input[data-document-type=business_license]",
                              files=[{"name": f"supplier-license-{RUN}.pdf", "mimeType": "application/pdf", "buffer": PDF}])
+        page.set_input_files("#doc-list input[data-document-type=owner_id]",
+                             files=[{"name": f"supplier-owner-{RUN}.pdf", "mimeType": "application/pdf", "buffer": PDF}])
         page.click("#documents-submit")
-        visible(page, "#review")
-        check("supplier: the review no longer says supplier screens are missing from the website",
-              "not on the website" not in page.inner_text("#review"))
+        page.wait_for_url("**/business-status.html*", timeout=30000)
+        page.wait_for_selector("#bs-main:not([hidden])")
+        check("supplier: submitted, the status page shows the supplier documents only",
+              page.locator("#bs-docs li").count() == 2 and "Pharmacy license" not in page.inner_text("#bs-docs"))
         orgs = find_org(supplier)
         check("supplier: stored with organization type 'supplier'", len(orgs) == 1 and orgs[0]["type"] == "supplier", orgs)
         check("supplier: not registered as a pharmacy", find_org(supplier, "pharmacy") == [])
         org_id = orgs[0]["organization_id"]
         detail = call("GET", f"/admin/organizations/{org_id}", token=admin_token())[1]
-        check("supplier: warehouse, owner and document saved",
+        licence = next(d for d in detail["documents"] if d["document_type"] == "business_license")
+        check("supplier: warehouse, owner and documents saved",
               detail["locations"][0]["name"] == "Gikondo Warehouse" and detail["members"][0]["email"] == supplier_email
-              and detail["members"][0]["role"] == "owner" and detail["documents"][0]["document_type"] == "business_license")
+              and detail["members"][0]["role"] == "owner"
+              and sorted(d["document_type"] for d in detail["documents"]) == ["business_license", "owner_id"])
 
         # Rejected with a note -> shown -> resubmitted -> approved.
-        doc_id = detail["documents"][0]["document_id"]
+        doc_id = licence["document_id"]
         call("POST", f"/admin/documents/{doc_id}/review", {"decision": "rejected", "rejection_reason": "The scan is unreadable."}, admin_token())
         call("POST", f"/admin/organizations/{org_id}/review", {"decision": "rejected", "notes": f"Upload a readable license {RUN}."}, admin_token())
-        page.click("#review-refresh")
+        page.click("#bs-refresh")
+        wait_text(page, "#bs-badge", "Not approved")
+        page.click("#bs-action")  # Correct and resubmit
+        visible(page, "#review")
         wait_text(page, "#review-status", "Not approved")
         check("review: the rejection, the note from ApexRX and the document reason are shown",
               f"Upload a readable license {RUN}." in page.inner_text("#review-notes")
@@ -490,16 +499,19 @@ def main():
         page.click("#upload-button")
         wait_text(page, "#review-documents", f"supplier-license-2-{RUN}.pdf")
         page.click("#review-resubmit")
-        wait_text(page, "#review-status", "Pending review")
-        check("review: resubmitting puts it back in the review queue",
-              find_org(supplier)[0]["status"] == "pending" and page.is_hidden("#review-resubmit"))
+        page.wait_for_url("**/business-status.html*", timeout=30000)
+        wait_text(page, "#bs-badge", "Awaiting review")
+        check("review: resubmitting puts it back in the review queue", find_org(supplier)[0]["status"] == "pending")
         for d in call("GET", f"/admin/organizations/{org_id}", token=admin_token())[1]["documents"]:
             if d["verification_status"] == "pending":
                 call("POST", f"/admin/documents/{d['document_id']}/review", {"decision": "approved"}, admin_token())
         call("POST", f"/admin/organizations/{org_id}/review", {"decision": "approved"}, admin_token())
-        page.click("#review-refresh")
-        wait_text(page, "#review-status", "Approved")
-        check("review: approval in the admin console shows on the supplier page", True)
+        page.click("#bs-refresh")
+        wait_text(page, "#bs-badge", "Approved")
+        check("review: approval shows on the status page, with the way to the workspace",
+              page.get_attribute("#bs-action", "href") == "supplier-dashboard.html")
+        page.goto(SITE + "/suppliers.html#review")
+        visible(page, "#review")
         page.click("#sign-out")
         page.wait_for_url("**/index.html*")
         check("supplier: sign out opens the landing page", page.evaluate("sessionStorage.getItem('apexrx_session')") is None)

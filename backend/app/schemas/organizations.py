@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, EmailStr, Field, StringConstraints, model_validator
 
@@ -46,6 +46,9 @@ class OrganizationResponse(ORMModel):
     updated_at: datetime
     reviewed_at: datetime | None
     review_notes: str | None
+    # Set when the application was submitted for review; None while the
+    # registration is in progress.
+    submitted_at: datetime | None = None
 
 
 class MyOrganizationResponse(OrganizationResponse):
@@ -202,3 +205,34 @@ class InvitationAccepted(BaseModel):
     organization_name: str
     organization_type: OrganizationType
     role: MembershipRole
+
+
+# Application (registration) status --------------------------------------------
+class ApplicationDocument(BaseModel):
+    document_type: str
+    label: str
+    status: Literal["missing", "pending", "approved", "rejected"]
+    document_id: int | None
+    file_name: str | None
+    uploaded_at: datetime | None
+    rejection_reason: str | None
+
+
+class ApplicationResponse(BaseModel):
+    """Where a pharmacy or supplier registration stands, for its members."""
+
+    organization_id: int
+    name: str
+    type: OrganizationType
+    status: OrganizationStatus
+    stage: Literal["in_progress", "awaiting_review", "approved", "rejected", "suspended"]
+    submitted_at: datetime | None
+    reviewed_at: datetime | None
+    review_notes: str | None
+    required_documents: list[ApplicationDocument]
+    # Every required document is uploaded (none missing or only rejected).
+    documents_complete: bool
+    # The registration can be submitted now (in progress or rejected, complete).
+    can_submit: bool
+    # Operational features (stock, orders, messages, reservations) are open.
+    workspace_open: bool

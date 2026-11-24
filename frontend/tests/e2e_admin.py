@@ -26,6 +26,8 @@ import uuid
 
 from playwright.sync_api import sync_playwright
 
+import e2e_dashboards as D  # noqa: E402  (shared helper: the real application flow)
+
 SITE = os.environ.get("E2E_SITE", "http://127.0.0.1:5501")
 API = os.environ.get("E2E_API", "http://127.0.0.1:8000")
 ADMIN_EMAIL = os.environ["E2E_ADMIN_EMAIL"]
@@ -103,9 +105,12 @@ def seed():
                                                "email": f"contact-{RUN}@example.com", "phone": OWNER_PHONE}, owner)
     call("POST", f"/organizations/{pending['organization_id']}/locations",
          {"name": "Remera Branch", "address": "KG 11 Ave", "city": "Kigali", "latitude": -1.95, "longitude": 30.11}, owner)
-    for doc_type, fname in [("pharmacy_license", "license-dummy.pdf"), ("owner_id", "owner-id-dummy.pdf")]:
+    for doc_type, fname in [("pharmacy_license", "license-dummy.pdf"), ("business_license", "trade-registration-dummy.pdf"),
+                            ("owner_id", "owner-id-dummy.pdf")]:
         call("POST", f"/organizations/{pending['organization_id']}/documents", token=owner,
              multipart=({"document_type": doc_type}, (fname, PDF, "application/pdf")))
+    call("POST", f"/organizations/{pending['organization_id']}/submit", token=owner)
+    pending["owner_token"] = owner
 
     supplier_owner = account(f"supplier-{RUN}@example.com", "Supplier Owner", "supplier")
     verify_email(supplier_owner)
@@ -115,6 +120,7 @@ def seed():
     seller = account(f"seller-{RUN}@example.com", "Seller")
     verify_email(seller)
     shop = call("POST", "/organizations", {"name": f"Search Pharmacy {RUN}", "type": "pharmacy"}, seller)
+    D.complete_application(shop["organization_id"], seller, admin)
     call("POST", f"/admin/organizations/{shop['organization_id']}/review", {"decision": "approved"}, admin)
     loc = call("POST", f"/organizations/{shop['organization_id']}/locations",
                {"name": "Kacyiru", "latitude": -1.94, "longitude": 30.06}, seller)
@@ -202,7 +208,9 @@ def main():
         check("detail shows contact", f"contact-{RUN}@example.com" in detail and OWNER_PHONE in detail)
         check("detail shows location", "Remera Branch" in detail and "KG 11 Ave" in detail)
         check("detail shows members", f"owner-{RUN}@example.com" in detail)
-        check("detail shows both documents", "license-dummy.pdf" in detail and "owner-id-dummy.pdf" in detail)
+        check("detail shows the three documents", "license-dummy.pdf" in detail and "owner-id-dummy.pdf" in detail
+              and "trade-registration-dummy.pdf" in detail)
+        check("detail shows when the application was submitted", "Submitted for review" in detail)
         approve = page.locator("#review-box [data-decision=approved]")
         check("approve disabled while documents are pending", approve.is_disabled())
         check("suspend hidden for a pending organization", page.is_hidden("#review-box [data-decision=suspended]"))
@@ -223,7 +231,21 @@ def main():
         page.click("#documents .item:has-text('owner-id-dummy.pdf') button:has-text('Reject document')")
         page.wait_for_function("document.querySelector('#detail-message').textContent.includes('rejected')")
         check("document statuses updated", "Photo is blurry (e2e)" in page.inner_text("#documents"))
-        check("approve enabled once documents are reviewed", not approve.is_disabled())
+        page.click("#documents .item:has-text('trade-registration-dummy.pdf') button:has-text('Approve document')")
+        page.wait_for_function("document.querySelector('#detail-message').textContent.includes('trade-registration-dummy.pdf approved')")
+        check("approve stays disabled while a required document is rejected",
+              approve.is_disabled() and "Owner ID" in page.inner_text("#review-hint"))
+        # The owner uploads a replacement; the administrator reviews it.
+        call("POST", f"/organizations/{pending['organization_id']}/documents", token=pending["owner_token"],
+             multipart=({"document_type": "owner_id"}, ("owner-id-new-dummy.pdf", PDF, "application/pdf")))
+        page.click("#back")
+        page.wait_for_function(f"document.querySelector('#org-rows').innerText.includes('Pending Pharmacy {RUN}')")
+        page.click(f"#org-rows tr:has-text('Pending Pharmacy {RUN}') button")
+        page.wait_for_selector("#detail-view:not([hidden])")
+        page.wait_for_function("document.querySelector('#documents').innerText.includes('owner-id-new-dummy.pdf')")
+        page.click("#documents .item:has-text('owner-id-new-dummy.pdf') button:has-text('Approve document')")
+        page.wait_for_function("document.querySelector('#detail-message').textContent.includes('owner-id-new-dummy.pdf approved')")
+        check("approve enabled once every required document is approved", not approve.is_disabled())
 
         approve.click()
         page.wait_for_function("document.querySelector('#detail-status').textContent === 'approved'")

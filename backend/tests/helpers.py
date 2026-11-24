@@ -83,7 +83,31 @@ def organization(client, headers, type_: str, name: str) -> int:
     return r.json()["organization_id"]
 
 
+def complete_application(organization_id: int) -> None:
+    """Test shortcut: give the organization every required document (approved
+    placeholder rows; no file is stored) and mark the application submitted, as
+    if it had been uploaded, submitted and reviewed. The real flow is tested in
+    tests/test_applications.py."""
+    from app.services.applications import REQUIRED_DOCUMENTS
+    with engine.begin() as conn:
+        org_type = conn.execute(text("SELECT type FROM organization WHERE organization_id = :o"),
+                                {"o": organization_id}).scalar_one()
+        for doc_type in REQUIRED_DOCUMENTS[org_type]:
+            conn.execute(text(
+                """INSERT INTO organization_document (organization_id, document_type, file_name, storage_key,
+                                                      mime_type, file_size_bytes, verification_status, reviewed_at)
+                   SELECT :o, CAST(:t AS VARCHAR), 'test.pdf', 'test-placeholder/' || :o || '/' || :t,
+                          'application/pdf', 1, 'approved', now()
+                   WHERE NOT EXISTS (SELECT 1 FROM organization_document
+                                     WHERE organization_id = :o AND document_type = :t
+                                       AND verification_status = 'approved')"""),
+                {"o": organization_id, "t": doc_type})
+        conn.execute(text("UPDATE organization SET submitted_at = COALESCE(submitted_at, now()) "
+                          "WHERE organization_id = :o"), {"o": organization_id})
+
+
 def approve(client, admin_headers, organization_id: int) -> None:
+    complete_application(organization_id)
     r = client.post(
         f"/admin/organizations/{organization_id}/review",
         json={"decision": "approved"},

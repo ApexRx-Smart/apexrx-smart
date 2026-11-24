@@ -177,7 +177,7 @@ def list_inventory(
     listed: bool | None = None,
 ):
     """Stock and offers across the organization's locations."""
-    get_org_access(db, user, organization_id, allow_admin_read=True)
+    get_org_access(db, user, organization_id, allow_admin_read=True, require_approved=True)
     limit, offset = page
     stmt = _inventory_query().where(Location.organization_id == organization_id)
     if location_id is not None:
@@ -218,7 +218,7 @@ def list_inventory(
 def get_stock_item(
     organization_id: int, location_id: int, product_id: int, user: CurrentUser, db: DbSession
 ):
-    get_org_access(db, user, organization_id, allow_admin_read=True)
+    get_org_access(db, user, organization_id, allow_admin_read=True, require_approved=True)
     get_org_location(db, organization_id, location_id)
     return _load_item(db, location_id, product_id)
 
@@ -236,7 +236,7 @@ def list_stock_adjustments(
     page: Pagination,
 ):
     """Audit trail of quantity changes (including deletions) for one product."""
-    get_org_access(db, user, organization_id, allow_admin_read=True)
+    get_org_access(db, user, organization_id, allow_admin_read=True, require_approved=True)
     get_org_location(db, organization_id, location_id)
     limit, offset = page
     stmt = (

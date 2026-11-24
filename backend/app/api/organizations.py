@@ -10,7 +10,6 @@ from app.api.auth import find_user_by_email
 from app.api.deps import (
     ALL_ROLES,
     MANAGERS,
-    OWNERS,
     CurrentUser,
     DbSession,
     get_org_access,
@@ -22,6 +21,8 @@ from app.models import Location, Membership, Organization, OrganizationDocument,
 from app.models.enums import DocumentStatus, MembershipRole, OrganizationStatus, OrganizationType
 from app.schemas.common import Message
 from app.schemas.organizations import (
+    ApplicationDocument,
+    ApplicationResponse,
     DocumentResponse,
     LocationCreate,
     LocationResponse,
@@ -34,7 +35,7 @@ from app.schemas.organizations import (
     OrganizationResponse,
     OrganizationUpdate,
 )
-from app.services import reservations, storage
+from app.services import applications, reservations, storage
 from app.services.phone import PhoneNumberError, normalize_phone
 
 router = APIRouter()
@@ -128,15 +129,76 @@ def update_organization(organization_id: int, payload: OrganizationUpdate, user:
     return organization
 
 
+def _application(db, organization: Organization) -> ApplicationResponse:
+    items = applications.checklist(db, organization)
+    complete = not applications.missing(items)
+    stage = applications.stage(organization)
+    return ApplicationResponse(
+        organization_id=organization.organization_id,
+        name=organization.name,
+        type=organization.type,
+        status=organization.status,
+        stage=stage,
+        submitted_at=organization.submitted_at,
+        reviewed_at=organization.reviewed_at,
+        review_notes=organization.review_notes,
+        required_documents=[ApplicationDocument(**vars(i)) for i in items],
+        documents_complete=complete,
+        can_submit=complete and stage in ("in_progress", "rejected"),
+        workspace_open=organization.status == OrganizationStatus.APPROVED,
+    )
+
+
+@router.get("/{organization_id}/application", response_model=ApplicationResponse)
+def get_application(organization_id: int, user: CurrentUser, db: DbSession):
+    """Where the registration stands: its stage, the review outcome and notes,
+    and each required document's status. Open to members in every status (it
+    is what a pending, rejected or suspended business sees)."""
+    organization = get_org_access(db, user, organization_id, allow_admin_read=True).organization
+    return _application(db, organization)
+
+
+@router.post("/{organization_id}/submit", response_model=ApplicationResponse)
+def submit_application(organization_id: int, user: CurrentUser, db: DbSession):
+    """Submit the registration for review by ApexRX (owners and managers).
+
+    Refused (409 documents_missing) until every required document is uploaded
+    (one not rejected of each type). A rejected registration is resubmitted the
+    same way: it goes back to 'pending', awaiting review; earlier review notes
+    are kept until the next decision."""
+    organization = db.scalar(
+        select(Organization).where(Organization.organization_id == organization_id).with_for_update()
+    )
+    if organization is None:
+        raise NotFound("Organization not found.")
+    get_org_access(db, user, organization_id, roles=MANAGERS)
+    stage = applications.stage(organization)
+    if stage == "awaiting_review":
+        raise Conflict("Your application is already waiting for review.", extra={"code": "already_submitted"})
+    if stage not in ("in_progress", "rejected"):
+        raise Conflict(f"This organization is {organization.status}; there is nothing to submit.",
+                       extra={"code": "not_submittable"})
+    missing = applications.missing(applications.checklist(db, organization))
+    if missing:
+        names = ", ".join(i.label for i in missing)
+        raise Conflict(f"Upload every required document before submitting. Missing: {names}.",
+                       extra={"code": "documents_missing", "missing": [i.document_type for i in missing]})
+    organization.status = OrganizationStatus.PENDING
+    organization.submitted_at = func.now()
+    db.commit()
+    db.refresh(organization)
+    return _application(db, organization)
+
+
 @router.post("/{organization_id}/resubmit", response_model=OrganizationResponse)
 def resubmit_organization(organization_id: int, user: CurrentUser, db: DbSession):
-    """Send a rejected registration back to the review queue (e.g. after
-    uploading corrected documents). Previous review notes are kept."""
-    organization = get_org_access(db, user, organization_id, roles=OWNERS).organization
+    """Send a rejected registration back to the review queue. The same rules as
+    POST /{organization_id}/submit (every required document uploaded)."""
+    organization = get_org_access(db, user, organization_id, roles=MANAGERS).organization
     if organization.status != OrganizationStatus.REJECTED:
         raise Conflict("Only rejected organizations can be resubmitted for review.")
-    organization.status = OrganizationStatus.PENDING
-    db.commit()
+    submit_application(organization_id, user, db)
+    db.refresh(organization)
     return organization
 
 
@@ -381,7 +443,14 @@ def upload_document(
 ):
     """Upload a verification document (e.g. operating license, business
     registration). Reviewed by ApexRx admins."""
-    get_org_access(db, user, organization_id, roles=MANAGERS)
+    organization = get_org_access(db, user, organization_id, roles=MANAGERS).organization
+    allowed = applications.allowed_document_types(organization.type)
+    if document_type.strip() not in allowed:
+        raise AppError(
+            f"Choose one of the documents ApexRX asks for: {', '.join(applications.DOCUMENT_LABELS[t] for t in allowed)}.",
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            extra={"code": "invalid_document_type", "allowed": list(allowed)},
+        )
     storage_key, mime_type, size = storage.save_document(organization_id, file)
     file_name = (file.filename or "document").replace("\\", "/").rsplit("/", 1)[-1][:255]
     document = OrganizationDocument(

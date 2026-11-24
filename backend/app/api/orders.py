@@ -227,7 +227,7 @@ def list_orders(
 ):
     """Orders sent (pharmacy) or received (supplier) by an organization,
     newest first. Suppliers never see drafts."""
-    access = get_org_access(db, user, organization_id, allow_admin_read=True)
+    access = get_org_access(db, user, organization_id, allow_admin_read=True, require_approved=True)
     limit, offset = page
     is_pharmacy = access.organization.type == OrganizationType.PHARMACY
     own_col = PurchaseOrder.pharmacy_organization_id if is_pharmacy else PurchaseOrder.supplier_organization_id

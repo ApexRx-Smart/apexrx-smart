@@ -37,6 +37,7 @@ def test_capabilities_say_what_is_unavailable(client):
     assert client.get("/auth/capabilities").json() == {
         "email_delivery": False, "email_verification_required": False,
         "password_reset": False, "invitation_emails": False, "phone_verification_required": False,
+        "support_contact": {"email": None, "phone": None},
     }
 
 
